@@ -37,7 +37,194 @@ const commands = [
   },
   {
     name: "userinfo",
-    description: "Show information about a Discord member."
+    description: "Show information about a Discord member.",
+    options: [
+      { type: 6, name: "user", description: "Discord member", required: false }
+    ]
+  },
+  { name: "ticket-panel", description: "Post a ticket creation panel." },
+  { name: "ticket-close", description: "Close the current ticket." },
+  { name: "ticket-claim", description: "Claim the current ticket." },
+  { name: "ticket-transcript", description: "Create a transcript of the current ticket." },
+  {
+    name: "warn",
+    description: "Warn a member.",
+    options: [
+      { type: 6, name: "user", description: "Member", required: true },
+      { type: 3, name: "reason", description: "Reason", required: true }
+    ]
+  },
+  {
+    name: "warnings",
+    description: "Show warnings for a member.",
+    options: [{ type: 6, name: "user", description: "Member", required: true }]
+  },
+  {
+    name: "clearwarnings",
+    description: "Clear all warnings for a member.",
+    options: [{ type: 6, name: "user", description: "Member", required: true }]
+  },
+  {
+    name: "kick",
+    description: "Kick a member.",
+    options: [
+      { type: 6, name: "user", description: "Member", required: true },
+      { type: 3, name: "reason", description: "Reason", required: false }
+    ]
+  },
+  {
+    name: "ban",
+    description: "Ban a member.",
+    options: [
+      { type: 6, name: "user", description: "Member", required: true },
+      { type: 3, name: "reason", description: "Reason", required: false },
+      { type: 4, name: "delete_days", description: "Delete 0-7 days of messages", required: false, min_value: 0, max_value: 7 }
+    ]
+  },
+  {
+    name: "unban",
+    description: "Unban by Discord user ID.",
+    options: [{ type: 3, name: "user_id", description: "Discord user ID", required: true }]
+  },
+  {
+    name: "timeout",
+    description: "Timeout a member.",
+    options: [
+      { type: 6, name: "user", description: "Member", required: true },
+      { type: 3, name: "duration", description: "Example: 10m, 2h, 1d", required: true },
+      { type: 3, name: "reason", description: "Reason", required: false }
+    ]
+  },
+  {
+    name: "untimeout",
+    description: "Remove a timeout.",
+    options: [{ type: 6, name: "user", description: "Member", required: true }]
+  },
+  {
+    name: "purge",
+    description: "Delete 1-100 messages.",
+    options: [{ type: 4, name: "amount", description: "Amount", required: true, min_value: 1, max_value: 100 }]
+  },
+  {
+    name: "slowmode",
+    description: "Set slowmode in the current channel.",
+    options: [{ type: 4, name: "seconds", description: "0-21600 seconds", required: true, min_value: 0, max_value: 21600 }]
+  },
+  { name: "lockdown", description: "Lock text channels." },
+  { name: "unlockdown", description: "Unlock text channels." },
+  {
+    name: "announce",
+    description: "Send an announcement embed.",
+    options: [
+      { type: 3, name: "title", description: "Title", required: true },
+      { type: 3, name: "message", description: "Message", required: true },
+      { type: 7, name: "channel", description: "Channel", required: false }
+    ]
+  },
+  {
+    name: "poll",
+    description: "Create a poll.",
+    options: [
+      { type: 3, name: "question", description: "Question", required: true },
+      { type: 3, name: "option1", description: "Option 1", required: true },
+      { type: 3, name: "option2", description: "Option 2", required: true },
+      { type: 3, name: "option3", description: "Optional option 3", required: false }
+    ]
+  },
+  {
+    name: "suggest",
+    description: "Send a suggestion.",
+    options: [{ type: 3, name: "text", description: "Suggestion text", required: true }]
+  },
+  {
+    name: "giveaway",
+    description: "Start a giveaway.",
+    options: [
+      { type: 3, name: "duration", description: "Example: 10m, 2h, 1d", required: true },
+      { type: 3, name: "prize", description: "Prize", required: true },
+      { type: 4, name: "winners", description: "Number of winners", required: false, min_value: 1, max_value: 20 }
+    ]
+  },
+  {
+    name: "role-panel",
+    description: "Post a self-role button.",
+    options: [
+      { type: 8, name: "role", description: "Role", required: true },
+      { type: 3, name: "label", description: "Button text", required: true }
+    ]
+  },
+  { name: "verify-panel", description: "Post a verification panel." },
+  {
+    name: "set-log-channel",
+    description: "Set the log channel.",
+    options: [{ type: 7, name: "channel", description: "Text channel", required: true, channel_types: [0] }]
+  },
+  {
+    name: "set-welcome",
+    description: "Set welcome messages.",
+    options: [
+      { type: 7, name: "channel", description: "Text channel", required: true, channel_types: [0] },
+      { type: 3, name: "message", description: "Use {user} and {server}", required: false }
+    ]
+  },
+  {
+    name: "set-leave",
+    description: "Set leave messages.",
+    options: [
+      { type: 7, name: "channel", description: "Text channel", required: true, channel_types: [0] },
+      { type: 3, name: "message", description: "Use {user} and {server}", required: false }
+    ]
+  },
+  {
+    name: "set-autorole",
+    description: "Set automatic join role.",
+    options: [{ type: 8, name: "role", description: "Role", required: true }]
+  },
+  {
+    name: "set-support-role",
+    description: "Set the ticket support role.",
+    options: [{ type: 8, name: "role", description: "Role", required: true }]
+  },
+  {
+    name: "set-ticket-category",
+    description: "Set the ticket category.",
+    options: [{ type: 7, name: "category", description: "Category", required: true, channel_types: [4] }]
+  },
+  {
+    name: "set-verification-role",
+    description: "Set the verification role.",
+    options: [{ type: 8, name: "role", description: "Role", required: true }]
+  },
+  {
+    name: "set-suggestion-channel",
+    description: "Set the suggestion channel.",
+    options: [{ type: 7, name: "channel", description: "Text channel", required: true, channel_types: [0] }]
+  },
+  {
+    name: "set-features",
+    description: "Enable or disable bot features.",
+    options: [
+      { type: 5, name: "automod", description: "AutoMod", required: true },
+      { type: 5, name: "invite_filter", description: "Invite filter", required: true },
+      { type: 5, name: "levels", description: "XP levels", required: true },
+      { type: 5, name: "economy", description: "Economy", required: true },
+      { type: 5, name: "anti_raid", description: "Anti-raid detection", required: true }
+    ]
+  },
+  { name: "balance", description: "Show your coins and level." },
+  { name: "daily", description: "Claim your daily reward." },
+  { name: "work", description: "Earn coins from work." },
+  { name: "leaderboard", description: "Show the server leaderboard." },
+  {
+    name: "level",
+    description: "Show XP and level.",
+    options: [{ type: 6, name: "user", description: "Member", required: false }]
+  },
+  { name: "backup", description: "Create a server backup JSON." },
+  {
+    name: "restore",
+    description: "Restore a ShardNote backup.",
+    options: [{ type: 11, name: "file", description: "Backup JSON", required: true }]
   }
 ];
 
