@@ -478,50 +478,12 @@ function currentUser(req) {
   const sid = parseCookies(req).shardnote_session;
   return sid ? sessions.get(sid) : null;
 }
-
-async function updateUserSubscription({userId,status,customerId=null,subscriptionId=null,currentPeriodEnd=null}){
-  const normalizedStatus=String(status||"inactive");
-  const periodEnd=currentPeriodEnd?new Date(Number(currentPeriodEnd)*1000).toISOString():null;
-  if(db){
-    await db.query(`UPDATE public.users SET subscription_status=$1,stripe_customer_id=COALESCE($2,stripe_customer_id),stripe_subscription_id=COALESCE($3,stripe_subscription_id),subscription_current_period_end=COALESCE($4::timestamptz,subscription_current_period_end) WHERE id=$5`,[normalizedStatus,customerId,subscriptionId,periodEnd,userId]);
-    return;
-  }
-  const user=state.users.find(item=>String(item.id)===String(userId));
-  if(user){user.subscriptionStatus=normalizedStatus;if(customerId)user.stripeCustomerId=customerId;if(subscriptionId)user.stripeSubscriptionId=subscriptionId;if(periodEnd)user.subscriptionCurrentPeriodEnd=periodEnd;}
-}
-
-async function updateUserSubscriptionByStripeSubscription(subscriptionId,status){
-  if(!db||!subscriptionId)return;
-  await db.query("UPDATE public.users SET subscription_status=$1 WHERE stripe_subscription_id=$2",[status,subscriptionId]);
-}
-
-async function refreshSubscriptionFromStripe(user){
-  if(!stripe||!user?.stripeSubscriptionId)return user;
-  try{
-    const subscription=await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
-    const customerId=typeof subscription.customer==="string"?subscription.customer:subscription.customer?.id||user.stripeCustomerId||null;
-    await updateUserSubscription({userId:user.id,status:subscription.status,customerId,subscriptionId:subscription.id,currentPeriodEnd:subscription.current_period_end});
-    user.subscriptionStatus=subscription.status;user.stripeCustomerId=customerId;user.stripeSubscriptionId=subscription.id;
-    user.subscriptionCurrentPeriodEnd=subscription.current_period_end?new Date(subscription.current_period_end*1000).toISOString():user.subscriptionCurrentPeriodEnd;
-  }catch(error){console.error("[ShardNote] Could not refresh Stripe subscription:",error.message);}
-  return user;
-}
-
-async function getSessionUser(req){
-  const sessionUser=currentUser(req);
-  if(!sessionUser)return null;
-  if(!db)return sessionUser;
-  const result=await db.query(`SELECT id,name,email,role,subscription_status AS "subscriptionStatus",stripe_customer_id AS "stripeCustomerId",stripe_subscription_id AS "stripeSubscriptionId",subscription_current_period_end AS "subscriptionCurrentPeriodEnd" FROM public.users WHERE id=$1 LIMIT 1`,[sessionUser.id]);
-  const row=result.rows[0];if(!row)return null;Object.assign(sessionUser,row);return sessionUser;
-}
-
+async function updateUserSubscription({userId,status,customerId=null,subscriptionId=null,currentPeriodEnd=null}){const normalizedStatus=String(status||"inactive");const periodEnd=currentPeriodEnd?new Date(Number(currentPeriodEnd)*1000).toISOString():null;if(db){await db.query(`UPDATE public.users SET subscription_status=$1,stripe_customer_id=COALESCE($2,stripe_customer_id),stripe_subscription_id=COALESCE($3,stripe_subscription_id),subscription_current_period_end=COALESCE($4::timestamptz,subscription_current_period_end) WHERE id=$5`,[normalizedStatus,customerId,subscriptionId,periodEnd,userId]);return;}const user=state.users.find(item=>String(item.id)===String(userId));if(user){user.subscriptionStatus=normalizedStatus;if(customerId)user.stripeCustomerId=customerId;if(subscriptionId)user.stripeSubscriptionId=subscriptionId;if(periodEnd)user.subscriptionCurrentPeriodEnd=periodEnd;}}
+async function updateUserSubscriptionByStripeSubscription(subscriptionId,status){if(!db||!subscriptionId)return;await db.query("UPDATE public.users SET subscription_status=$1 WHERE stripe_subscription_id=$2",[status,subscriptionId]);}
+async function refreshSubscriptionFromStripe(user){if(!stripe||!user?.stripeSubscriptionId)return user;try{const subscription=await stripe.subscriptions.retrieve(user.stripeSubscriptionId);const customerId=typeof subscription.customer==="string"?subscription.customer:subscription.customer?.id||user.stripeCustomerId||null;await updateUserSubscription({userId:user.id,status:subscription.status,customerId,subscriptionId:subscription.id,currentPeriodEnd:subscription.current_period_end});user.subscriptionStatus=subscription.status;user.stripeCustomerId=customerId;user.stripeSubscriptionId=subscription.id;user.subscriptionCurrentPeriodEnd=subscription.current_period_end?new Date(subscription.current_period_end*1000).toISOString():user.subscriptionCurrentPeriodEnd;}catch(error){console.error("[ShardNote] Could not refresh Stripe subscription:",error.message);}return user;}
+async function getSessionUser(req){const sessionUser=currentUser(req);if(!sessionUser)return null;if(!db)return sessionUser;const result=await db.query(`SELECT id,name,email,role,subscription_status AS "subscriptionStatus",stripe_customer_id AS "stripeCustomerId",stripe_subscription_id AS "stripeSubscriptionId",subscription_current_period_end AS "subscriptionCurrentPeriodEnd" FROM public.users WHERE id=$1 LIMIT 1`,[sessionUser.id]);const row=result.rows[0];if(!row)return null;Object.assign(sessionUser,row);return sessionUser;}
 function hasPaidAccess(user){return user?.role==="admin"||["active","trialing"].includes(user?.subscriptionStatus);}
-
-async function requireAuth(req,res,next){
-  const user=await getSessionUser(req);
-  if(!user)return res.status(401).json({error:"Du skal logge ind."});
-  req.user=user;next();
-}
+async function requireAuth(req,res,next){try{const user=await getSessionUser(req);if(!user)return res.status(401).json({error:"Du skal logge ind."});req.user=user;next();}catch(error){console.error(error);res.status(500).json({error:"Loginstatus kunne ikke hentes."});}}
 function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") return res.status(403).json({ error: "Kun administratorer har adgang." });
   next();
@@ -581,7 +543,7 @@ app.post("/api/login", async (req, res) => {
     let user;
     if (db) {
       const result = await db.query(
-        "SELECT id, name, email, role, password_hash, created_at, subscription_status AS "subscriptionStatus", stripe_customer_id AS "stripeCustomerId", stripe_subscription_id AS "stripeSubscriptionId", subscription_current_period_end AS "subscriptionCurrentPeriodEnd" FROM users WHERE email = $1 LIMIT 1",
+        "SELECT id, name, email, role, password_hash, created_at FROM users WHERE email = $1 LIMIT 1",
         [email]
       );
       const row = result.rows[0];
@@ -593,10 +555,10 @@ app.post("/api/login", async (req, res) => {
           role: row.role,
           passwordHash: row.password_hash,
           createdAt: row.created_at,
-          subscriptionStatus: row.subscriptionStatus || "inactive",
-          stripeCustomerId: row.stripeCustomerId,
-          stripeSubscriptionId: row.stripeSubscriptionId,
-          subscriptionCurrentPeriodEnd: row.subscriptionCurrentPeriodEnd
+          subscriptionStatus: "inactive",
+          stripeCustomerId: null,
+          stripeSubscriptionId: null,
+          subscriptionCurrentPeriodEnd: null
         };
       }
     } else {
@@ -621,11 +583,7 @@ app.post("/api/login", async (req, res) => {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role,
-      subscriptionStatus: user.subscriptionStatus || "inactive",
-      stripeCustomerId: user.stripeCustomerId || null,
-      stripeSubscriptionId: user.stripeSubscriptionId || null,
-      subscriptionCurrentPeriodEnd: user.subscriptionCurrentPeriodEnd || null
+      role: user.role
     });
 
     res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
@@ -675,7 +633,7 @@ app.post("/api/register", async (req, res) => {
 
       try {
         const result = await db.query(
-          "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, 'member', $3) RETURNING id, name, email, role, created_at, 'inactive'::varchar AS \"subscriptionStatus\"",
+          "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, 'member', $3) RETURNING id, name, email, role, created_at",
           [name, email, hashPassword(password)]
         );
         user = result.rows[0];
@@ -989,18 +947,33 @@ app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
     let customerId=req.user.stripeCustomerId;
     if(!customerId){
       const customer=await stripe.customers.create({email:req.user.email,name:req.user.name,metadata:{user_id:String(req.user.id)}});
-      customerId=customer.id;await updateUserSubscription({userId:req.user.id,status:"inactive",customerId});
+      customerId=customer.id;
+      await updateUserSubscription({userId:req.user.id,status:"inactive",customerId});
     }
-    const session=await stripe.checkout.sessions.create({mode:"subscription",customer:customerId,line_items:[{price_data:{currency:"eur",unit_amount:200,recurring:{interval:"month"},product_data:{name:"ShardNote Premium"}},quantity:1}],metadata:{user_id:String(req.user.id)},subscription_data:{metadata:{user_id:String(req.user.id)}},success_url:PUBLIC_SITE_URL+"/?payment=success",cancel_url:PUBLIC_SITE_URL+"/?payment=cancel"});
+    const session=await stripe.checkout.sessions.create({
+      mode:"subscription",
+      customer:customerId,
+      line_items:[{price_data:{currency:"eur",unit_amount:200,recurring:{interval:"month"},product_data:{name:"ShardNote Premium"}},quantity:1}],
+      metadata:{user_id:String(req.user.id)},
+      subscription_data:{metadata:{user_id:String(req.user.id)}},
+      success_url:PUBLIC_SITE_URL+"/?payment=success",
+      cancel_url:PUBLIC_SITE_URL+"/?payment=cancel"
+    });
     res.json({url:session.url});
-  }catch(error){console.error("[ShardNote] Stripe checkout failed:",error);res.status(500).json({error:"Betalingssiden kunne ikke åbnes."});}
+  }catch(error){
+    console.error("[ShardNote] Stripe checkout failed:",error);
+    res.status(500).json({error:"Betalingssiden kunne ikke åbnes."});
+  }
 });
 
 app.get("/api/billing/status",requireAuth,async(req,res)=>{
   try{
     if(stripe&&req.user.stripeSubscriptionId)await refreshSubscriptionFromStripe(req.user);
     res.json({configured:!!stripe,status:req.user.subscriptionStatus||"inactive",hasPaidAccess:hasPaidAccess(req.user)});
-  }catch(error){console.error("[ShardNote] Stripe status check failed:",error);res.status(500).json({error:"Betalingsstatus kunne ikke hentes."});}
+  }catch(error){
+    console.error("[ShardNote] Stripe status check failed:",error);
+    res.status(500).json({error:"Betalingsstatus kunne ikke hentes."});
+  }
 });
 
 app.post("/api/billing/portal",requireAuth,async(req,res)=>{
@@ -1008,7 +981,10 @@ app.post("/api/billing/portal",requireAuth,async(req,res)=>{
     if(!stripe||!req.user.stripeCustomerId)return res.status(400).json({error:"Der er ikke noget Stripe-abonnement at administrere."});
     const portal=await stripe.billingPortal.sessions.create({customer:req.user.stripeCustomerId,return_url:PUBLIC_SITE_URL});
     res.json({url:portal.url});
-  }catch(error){console.error("[ShardNote] Stripe portal failed:",error);res.status(500).json({error:"Abonnementsadministration kunne ikke åbnes."});}
+  }catch(error){
+    console.error("[ShardNote] Stripe portal failed:",error);
+    res.status(500).json({error:"Abonnementsadministration kunne ikke åbnes."});
+  }
 });
 
 app.use("/api", (req, res, next) => {
@@ -1016,7 +992,7 @@ app.use("/api", (req, res, next) => {
   requireAuth(req,res,async()=>{
     try{
       if(["/billing/create-checkout","/billing/status","/billing/portal"].some(path=>req.path.startsWith(path))) return next();
-      if(!hasPaidAccess(req.user)) return res.status(402).json({requiresSubscription:true,error:"Et aktivt ShardNote-abonnement på 2 € pr. måned kræves."});
+      if(!hasPaidAccess(req.user))return res.status(402).json({requiresSubscription:true,error:"Et aktivt ShardNote-abonnement på 2 € pr. måned kræves."});
       next();
     }catch(error){console.error(error);res.status(500).json({error:"Adgangskontrol kunne ikke gennemføres."});}
   });
