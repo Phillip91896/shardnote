@@ -391,7 +391,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
     times.push(now);
     spamBuckets.set(key, times);
 
-    const invite = /(?:discord\\.gg\\/|discord(?:app)?\\.com\\/invite\\/)/i.test(message.content || "");
+    const invite = /discord(?:\.gg\/|(?:app)?\.com\/invite\/)/i.test(message.content || "");
     const blockedWords = String(process.env.AUTOMOD_WORDS || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean);
     const blockedWord = blockedWords.some(word => word && String(message.content || "").toLowerCase().includes(word));
     const spam = times.length >= 6;
