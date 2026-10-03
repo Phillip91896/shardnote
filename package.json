@@ -1,12 +1,13 @@
 {
   "name": "shardnote",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "ShardNote Discord bot dashboard",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js"
   },
   "dependencies": {
+    "discord.js": "^14.24.2",
     "express": "^4.21.2"
   }
 }
