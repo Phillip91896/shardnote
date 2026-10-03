@@ -262,14 +262,19 @@ async function loadLogs(){
 async function loadUsers(){
   try{
     const users=await api("/api/admin/users");
+    const planNames={member:"Member",member_plus:"Member Plus",member_pro:"Member Pro",member_premium:"Member Premium"};
     document.getElementById("userList").innerHTML=users.map(u=>{
       const roleButton=u.id!==currentUser?.id
         ? `<button class="btn small" onclick="toggleUserRole(${u.id},'${u.role}')">${u.role==="admin"?"Gør til member":"Gør til admin"}</button>`
         : "";
+      const nextPlan=u.plan==="member_plus"?"member":"member_plus";
+      const planButton=u.role!=="admin"
+        ? `<button class="btn small" onclick="toggleUserPlan(${u.id},'${nextPlan}')">${u.plan==="member_plus"?"Gør til Member":"Gør til Member Plus"}</button>`
+        : "";
       const deleteButton=u.id!==currentUser?.id
         ? `<button class="btn small danger" onclick="deleteUser(${u.id})">Slet</button>`
         : "";
-      return `<div class="activity-item"><div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div><div style="flex:1"><b>${escapeHtml(u.name)}</b><small>${escapeHtml(u.email)} · ${escapeHtml(u.role)}</small></div>${roleButton} ${deleteButton}</div>`;
+      return `<div class="activity-item"><div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div><div style="flex:1"><b>${escapeHtml(u.name)}</b><small>${escapeHtml(u.email)} · ${escapeHtml(u.role)} · <b>${escapeHtml(planNames[u.plan]||"Member")}</b></small></div>${roleButton} ${planButton} ${deleteButton}</div>`;
     }).join("")||'<div class="empty">Ingen brugere.</div>';
   }catch(e){toast(e.message)}
 }
@@ -308,6 +313,10 @@ function unlockDashboard(){
     document.querySelector('[data-page="logs"]')?.remove();
     document.querySelector('[data-page="settings"]')?.remove();
     document.getElementById("page-settings")?.remove();
+    if(currentUser?.plan!=="member_plus" && currentUser?.role!=="admin"){
+      document.querySelector('[data-page="features"]')?.remove();
+      document.getElementById("page-features")?.remove();
+    }
   }
   loadStats();
 }
@@ -550,6 +559,17 @@ async function toggleUserRole(id,currentRole){
     toast(nextRole==="admin"?"Admin-adgang givet":"Admin-adgang fjernet");
     loadUsers();
     loadLogs();
+  }catch(e){toast(e.message)}
+}
+async function toggleUserPlan(id,nextPlan){
+  try{
+    await api("/api/admin/users/"+id+"/plan",{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({plan:nextPlan})
+    });
+    toast(nextPlan==="member_plus"?"Member Plus givet":"Member givet");
+    loadUsers();
   }catch(e){toast(e.message)}
 }
 async function deleteUser(id){if(!confirm("Slet denne bruger?"))return;try{await api("/api/admin/users/"+id,{method:"DELETE"});toast("Bruger slettet");loadUsers();loadLogs()}catch(e){toast(e.message)}}
