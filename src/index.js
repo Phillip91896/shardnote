@@ -145,6 +145,45 @@ app.post("/api/login", (req, res) => {
   res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 
+app.post("/api/register", (req, res) => {
+  ensureAdmin();
+
+  const name = String(req.body.name || "").trim().slice(0, 80);
+  const email = String(req.body.email || "").trim().toLowerCase().slice(0, 160);
+  const password = String(req.body.password || "");
+
+  if (name.length < 2) {
+    return res.status(400).json({ error: "Navnet skal være mindst 2 tegn." });
+  }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "Skriv en gyldig emailadresse." });
+  }
+  if (password.length < 8) {
+    return res.status(400).json({ error: "Adgangskoden skal være mindst 8 tegn." });
+  }
+  if (state.users.some(u => u.email === email)) {
+    return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+  }
+
+  const user = {
+    id: Date.now(),
+    name,
+    email,
+    role: "staff",
+    passwordHash: hashPassword(password),
+    createdAt: new Date().toISOString()
+  };
+
+  state.users.push(user);
+
+  const sid = crypto.randomBytes(32).toString("hex");
+  sessions.set(sid, { id: user.id, name: user.name, email: user.email, role: user.role });
+  res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+
+  log("security", `New account registered: ${email}`);
+  res.status(201).json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+});
+
 app.post("/api/logout", (req, res) => {
   const sid = parseCookies(req).shardnote_session;
   if (sid) sessions.delete(sid);
@@ -199,7 +238,7 @@ app.get("/health", (req, res) => {
 });
 
 app.use("/api", (req, res, next) => {
-  if (["/login", "/logout", "/me"].includes(req.path) || req.path === "/health") return next();
+  if (["/login", "/register", "/logout", "/me"].includes(req.path) || req.path === "/health") return next();
   requireAuth(req, res, next);
 });
 
