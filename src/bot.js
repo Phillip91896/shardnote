@@ -450,15 +450,68 @@ function createBot({ state, db, log, createTicket, setReady }) {
     };
     const selectedPrefixRole = base => prefixRoles.has(roleKey(base)) ? "F5 " + base : base;
 
+    function permissionsForRole(key) {
+      const basic = [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.Connect,
+        PermissionFlagsBits.Speak
+      ];
+      if (key === "owner") return [PermissionFlagsBits.Administrator];
+      if (key === "admin") return [
+        PermissionFlagsBits.ManageGuild,
+        PermissionFlagsBits.ManageChannels,
+        PermissionFlagsBits.ManageRoles,
+        PermissionFlagsBits.ManageMessages,
+        PermissionFlagsBits.KickMembers,
+        PermissionFlagsBits.BanMembers,
+        PermissionFlagsBits.ModerateMembers,
+        PermissionFlagsBits.ViewAuditLog
+      ];
+      if (key === "developer") return [
+        PermissionFlagsBits.ManageGuild,
+        PermissionFlagsBits.ManageChannels,
+        PermissionFlagsBits.ManageRoles,
+        PermissionFlagsBits.ManageMessages,
+        PermissionFlagsBits.ViewAuditLog
+      ];
+      if (key === "moderator") return [
+        PermissionFlagsBits.ManageMessages,
+        PermissionFlagsBits.ModerateMembers,
+        PermissionFlagsBits.KickMembers,
+        PermissionFlagsBits.ViewAuditLog
+      ];
+      if (key === "coach") return [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.Connect,
+        PermissionFlagsBits.Speak,
+        PermissionFlagsBits.ManageMessages
+      ];
+      if (key === "support") return [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.AttachFiles,
+        PermissionFlagsBits.EmbedLinks,
+        PermissionFlagsBits.Connect,
+        PermissionFlagsBits.Speak
+      ];
+      if (key === "muted") return [
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.ReadMessageHistory
+      ];
+      return basic;
+    }
+
     const roleSpecs = config.roles.map((base,index) => ({
       key: roleKey(base),
       name: selectedPrefixRole(base),
       color: [0xf1c40f,0xe74c3c,0xe67e22,0x3498db,0x9b59b6,0x2ecc71,0x7f8c8d,0x1abc9c][index % 8],
       hoist: index < Math.min(5, config.roles.length),
-      permissions: index===0 ? [PermissionFlagsBits.Administrator] :
-        index===1 ? [PermissionFlagsBits.ManageGuild,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageRoles,PermissionFlagsBits.ManageMessages,PermissionFlagsBits.KickMembers,PermissionFlagsBits.BanMembers,PermissionFlagsBits.ModerateMembers,PermissionFlagsBits.ViewAuditLog] :
-        index===2 ? [PermissionFlagsBits.ManageMessages,PermissionFlagsBits.ModerateMembers,PermissionFlagsBits.KickMembers,PermissionFlagsBits.ViewAuditLog] :
-        [PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.Connect,PermissionFlagsBits.Speak]
+      permissions: permissionsForRole(roleKey(base))
     }));
 
     const roles = {};
@@ -485,8 +538,15 @@ function createBot({ state, db, log, createTicket, setReady }) {
     const roleList = Object.values(roles);
     const ownerRole = roles.owner;
     const adminRole = roles.admin;
-    const staffRoleIds = roleList.slice(0, Math.min(4, roleList.length)).map(r=>r.id);
-    const memberRoleIds = roleList.map(r=>r.id);
+    const staffRoleIds = roleSpecs
+      .filter(r => ["owner","admin","developer","moderator","support","coach"].includes(r.key))
+      .map(r => roles[r.key]?.id)
+      .filter(Boolean);
+    const mutedRoleIds = roleSpecs
+      .filter(r => r.key === "muted")
+      .map(r => roles[r.key]?.id)
+      .filter(Boolean);
+    const memberRoleIds = roleList.filter(r => !mutedRoleIds.includes(r.id)).map(r=>r.id);
     const botId = guild.client.user.id;
     const overwrite = (id, allow = [], deny = []) => ({ id, allow, deny });
 
@@ -502,11 +562,13 @@ function createBot({ state, db, log, createTicket, setReady }) {
     const communityOverwrites = [
       overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel]),
       ...memberRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages])),
+      ...mutedRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory],[PermissionFlagsBits.SendMessages])),
       overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
     const voiceOverwrites = [
       overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.Connect]),
       ...memberRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.Connect])),
+      ...mutedRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory],[PermissionFlagsBits.Connect,PermissionFlagsBits.Speak,PermissionFlagsBits.SendMessages])),
       overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.Connect,PermissionFlagsBits.Speak,PermissionFlagsBits.ManageChannels])
     ];
 
