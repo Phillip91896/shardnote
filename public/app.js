@@ -23,6 +23,7 @@ document.querySelectorAll(".nav button").forEach(btn=>{
 
 function navigate(page){
   if(!pages.includes(page)) return;
+  if(page==="settings" && currentUser && currentUser.role!=="admin") return;
   pages.forEach(p=>{
     const el=document.getElementById("page-"+p);
     if(el) el.classList.toggle("active",p===page);
@@ -213,9 +214,9 @@ async function loadLogCategory(element){
     const items=await api("/api/logs?category="+encodeURIComponent(category));
     if(category==="login"){
       body.innerHTML=items.length
-        ? `<div class="table-wrap"><table class="table"><thead><tr><th>Tid</th><th>Bruger</th><th>Resultat</th><th>IP</th><th>Sted</th><th>Browser/enhed</th></tr></thead><tbody>${items.map(item=>{
+        ? `<div class="table-wrap"><table class="table"><thead><tr><th>Tid</th><th>Bruger</th><th>Resultat</th><th>Sted</th><th>Browser/enhed</th></tr></thead><tbody>${items.map(item=>{
             const place=[item.city,item.country].filter(Boolean).join(", ")||"Ukendt";
-            return `<tr><td>${new Date(item.createdAt).toLocaleString("da-DK")}</td><td>${escapeHtml(item.userName||item.userEmail||"Ukendt")}</td><td><span class="badge ${item.success?"open":"closed"}">${item.success?"Succes":"Fejlet"}</span></td><td>${escapeHtml(item.ipAddress||"Ukendt")}</td><td>${escapeHtml(place)}</td><td title="${escapeHtml(item.userAgent||"")}">${escapeHtml(item.userAgent||"Ukendt")}</td></tr>`;
+            return `<tr><td>${new Date(item.createdAt).toLocaleString("da-DK")}</td><td>${escapeHtml(item.userName||item.userEmail||"Ukendt")}</td><td><span class="badge ${item.success?"open":"closed"}">${item.success?"Succes":"Fejlet"}</span></td><td>${escapeHtml(place)}</td><td title="${escapeHtml(item.userAgent||"")}">${escapeHtml(item.userAgent||"Ukendt")}</td></tr>`;
           }).join("")}</tbody></table></div>`
         : '<div class="empty">Ingen login-logs endnu.</div>';
     }else{
@@ -290,6 +291,8 @@ async function checkLogin(){
     if(currentUser.role!=="admin"){
       document.querySelector('[data-page="admin"]')?.remove();
       document.querySelector('[data-page="logs"]')?.remove();
+      document.querySelector('[data-page="settings"]')?.remove();
+      document.getElementById("page-settings")?.remove();
     }
     loadStats();
   }catch(e){showLogin();}
@@ -353,6 +356,8 @@ async function login(e){
     if(currentUser.role!=="admin"){
       document.querySelector('[data-page="admin"]')?.remove();
       document.querySelector('[data-page="logs"]')?.remove();
+      document.querySelector('[data-page="settings"]')?.remove();
+      document.getElementById("page-settings")?.remove();
     }
     loadStats();
   }catch(err){error.textContent=err.message}
@@ -383,6 +388,8 @@ async function register(e){
     if(currentUser.role!=="admin"){
       document.querySelector('[data-page="admin"]')?.remove();
       document.querySelector('[data-page="logs"]')?.remove();
+      document.querySelector('[data-page="settings"]')?.remove();
+      document.getElementById("page-settings")?.remove();
     }
 
     toast("Konto oprettet");
