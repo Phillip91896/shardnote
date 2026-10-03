@@ -2,7 +2,7 @@ const express = require("express");
 const crypto = require("crypto");
 const path = require("path");
 const { Pool } = require("pg");
-const { Client, GatewayIntentBits } = require("discord.js");
+const { createBot } = require("./bot");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -123,58 +123,15 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-const client = new Client({
-  intents: [
-    GatewayIntentBits.Guilds,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
-});
-
 let discordReady = false;
 
-client.once("ready", () => {
-  discordReady = true;
-  log("success", "Discord bot connected as " + client.user.tag);
-});
-
-client.on("messageCreate", (message) => {
-  if (message.author.bot) return;
-  const prefix = state.settings.prefix || "!";
-  if (!message.content.startsWith(prefix)) return;
-
-  const parts = message.content.slice(prefix.length).trim().split(/\s+/);
-  const command = (parts.shift() || "").toLowerCase();
-
-  if (command === "ping") {
-    message.reply("Pong! ShardNote is online.");
-    log("command", `!ping used by ${message.author.tag}`);
-  }
-
-  if (command === "ticket") {
-    const ticket = {
-      id: Date.now(),
-      title: parts.join(" ") || "New Discord ticket",
-      user: message.author.tag,
-      status: "open",
-      priority: "normal",
-      createdAt: new Date().toISOString()
-    };
-    state.tickets.unshift(ticket);
-    message.reply(`Ticket #${ticket.id} created.`);
-    log("ticket", `Ticket #${ticket.id} created by ${message.author.tag}`);
+const client = createBot({
+  state,
+  log,
+  setReady(ready) {
+    discordReady = ready;
   }
 });
-
-if (process.env.DISCORD_TOKEN) {
-  client.login(process.env.DISCORD_TOKEN).catch((error) => {
-    discordReady = false;
-    log("error", "Discord login failed: " + error.message);
-  });
-} else {
-  log("warning", "DISCORD_TOKEN is not configured. Dashboard runs in web-only mode.");
-}
-
 
 app.post("/api/login", async (req, res) => {
   try {
@@ -452,7 +409,7 @@ app.get("/api/stats", (req, res) => {
       ? client.guilds.cache.reduce((total, guild) => total + (guild.memberCount || 0), 0)
       : 0,
     tickets: state.tickets.filter(t => t.status !== "closed").length,
-    commands: 2,
+    commands: 5,
     uptime: Math.floor((Date.now() - startedAt) / 1000)
   });
 });
