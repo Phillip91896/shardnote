@@ -134,6 +134,7 @@ async function initDatabase() {
   await db.query(`
     ALTER TABLE public.users
       ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(30) NOT NULL DEFAULT 'inactive',
+      ADD COLUMN IF NOT EXISTS trial_used BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(120),
       ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(120),
       ADD COLUMN IF NOT EXISTS subscription_current_period_end TIMESTAMPTZ
@@ -489,7 +490,7 @@ function currentUser(req) {
 async function updateUserSubscription({userId,status,customerId=null,subscriptionId=null,currentPeriodEnd=null}){const normalizedStatus=String(status||"inactive");const periodEnd=currentPeriodEnd?new Date(Number(currentPeriodEnd)*1000).toISOString():null;if(db){await db.query(`UPDATE public.users SET subscription_status=$1,stripe_customer_id=COALESCE($2,stripe_customer_id),stripe_subscription_id=COALESCE($3,stripe_subscription_id),subscription_current_period_end=COALESCE($4::timestamptz,subscription_current_period_end) WHERE id=$5`,[normalizedStatus,customerId,subscriptionId,periodEnd,userId]);return;}const user=state.users.find(item=>String(item.id)===String(userId));if(user){user.subscriptionStatus=normalizedStatus;if(customerId)user.stripeCustomerId=customerId;if(subscriptionId)user.stripeSubscriptionId=subscriptionId;if(periodEnd)user.subscriptionCurrentPeriodEnd=periodEnd;}}
 async function updateUserSubscriptionByStripeSubscription(subscriptionId,status){if(!db||!subscriptionId)return;await db.query("UPDATE public.users SET subscription_status=$1 WHERE stripe_subscription_id=$2",[status,subscriptionId]);}
 async function refreshSubscriptionFromStripe(user){if(!stripe||!user?.stripeSubscriptionId)return user;try{const subscription=await stripe.subscriptions.retrieve(user.stripeSubscriptionId);const customerId=typeof subscription.customer==="string"?subscription.customer:subscription.customer?.id||user.stripeCustomerId||null;await updateUserSubscription({userId:user.id,status:subscription.status,customerId,subscriptionId:subscription.id,currentPeriodEnd:subscription.current_period_end});user.subscriptionStatus=subscription.status;user.stripeCustomerId=customerId;user.stripeSubscriptionId=subscription.id;user.subscriptionCurrentPeriodEnd=subscription.current_period_end?new Date(subscription.current_period_end*1000).toISOString():user.subscriptionCurrentPeriodEnd;}catch(error){console.error("[ShardNote] Could not refresh Stripe subscription:",error.message);}return user;}
-async function getSessionUser(req){const sessionUser=currentUser(req);if(!sessionUser)return null;if(!db)return sessionUser;const result=await db.query(`SELECT id,name,email,role,subscription_status AS "subscriptionStatus",stripe_customer_id AS "stripeCustomerId",stripe_subscription_id AS "stripeSubscriptionId",subscription_current_period_end AS "subscriptionCurrentPeriodEnd" FROM public.users WHERE id=$1 LIMIT 1`,[sessionUser.id]);const row=result.rows[0];if(!row)return null;Object.assign(sessionUser,row);return sessionUser;}
+async function getSessionUser(req){const sessionUser=currentUser(req);if(!sessionUser)return null;if(!db)return sessionUser;const result=await db.query(`SELECT id,name,email,role,subscription_status AS "subscriptionStatus",trial_used AS "trialUsed",stripe_customer_id AS "stripeCustomerId",stripe_subscription_id AS "stripeSubscriptionId",subscription_current_period_end AS "subscriptionCurrentPeriodEnd" FROM public.users WHERE id=$1 LIMIT 1`,[sessionUser.id]);const row=result.rows[0];if(!row)return null;Object.assign(sessionUser,row);return sessionUser;}
 function hasPaidAccess(user){return user?.role==="admin"||["active","trialing"].includes(user?.subscriptionStatus);}
 async function requireAuth(req,res,next){try{const user=await getSessionUser(req);if(!user)return res.status(401).json({error:"Du skal logge ind."});req.user=user;next();}catch(error){console.error(error);res.status(500).json({error:"Loginstatus kunne ikke hentes."});}}
 function requireAdmin(req, res, next) {
@@ -553,6 +554,7 @@ app.post("/api/login", async (req, res) => {
       const result = await db.query(
         `SELECT id, name, email, role, password_hash, created_at,
                 subscription_status AS "subscriptionStatus",
+                trial_used AS "trialUsed",
                 stripe_customer_id AS "stripeCustomerId",
                 stripe_subscription_id AS "stripeSubscriptionId",
                 subscription_current_period_end AS "subscriptionCurrentPeriodEnd"
@@ -569,6 +571,7 @@ app.post("/api/login", async (req, res) => {
           passwordHash: row.password_hash,
           createdAt: row.created_at,
           subscriptionStatus: row.subscriptionStatus || "inactive",
+          trialUsed: !!row.trialUsed,
           stripeCustomerId: row.stripeCustomerId || null,
           stripeSubscriptionId: row.stripeSubscriptionId || null,
           subscriptionCurrentPeriodEnd: row.subscriptionCurrentPeriodEnd || null
@@ -610,6 +613,7 @@ app.post("/api/login", async (req, res) => {
         email: user.email,
         role: user.role,
         subscriptionStatus: user.subscriptionStatus || "inactive",
+        trialUsed: !!user.trialUsed,
         hasPaidAccess: hasPaidAccess(user)
       }
     });
@@ -708,7 +712,7 @@ app.get("/api/me", async (req,res)=>{
   const user=await getSessionUser(req);
   if(!user)return res.status(401).json({error:"Ikke logget ind."});
   if(stripe&&user.stripeSubscriptionId)await refreshSubscriptionFromStripe(user);
-  res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role,subscriptionStatus:user.subscriptionStatus||"inactive",hasPaidAccess:hasPaidAccess(user)}});
+  res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role,subscriptionStatus:user.subscriptionStatus||"inactive",trialUsed:!!user.trialUsed,hasPaidAccess:hasPaidAccess(user)}});
 });
 
 app.get("/api/admin/login-history", requireAuth, requireAdmin, async (req, res) => {
@@ -964,15 +968,28 @@ app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
       customerId=customer.id;
       await updateUserSubscription({userId:req.user.id,status:"inactive",customerId});
     }
+
+    const firstTrial=!req.user.trialUsed;
     const session=await stripe.checkout.sessions.create({
       mode:"subscription",
       customer:customerId,
-      line_items:[{price_data:{currency:"eur",unit_amount:200,recurring:{interval:"month"},product_data:{name:"ShardNote Premium"}},quantity:1}],
+      line_items:[{price_data:{currency:"eur",unit_amount:267,recurring:{interval:"month"},product_data:{name:"ShardNote Premium"}},quantity:1}],
       metadata:{user_id:String(req.user.id)},
-      subscription_data:{metadata:{user_id:String(req.user.id)}},
+      subscription_data:{
+        metadata:{user_id:String(req.user.id)},
+        ...(firstTrial ? {trial_period_days:10} : {})
+      },
       success_url:PUBLIC_SITE_URL+"/?payment=success",
       cancel_url:PUBLIC_SITE_URL+"/?payment=cancel"
     });
+
+    if(firstTrial && db){
+      await db.query("UPDATE public.users SET trial_used=TRUE WHERE id=$1",[req.user.id]);
+    } else if(firstTrial){
+      const localUser=state.users.find(item=>String(item.id)===String(req.user.id));
+      if(localUser)localUser.trialUsed=true;
+    }
+
     res.json({url:session.url});
   }catch(error){
     console.error("[ShardNote] Stripe checkout failed:",error);
