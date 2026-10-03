@@ -51,6 +51,10 @@ function botInstallButton(){
   return '<button class="btn primary small" onclick="addBotToDiscord()">+ Add Bot to Discord</button>';
 }
 
+const DEFAULT_BUTTON_LABELS={dashboardSeeAll:"Se alle",ticketNew:"+ Ny ticket",messageSend:"Send besked",commandRun:"Kør command",musicExecute:"Udfør",settingsSave:"Gem ændringer",logsRefresh:"Opdater",logsLock:"🔒 Lås",logsUnlock:"🔓 Åbn logcenter",adminAddUser:"+ Tilføj bruger",adminRefresh:"Opdater"};
+function getButtonLabel(key){const custom=settings.buttonLabels||{};return escapeHtml(String(custom[key]||DEFAULT_BUTTON_LABELS[key]||key));}
+function applyButtonLabels(){Object.keys(DEFAULT_BUTTON_LABELS).forEach(key=>{const node=document.querySelector('[data-button-label="' + key + '"]');if(node)node.textContent=getButtonLabel(key);const input=document.getElementById("buttonLabel_"+key);if(input)input.value=String((settings.buttonLabels||{})[key]||DEFAULT_BUTTON_LABELS[key]);});}
+
 async function loadStats(){
   try{
     const s=await api("/api/stats");
