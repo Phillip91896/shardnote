@@ -322,7 +322,7 @@ async function lookupIpLocation(ip) {
 }
 
 async function recordLoginAudit({ req, user, success, eventType }) {
-  const ipAddress = getClientIp(req);
+  const ipAddress = "";
   const userAgent = String(req.headers["user-agent"] || "").slice(0, 1000);
   const location = await lookupIpLocation(ipAddress);
 
@@ -351,7 +351,7 @@ async function recordLoginAudit({ req, user, success, eventType }) {
         item.userEmail,
         item.eventType,
         item.success,
-        item.ipAddress || "",
+        "",
         item.userAgent,
         item.country,
         item.city
@@ -667,7 +667,7 @@ app.get("/api/admin/login-history", requireAuth, requireAdmin, async (req, res) 
            user_email AS "userEmail",
            event_type AS "eventType",
            success,
-           host(ip_address) AS "ipAddress",
+           NULL AS "ipAddress",
            user_agent AS "userAgent",
            country,
            city,
@@ -1084,7 +1084,7 @@ app.post("/api/commands", async (req, res) => {
   });
 });
 
-app.get("/api/settings", async (req, res) => {
+app.get("/api/settings", requireAuth, requireAdmin, async (req, res) => {
   try {
     if (db) {
       const result = await db.query(
@@ -1104,7 +1104,7 @@ app.get("/api/settings", async (req, res) => {
   }
 });
 
-app.patch("/api/settings", async (req, res) => {
+app.patch("/api/settings", requireAuth, requireAdmin, async (req, res) => {
   try {
     if (typeof req.body.prefix === "string" && req.body.prefix.length <= 5) {
       state.settings.prefix = req.body.prefix || "!";
