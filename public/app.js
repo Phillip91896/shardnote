@@ -414,7 +414,7 @@ function showPaywall(){
     <h1>Abonnement kræves</h1>
     <p>Din konto er oprettet, men du skal have et aktivt abonnement på <b>2 € pr. måned</b> for at få adgang til kontrolpanelet.</p>
     <button class="btn primary" style="width:100%;margin-top:8px" onclick="startSubscription()">Betal 2 € / måned</button>
-    <button class="btn" style="width:100%;margin-top:10px" onclick="checkBillingStatus()">Jeg har allerede betalt</button>
+    <div style="font-size:12px;color:var(--muted);margin-top:12px">Når betalingen er godkendt, gemmes dit abonnement automatisk på kontoen. Næste gang du logger ind, går du direkte ind på dashboardet.</div>
     <button class="btn small" style="margin-top:18px" onclick="logout()">Log ud</button>
     <div id="paymentError" style="color:var(--red);font-size:12px;margin-top:12px"></div>
   </div>`;
