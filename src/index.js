@@ -998,6 +998,10 @@ app.get("/api/settings", async (req, res) => {
          FROM public.bot_settings WHERE id = 1 LIMIT 1`
       );
       if (result.rows[0]) state.settings = result.rows[0];
+      const buttonLabelResult = await db.query("SELECT message FROM public.logs WHERE type = 'button_labels' ORDER BY created_at DESC LIMIT 1");
+      if (buttonLabelResult.rows[0]) {
+        try { state.settings.buttonLabels = JSON.parse(buttonLabelResult.rows[0].message) || {}; } catch (_) {}
+      }
     }
     res.json(state.settings);
   } catch (error) {
