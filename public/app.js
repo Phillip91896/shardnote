@@ -398,9 +398,8 @@ function showPaywall(){
 }
 function showLogin(){
   document.body.classList.add("locked");
-  if(document.getElementById("loginScreen")) return;
 
-  const box=document.createElement("div");
+  const box=document.getElementById("loginScreen") || document.createElement("div");
   box.id="loginScreen";
   box.innerHTML=`<div class="login-card">
     <div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div>
