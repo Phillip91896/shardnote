@@ -1086,21 +1086,24 @@ app.use("/api", (req, res, next) => {
 app.get("/api/stats", async (req, res) => {
   try {
     let linkedGuildIds = [];
-    if (db) {
+    if (db && req.user?.role !== "admin") {
       const linked = await db.query("SELECT guild_id FROM public.account_guilds WHERE user_id = $1", [req.user.id]);
       linkedGuildIds = linked.rows.map(row => String(row.guild_id));
     }
 
     const linkedGuilds = discordReady
-      ? [...client.guilds.cache.values()].filter(guild => linkedGuildIds.includes(String(guild.id)))
+      ? (req.user?.role === "admin"
+          ? [...client.guilds.cache.values()]
+          : [...client.guilds.cache.values()].filter(guild => linkedGuildIds.includes(String(guild.id))))
       : [];
 
-    let openTickets = state.tickets.filter(t => t.ownerUserId === req.user.id && t.status !== "closed").length;
+    let openTickets = req.user?.role === "admin"
+      ? state.tickets.filter(t => t.status !== "closed").length
+      : state.tickets.filter(t => t.ownerUserId === req.user.id && t.status !== "closed").length;
     if (db) {
-      const result = await db.query(
-        "SELECT COUNT(*)::int AS count FROM public.tickets WHERE owner_user_id = $1 AND status <> 'closed'",
-        [req.user.id]
-      );
+      const result = req.user?.role === "admin"
+        ? await db.query("SELECT COUNT(*)::int AS count FROM public.tickets WHERE status <> 'closed'")
+        : await db.query("SELECT COUNT(*)::int AS count FROM public.tickets WHERE owner_user_id = $1 AND status <> 'closed'", [req.user.id]);
       openTickets = result.rows[0].count;
     }
 
@@ -1122,15 +1125,23 @@ app.get("/api/stats", async (req, res) => {
 app.get("/api/tickets", async (req, res) => {
   try {
     if (db) {
-      const result = await db.query(`
-        SELECT id, title, user_name AS "user", status, priority, created_at AS "createdAt"
-        FROM public.tickets
-        WHERE owner_user_id = $1
-        ORDER BY created_at DESC LIMIT 500
-      `, [req.user.id]);
-      state.tickets = result.rows.map(row => ({ ...row, ownerUserId: req.user.id }));
+      const result = req.user?.role === "admin"
+        ? await db.query(`
+            SELECT id, title, user_name AS "user", status, priority, created_at AS "createdAt", owner_user_id AS "ownerUserId"
+            FROM public.tickets
+            ORDER BY created_at DESC LIMIT 500
+          `)
+        : await db.query(`
+            SELECT id, title, user_name AS "user", status, priority, created_at AS "createdAt", owner_user_id AS "ownerUserId"
+            FROM public.tickets
+            WHERE owner_user_id = $1
+            ORDER BY created_at DESC LIMIT 500
+          `, [req.user.id]);
+      state.tickets = result.rows;
     }
-    res.json(state.tickets.filter(item => String(item.ownerUserId || "") === String(req.user.id)));
+    res.json(req.user?.role === "admin"
+      ? state.tickets
+      : state.tickets.filter(item => String(item.ownerUserId || "") === String(req.user.id)));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Kunne ikke hente tickets." });
@@ -1161,13 +1172,14 @@ app.patch("/api/tickets/:id", async (req, res) => {
         `UPDATE public.tickets
          SET status = COALESCE($1, status),
              priority = COALESCE($2, priority)
-         WHERE id = $3 AND owner_user_id = $4
-         RETURNING id, title, user_name AS "user", status, priority, created_at AS "createdAt"`,
+         WHERE id = $3 AND (owner_user_id = $4 OR $5 = TRUE)
+         RETURNING id, title, user_name AS "user", status, priority, created_at AS "createdAt", owner_user_id AS "ownerUserId"`,
         [
           ["open", "pending", "closed"].includes(req.body.status) ? req.body.status : null,
           ["low", "normal", "high"].includes(req.body.priority) ? req.body.priority : null,
           req.params.id,
-          req.user.id
+          req.user.id,
+          req.user.role === "admin"
         ]
       );
       if (!result.rowCount) return res.status(404).json({ error: "Ticket not found" });
@@ -1178,7 +1190,7 @@ app.patch("/api/tickets/:id", async (req, res) => {
       return res.json(ticket);
     }
 
-    const ticket = state.tickets.find(t => String(t.id) === String(req.params.id) && String(t.ownerUserId || "") === String(req.user.id));
+    const ticket = state.tickets.find(t => String(t.id) === String(req.params.id) && (req.user?.role === "admin" || String(t.ownerUserId || "") === String(req.user.id)));
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
     if (["open", "pending", "closed"].includes(req.body.status)) ticket.status = req.body.status;
     if (["low", "normal", "high"].includes(req.body.priority)) ticket.priority = req.body.priority;
@@ -1193,7 +1205,9 @@ app.patch("/api/tickets/:id", async (req, res) => {
 app.delete("/api/tickets/:id", async (req, res) => {
   try {
     if (db) {
-      const result = await db.query("DELETE FROM public.tickets WHERE id = $1 AND owner_user_id = $2 RETURNING id", [req.params.id, req.user.id]);
+      const result = req.user?.role === "admin"
+        ? await db.query("DELETE FROM public.tickets WHERE id = $1 RETURNING id", [req.params.id])
+        : await db.query("DELETE FROM public.tickets WHERE id = $1 AND owner_user_id = $2 RETURNING id", [req.params.id, req.user.id]);
       if (!result.rowCount) return res.status(404).json({ error: "Ticket not found" });
       state.tickets = state.tickets.filter(t => String(t.id) !== String(req.params.id));
       log("ticket", `Ticket #${req.params.id} deleted`, req.user.id);
@@ -1214,15 +1228,23 @@ app.delete("/api/tickets/:id", async (req, res) => {
 app.get("/api/messages", async (req, res) => {
   try {
     if (db) {
-      const result = await db.query(`
-        SELECT id, channel, content, author, created_at AS "time"
-        FROM public.messages
-        WHERE owner_user_id = $1
-        ORDER BY created_at DESC LIMIT 500
-      `, [req.user.id]);
-      state.messages = result.rows.map(row => ({ ...row, ownerUserId: req.user.id }));
+      const result = req.user?.role === "admin"
+        ? await db.query(`
+            SELECT id, channel, content, author, created_at AS "time", owner_user_id AS "ownerUserId"
+            FROM public.messages
+            ORDER BY created_at DESC LIMIT 500
+          `)
+        : await db.query(`
+            SELECT id, channel, content, author, created_at AS "time", owner_user_id AS "ownerUserId"
+            FROM public.messages
+            WHERE owner_user_id = $1
+            ORDER BY created_at DESC LIMIT 500
+          `, [req.user.id]);
+      state.messages = result.rows;
     }
-    res.json(state.messages.filter(item => String(item.ownerUserId || "") === String(req.user.id)));
+    res.json(req.user?.role === "admin"
+      ? state.messages
+      : state.messages.filter(item => String(item.ownerUserId || "") === String(req.user.id)));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Kunne ikke hente beskeder." });
@@ -1406,13 +1428,15 @@ app.get("/api/logs/categories", requireAuth, requireAdmin, requireLogsAccess, as
   try {
     const counts = {};
     if (db) {
-      const logsResult = await db.query(
-        `SELECT type, COUNT(*)::int AS count
-         FROM public.logs
-         WHERE owner_user_id = $1
-         GROUP BY type`,
-        [req.user.id]
-      );
+      const logsResult = req.user?.role === "admin"
+        ? await db.query(`SELECT type, COUNT(*)::int AS count FROM public.logs GROUP BY type`)
+        : await db.query(
+            `SELECT type, COUNT(*)::int AS count
+             FROM public.logs
+             WHERE owner_user_id = $1
+             GROUP BY type`,
+            [req.user.id]
+          );
       for (const row of logsResult.rows) counts[row.type] = row.count;
 
       const loginResult = await db.query(
@@ -1466,14 +1490,23 @@ app.get("/api/logs", requireAuth, requireAdmin, requireLogsAccess, async (req, r
         return res.json(result.rows);
       }
 
-      const result = await db.query(
-        `SELECT id, type, message, created_at AS "time"
-         FROM public.logs
-         WHERE type = $1 AND owner_user_id = $2
-         ORDER BY created_at DESC
-         LIMIT 500`,
-        [config.type, req.user.id]
-      );
+      const result = req.user?.role === "admin"
+        ? await db.query(
+            `SELECT id, type, message, created_at AS "time", owner_user_id AS "ownerUserId"
+             FROM public.logs
+             WHERE type = $1
+             ORDER BY created_at DESC
+             LIMIT 500`,
+            [config.type]
+          )
+        : await db.query(
+            `SELECT id, type, message, created_at AS "time", owner_user_id AS "ownerUserId"
+             FROM public.logs
+             WHERE type = $1 AND owner_user_id = $2
+             ORDER BY created_at DESC
+             LIMIT 500`,
+            [config.type, req.user.id]
+          );
       return res.json(result.rows);
     }
 
@@ -1488,11 +1521,15 @@ app.get("/api/logs", requireAuth, requireAdmin, requireLogsAccess, async (req, r
 
 app.get("/api/bot/guilds", requireAuth, requirePaid, async (req, res) => {
   try {
-    if (!discordReady || !db) return res.json([]);
-    const linked = await db.query("SELECT guild_id FROM public.account_guilds WHERE user_id = $1", [req.user.id]);
-    const linkedIds = new Set(linked.rows.map(row => String(row.guild_id)));
-    const guilds = [...client.guilds.cache.values()]
-      .filter(guild => linkedIds.has(String(guild.id)))
+    if (!discordReady) return res.json([]);
+    let guildsSource = [...client.guilds.cache.values()];
+    if (req.user?.role !== "admin") {
+      if (!db) return res.json([]);
+      const linked = await db.query("SELECT guild_id FROM public.account_guilds WHERE user_id = $1", [req.user.id]);
+      const linkedIds = new Set(linked.rows.map(row => String(row.guild_id)));
+      guildsSource = guildsSource.filter(guild => linkedIds.has(String(guild.id)));
+    }
+    const guilds = guildsSource
       .map(guild => ({
         id: guild.id,
         name: guild.name,
@@ -1512,7 +1549,7 @@ app.get("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, async (re
     if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
     const guild = client.guilds.cache.get(String(req.params.guildId));
     if (!guild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
-    if (!(await isGuildLinkedToUser(req.user.id, guild.id))) return res.status(403).json({ error: "Denne Discord-server er ikke koblet til din ShardNote-konto." });
+    if (req.user?.role !== "admin" && !(await isGuildLinkedToUser(req.user.id, guild.id))) return res.status(403).json({ error: "Denne Discord-server er ikke koblet til din ShardNote-konto." });
 
     let settings;
     if (client.dashboardGetGuildSettings) {
