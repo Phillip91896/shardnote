@@ -7,6 +7,8 @@ const { createBot } = require("./bot");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+app.set("trust proxy", 1);
+
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "../public"), { maxAge: 0 }));
@@ -47,6 +49,7 @@ const state = {
   ],
   messages: [],
   logs: [],
+  loginAudit: [],
   settings: {
     prefix: "!",
     maintenance: false,
@@ -67,6 +70,89 @@ function log(type, message) {
 
 
 const sessions = new Map();
+
+function getClientIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  const ip = forwarded || req.ip || req.socket?.remoteAddress || "";
+  return ip.replace(/^::ffff:/, "");
+}
+
+const geoCache = new Map();
+
+async function lookupIpLocation(ip) {
+  if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("172.16.")) {
+    return { country: null, city: null };
+  }
+
+  if (geoCache.has(ip)) return geoCache.get(ip);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1200);
+
+  try {
+    const response = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, {
+      signal: controller.signal,
+      headers: { "User-Agent": "ShardNote/1.0" }
+    });
+
+    if (!response.ok) return { country: null, city: null };
+
+    const data = await response.json();
+    const location = {
+      country: data.country_name || data.country || null,
+      city: data.city || null
+    };
+
+    geoCache.set(ip, location);
+    return location;
+  } catch {
+    return { country: null, city: null };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function recordLoginAudit({ req, user, success, eventType }) {
+  const ipAddress = getClientIp(req);
+  const userAgent = String(req.headers["user-agent"] || "").slice(0, 1000);
+  const location = await lookupIpLocation(ipAddress);
+
+  const item = {
+    id: Date.now() + Math.random(),
+    userId: user?.id || null,
+    userName: user?.name || null,
+    userEmail: user?.email || null,
+    eventType,
+    success: !!success,
+    ipAddress,
+    userAgent,
+    country: location.country,
+    city: location.city,
+    createdAt: new Date().toISOString()
+  };
+
+  if (db) {
+    await db.query(
+      `INSERT INTO public.login_audit
+       (user_id, user_name, user_email, event_type, success, ip_address, user_agent, country, city)
+       VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')::inet, $7, $8, $9)`,
+      [
+        item.userId,
+        item.userName,
+        item.userEmail,
+        item.eventType,
+        item.success,
+        item.ipAddress || "",
+        item.userAgent,
+        item.country,
+        item.city
+      ]
+    );
+  } else {
+    state.loginAudit.unshift(item);
+    state.loginAudit = state.loginAudit.slice(0, 500);
+  }
+}
 
 function hashPassword(password) {
   return crypto.createHash("sha256").update(String(password)).digest("hex");
@@ -164,6 +250,12 @@ app.post("/api/login", async (req, res) => {
     }
 
     if (!user) {
+      await recordLoginAudit({
+        req,
+        user: { email },
+        success: false,
+        eventType: "login_failed"
+      });
       log("security", `Failed login attempt for ${email || "unknown user"}`);
       return res.status(401).json({ error: "Forkert email eller adgangskode." });
     }
@@ -177,6 +269,7 @@ app.post("/api/login", async (req, res) => {
     });
 
     res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    await recordLoginAudit({ req, user, success: true, eventType: "login" });
     log("security", `User ${user.email} logged in`);
     res.json({
       user: {
@@ -281,6 +374,40 @@ app.get("/api/me", (req, res) => {
   const user = currentUser(req);
   if (!user) return res.status(401).json({ error: "Ikke logget ind." });
   res.json({ user });
+});
+
+app.get("/api/admin/login-history", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 200, 1), 500);
+
+    if (db) {
+      const result = await db.query(
+        `SELECT
+           id,
+           user_id AS "userId",
+           user_name AS "userName",
+           user_email AS "userEmail",
+           event_type AS "eventType",
+           success,
+           host(ip_address) AS "ipAddress",
+           user_agent AS "userAgent",
+           country,
+           city,
+           created_at AS "createdAt"
+         FROM public.login_audit
+         ORDER BY created_at DESC
+         LIMIT $1`,
+        [limit]
+      );
+      return res.json(result.rows);
+    }
+
+    res.json(state.loginAudit.slice(0, limit));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente login-historikken." });
+  }
 });
 
 app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
