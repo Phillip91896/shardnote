@@ -1679,7 +1679,11 @@ app.post("/api/bot/guilds/:guildId/templates/:templateKey", requireAuth, require
     }
 
     const templateKey = String(req.params.templateKey || "").trim().toLowerCase();
-    if (templateKey !== "f5-vip") {
+    const allowedTemplates = [
+      "f5-vip","fivem-vip","fivem-esx","fivem-rp","rust","vennegruppe",
+      "gaming","clan","streamer","community","support","shop","creator","custom"
+    ];
+    if (!allowedTemplates.includes(templateKey)) {
       return res.status(400).json({ error: "Ukendt Discord-skitse." });
     }
 
