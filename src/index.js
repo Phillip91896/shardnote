@@ -1314,6 +1314,23 @@ body.locked > .app{display:none}
     <div class="switch-row"><div><b>Maintenance mode</b><div style="color:var(--muted);font-size:12px">Vis dashboardet som vedligeholdelse</div></div><button id="maintenanceSwitch" class="switch" onclick="toggleSetting('maintenance')"><i></i></button></div>
     <div class="switch-row"><div><b>Auto-reply</b><div style="color:var(--muted);font-size:12px">Tillad automatiske svar</div></div><button id="autoReplySwitch" class="switch" onclick="toggleSetting('autoReply')"><i></i></button></div>
     <div class="switch-row"><div><b>Welcome messages</b><div style="color:var(--muted);font-size:12px">Velkomstbeskeder til nye medlemmer</div></div><button id="welcomeMessagesSwitch" class="switch" onclick="toggleSetting('welcomeMessages')"><i></i></button></div>
+    <div style="margin-top:22px;padding-top:20px;border-top:1px solid var(--border)">
+      <div class="section-title"><div><h2>Knapnavne</h2><span>Kun knapper inde på siderne. Menuen ændres ikke.</span></div></div>
+      <div class="form-grid">
+        <div class="field"><label>Se alle</label><input id="buttonLabel_dashboardSeeAll" maxlength="80"></div>
+        <div class="field"><label>+ Ny ticket</label><input id="buttonLabel_ticketNew" maxlength="80"></div>
+        <div class="field"><label>Send besked</label><input id="buttonLabel_messageSend" maxlength="80"></div>
+        <div class="field"><label>Kør command</label><input id="buttonLabel_commandRun" maxlength="80"></div>
+        <div class="field"><label>Udfør</label><input id="buttonLabel_musicExecute" maxlength="80"></div>
+        <div class="field"><label>Gem ændringer</label><input id="buttonLabel_settingsSave" maxlength="80"></div>
+        <div class="field"><label>Opdater logs</label><input id="buttonLabel_logsRefresh" maxlength="80"></div>
+        <div class="field"><label>Lås logs</label><input id="buttonLabel_logsLock" maxlength="80"></div>
+        <div class="field"><label>Åbn logcenter</label><input id="buttonLabel_logsUnlock" maxlength="80"></div>
+        <div class="field"><label>+ Tilføj bruger</label><input id="buttonLabel_adminAddUser" maxlength="80"></div>
+        <div class="field"><label>Opdater brugere</label><input id="buttonLabel_adminRefresh" maxlength="80"></div>
+      </div>
+      <div style="color:var(--muted);font-size:12px;margin-top:12px">Sidebar/menu-knapper, Log ud og Add Bot til Discord ændres ikke.</div>
+    </div>
   </div>
 </section>
 
