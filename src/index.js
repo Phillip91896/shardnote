@@ -120,7 +120,8 @@ async function loadPersistentState() {
       FROM public.logs ORDER BY created_at DESC LIMIT 100
     `),
     db.query(`
-      SELECT prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages"
+      SELECT prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages",
+           button_labels AS "buttonLabels"
       FROM public.bot_settings WHERE id = 1 LIMIT 1
     `)
   ]);
@@ -143,7 +144,17 @@ const state = {
     prefix: "!",
     maintenance: false,
     autoReply: true,
-    welcomeMessages: true
+    welcomeMessages: true,
+    buttonLabels: {
+      dashboard: "Dashboard",
+      tickets: "Tickets",
+      messages: "Beskeder",
+      commands: "Commands",
+      music: "Musik",
+      settings: "Indstillinger",
+      logs: "Logs",
+      admin: "Admin"
+    }
   }
 };
 
@@ -988,7 +999,8 @@ app.get("/api/settings", async (req, res) => {
   try {
     if (db) {
       const result = await db.query(
-        `SELECT prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages"
+        `SELECT prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages",
+                 button_labels AS "buttonLabels"
          FROM public.bot_settings WHERE id = 1 LIMIT 1`
       );
       if (result.rows[0]) state.settings = result.rows[0];
@@ -1009,6 +1021,18 @@ app.patch("/api/settings", async (req, res) => {
     if (typeof req.body.autoReply === "boolean") state.settings.autoReply = req.body.autoReply;
     if (typeof req.body.welcomeMessages === "boolean") state.settings.welcomeMessages = req.body.welcomeMessages;
 
+    if (req.body.buttonLabels && typeof req.body.buttonLabels === "object" && !Array.isArray(req.body.buttonLabels)) {
+      const current = state.settings.buttonLabels || {};
+      const allowed = ["dashboard","tickets","messages","commands","music","settings","logs","admin"];
+      for (const key of allowed) {
+        if (typeof req.body.buttonLabels[key] === "string") {
+          const value = req.body.buttonLabels[key].trim().slice(0, 40);
+          if (value) current[key] = value;
+        }
+      }
+      state.settings.buttonLabels = current;
+    }
+
     if (db) {
       const result = await db.query(
         `UPDATE public.bot_settings
@@ -1016,14 +1040,17 @@ app.patch("/api/settings", async (req, res) => {
              maintenance = $2,
              auto_reply = $3,
              welcome_messages = $4,
+             button_labels = $5::jsonb,
              updated_at = NOW()
          WHERE id = 1
-         RETURNING prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages"`,
+         RETURNING prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages",
+                   button_labels AS "buttonLabels"`,
         [
           state.settings.prefix,
           state.settings.maintenance,
           state.settings.autoReply,
-          state.settings.welcomeMessages
+          state.settings.welcomeMessages,
+          JSON.stringify(state.settings.buttonLabels || {})
         ]
       );
       if (result.rows[0]) state.settings = result.rows[0];
@@ -1215,14 +1242,14 @@ body.locked > .app{display:none}
 <aside class="sidebar">
   <div class="brand"><div class="brand-mark">S</div><span>ShardNote</span></div>
   <nav class="nav">
-    <button class="active" data-page="dashboard"><span class="icon">⌂</span><span>Dashboard</span></button>
-    <button data-page="tickets"><span class="icon">🎫</span><span>Tickets</span></button>
-    <button data-page="messages"><span class="icon">✉</span><span>Beskeder</span></button>
-    <button data-page="commands"><span class="icon">⌘</span><span>Commands</span></button>
-    <button data-page="music"><span class="icon">♫</span><span>Musik</span></button>
-    <button data-page="settings"><span class="icon">⚙</span><span>Indstillinger</span></button>
-    <button data-page="logs"><span class="icon">◷</span><span>Logs</span></button>
-    <button data-page="admin"><span class="icon">👑</span><span>Admin</span></button>
+    <button class="active" data-page="dashboard"><span class="icon">⌂</span><span class="nav-label">Dashboard</span></button>
+    <button data-page="tickets"><span class="icon">🎫</span><span class="nav-label">Tickets</span></button>
+    <button data-page="messages"><span class="icon">✉</span><span class="nav-label">Beskeder</span></button>
+    <button data-page="commands"><span class="icon">⌘</span><span class="nav-label">Commands</span></button>
+    <button data-page="music"><span class="icon">♫</span><span class="nav-label">Musik</span></button>
+    <button data-page="settings"><span class="icon">⚙</span><span class="nav-label">Indstillinger</span></button>
+    <button data-page="logs"><span class="icon">◷</span><span class="nav-label">Logs</span></button>
+    <button data-page="admin"><span class="icon">👑</span><span class="nav-label">Admin</span></button>
   </nav>
   <div class="sidebar-footer">ShardNote 2.0<br>Discord Control Center</div>
 </aside>
@@ -1302,6 +1329,11 @@ body.locked > .app{display:none}
     <div class="switch-row"><div><b>Maintenance mode</b><div style="color:var(--muted);font-size:12px">Vis dashboardet som vedligeholdelse</div></div><button id="maintenanceSwitch" class="switch" onclick="toggleSetting('maintenance')"><i></i></button></div>
     <div class="switch-row"><div><b>Auto-reply</b><div style="color:var(--muted);font-size:12px">Tillad automatiske svar</div></div><button id="autoReplySwitch" class="switch" onclick="toggleSetting('autoReply')"><i></i></button></div>
     <div class="switch-row"><div><b>Welcome messages</b><div style="color:var(--muted);font-size:12px">Velkomstbeskeder til nye medlemmer</div></div><button id="welcomeMessagesSwitch" class="switch" onclick="toggleSetting('welcomeMessages')"><i></i></button></div>
+  </div>
+  <div class="card" style="margin-top:18px">
+    <div class="section-title"><h2>Rediger knapnavne</h2><span>Navnene gemmes i databasen</span></div>
+    <div id="buttonLabelEditor" class="form-grid"></div>
+    <div class="actions"><button class="btn primary" onclick="saveButtonLabels()">Gem knapnavne</button><button class="btn" onclick="resetButtonLabels()">Nulstil navne</button></div>
   </div>
 </section>
 
