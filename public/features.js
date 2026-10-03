@@ -159,24 +159,34 @@
     showPage();
     const host=document.getElementById("botFeaturesPage");
     if(!host) return;
-    host.innerHTML='<div class="card"><div class="empty">Henter Discord-servere…</div></div>';
+
+    const cards=FEATURE_LIST.map(function(item){
+      return '<div class="feature-card"><div style="font-size:24px;margin-bottom:8px">'+item[0]+'</div><h3>'+esc(item[1])+'</h3><p>'+esc(item[2])+'</p><span class="feature-command">'+esc(item[3])+'</span></div>';
+    }).join("");
+
+    host.innerHTML=
+      '<div class="card" style="margin-bottom:18px">'+
+        '<div class="section-title"><div><h2>Alle bot-funktioner</h2><span>Her kan du se alt, ShardNote-botten kan. Dette er bot-funktionerne – ikke selve Discord-serveren.</span></div><div class="badge open">'+FEATURE_LIST.length+' funktioner</div></div>'+
+        '<div class="feature-grid">'+cards+'</div>'+
+      '</div>'+
+      '<div class="card">'+
+        '<div class="section-title"><div><h2>Bot-indstillinger pr. server</h2><span>Vælg en Discord-server herunder, hvis du vil konfigurere funktionerne.</span></div><div id="snFeatureGuildWrap" style="min-width:260px"></div></div>'+
+        '<div id="snFeatureSettings"><div class="empty">Henter Discord-servere…</div></div>'+
+      '</div>';
 
     try{
       const guilds=await apiCall("/api/bot/guilds");
       if(!guilds.length){
-        host.innerHTML='<div class="card"><div class="empty"><div style="font-size:34px;margin-bottom:10px">🤖</div><b>Ingen Discord-servere fundet</b><div style="margin-top:8px;font-size:12px;color:var(--muted)">Botten skal være online og være tilføjet til mindst én Discord-server.</div></div></div>';
+        document.getElementById("snFeatureGuildWrap").innerHTML='<span class="badge pending">Ingen server valgt</span>';
+        document.getElementById("snFeatureSettings").innerHTML='<div class="empty">Botten skal være tilføjet til mindst én Discord-server for at kunne konfigurere funktionerne. Selve funktionslisten ovenfor er stadig tilgængelig.</div>';
         return;
       }
 
       if(!guilds.some(function(g){return String(g.id)===String(selectedGuild);})) selectedGuild=guilds[0].id;
       localStorage.setItem("shardnote_feature_guild",selectedGuild);
 
-      host.innerHTML=
-        '<div class="card">'+
-          '<div class="section-title"><div><h2>Bot-funktioner</h2><span>Alt det, vi har bygget ind i botten, samlet ét sted.</span></div>'+
-          '<select id="snFeatureGuild" class="feature-select" style="max-width:360px">'+guilds.map(function(g){return '<option value="'+esc(g.id)+'"'+(String(g.id)===String(selectedGuild)?" selected":"")+'>'+esc(g.name)+' · '+g.memberCount+' medlemmer</option>';}).join("")+'</select></div>'+
-          '<div id="snFeatureSettings"></div>'+
-        '</div>';
+      document.getElementById("snFeatureGuildWrap").innerHTML=
+        '<select id="snFeatureGuild" class="feature-select" style="max-width:360px">'+guilds.map(function(g){return '<option value="'+esc(g.id)+'"'+(String(g.id)===String(selectedGuild)?" selected":"")+'>'+esc(g.name)+' · '+g.memberCount+' medlemmer</option>';}).join("")+'</select>';
 
       document.getElementById("snFeatureGuild").addEventListener("change",function(){
         selectedGuild=this.value;
@@ -186,7 +196,8 @@
 
       await renderFeatureSettings(selectedGuild);
     }catch(error){
-      host.innerHTML='<div class="card"><div class="empty">'+esc(error.message)+'</div></div>';
+      document.getElementById("snFeatureGuildWrap").innerHTML='<span class="badge pending">Kunne ikke hente servere</span>';
+      document.getElementById("snFeatureSettings").innerHTML='<div class="empty">'+esc(error.message)+'</div>';
     }
   }
 
