@@ -314,7 +314,121 @@ function createBot({ state, db, log, createTicket, setReady }) {
   async function applyDiscordTemplate(guildId, templateKey, options = {}) {
     const guild = client.guilds.cache.get(String(guildId));
     if (!guild) throw new Error("Discord serveren blev ikke fundet.");
-    if (templateKey !== "f5-vip") throw new Error("Ukendt Discord-skitse.");
+
+    const templates = {
+      "f5-vip": {
+        name: "F5 VIP",
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        categories: ["📌 INFORMATION","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","⭐ VIP","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","verification","annonceringer","chat","forslag","support","ticket-panel","vip-chat","staff-chat","logs","Fælles","VIP Lounge"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false },
+        prefixRoles:["owner","admin","moderator","support","vip","member","muted"],
+        prefixChannels:["welcome","rules","verification","announcements","chat","suggestions","support","ticketPanel","vipChat","staffChat","logs","generalVoice","vipVoice"]
+      },
+      "fivem-vip": {
+        name: "FiveM VIP",
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        categories: ["📌 INFORMATION","🚓 FIVEM","🎫 SUPPORT","🎟️ TICKETS","⭐ VIP","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","server-info","jobs","support","ticket-panel","vip-chat","staff-chat","logs","clips","Fælles","VIP Lounge"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
+      },
+      "fivem-esx": {
+        name: "FiveM ESX",
+        roles: ["Ejer","Admin","Developer","Moderator","Support","Politi","EMS","Medlem","Muted"],
+        categories: ["📌 INFORMATION","🚓 FIVEM","👮 JOBS","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","server-info","whitelist","job-info","politi","ems","support","ticket-panel","forslag","logs","Fælles","Staff"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:false, economy_enabled:false, anti_raid_enabled:true, lockdown:false }
+      },
+      "fivem-rp": {
+        name: "FiveM RP",
+        roles: ["Ejer","Admin","Moderator","Support","Kriminel","Civil","Medlem","Muted"],
+        categories: ["📌 INFORMATION","🚓 RP","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","server-info","rp-info","fraktioner","chat","support","ticket-panel","forslag","logs","Fælles","RP Voice"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:false, anti_raid_enabled:true, lockdown:false }
+      },
+      "rust": {
+        name: "Rust",
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        categories: ["📌 INFORMATION","⛏️ RUST","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","server-info","wipe-info","raid-info","team-finder","chat","support","ticket-panel","trade","logs","Fælles","Rust Voice"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
+      },
+      "vennegruppe": {
+        name: "Vennegruppe",
+        roles: ["Ejer","Admin","Moderator","Ven","Muted"],
+        categories: ["👋 INFORMATION","💬 CHAT","🎮 SPIL","🔊 VOICE"],
+        channels: ["velkommen","regler","chat","memes","clips","game-chat","find-et-game","bot-commands","Fælles","Gaming","Chill"],
+        features: { automod_enabled:true, invite_filter:false, levels_enabled:true, economy_enabled:true, anti_raid_enabled:false, lockdown:false }
+      },
+      "gaming": {
+        name: "Gaming Community",
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        categories: ["📌 INFORMATION","💬 COMMUNITY","🎮 GAMING","🎫 SUPPORT","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","chat","game-chat","find-spillere","clips","events","support","logs","Fælles","Gaming","Chill"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:false, lockdown:false }
+      },
+      "clan": {
+        name: "Clan / E-sport",
+        roles: ["Ejer","Admin","Coach","Moderator","Spiller","Trial","Muted"],
+        categories: ["📌 INFORMATION","🏆 CLAN","🎮 GAMING","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","announcements","team-chat","scrims","results","tryouts","clips","staff-chat","logs","Team VC","Scrim VC"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:false, anti_raid_enabled:true, lockdown:false }
+      },
+      "streamer": {
+        name: "Streamer / Creator",
+        roles: ["Ejer","Admin","Moderator","Subscriber","VIP","Medlem","Muted"],
+        categories: ["📌 INFORMATION","📺 STREAM","💬 COMMUNITY","🎫 SUPPORT","🔊 VOICE"],
+        channels: ["velkommen","regler","stream-live","stream-info","chat","clips","fan-art","support","suggestions","Fælles","Chill","Gaming"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:false, lockdown:false }
+      },
+      "community": {
+        name: "Community",
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        categories: ["📌 INFORMATION","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","annonceringer","chat","suggestions","events","support","ticket-panel","logs","Fælles","Chill"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
+      },
+      "support": {
+        name: "Support Server",
+        roles: ["Ejer","Admin","Support","Moderator","Medlem","Muted"],
+        categories: ["📌 INFORMATION","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","support","ticket-panel","faq","status","logs","Fælles","Support VC"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:false, economy_enabled:false, anti_raid_enabled:true, lockdown:false }
+      },
+      "shop": {
+        name: "Shop / Marketplace",
+        roles: ["Ejer","Admin","Moderator","Support","Kunde","VIP","Muted"],
+        categories: ["📌 INFORMATION","🛒 SHOP","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","shop-info","produkter","tilbud","bestillinger","support","ticket-panel","anmeldelser","logs","Fælles","Support VC"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:false, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
+      },
+      "creator": {
+        name: "Creator Community",
+        roles: ["Ejer","Admin","Moderator","Support","Creator","VIP","Medlem"],
+        categories: ["📌 INFORMATION","🎨 CREATOR","💬 COMMUNITY","🎫 SUPPORT","🔊 VOICE"],
+        channels: ["velkommen","regler","annonceringer","showcase","feedback","samarbejde","chat","support","logs","Fælles","Creator VC"],
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:false, lockdown:false }
+      }
+    };
+
+    let config = templates[templateKey];
+    if (templateKey === "custom") {
+      config = {
+        name: "Min egen skitse",
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        categories: ["📌 INFORMATION","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","annonceringer","chat","support","ticket-panel","logs","Fælles","Chill"],
+        features: {
+          automod_enabled: !!options.features?.automod_enabled,
+          invite_filter: !!options.features?.invite_filter,
+          levels_enabled: !!options.features?.levels_enabled,
+          economy_enabled: !!options.features?.economy_enabled,
+          anti_raid_enabled: !!options.features?.anti_raid_enabled,
+          lockdown: false
+        }
+      };
+    }
+    if (!config) throw new Error("Ukendt Discord-skitse.");
 
     const me = guild.members.me || await guild.members.fetchMe().catch(() => null);
     const required = [PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages];
@@ -322,47 +436,34 @@ function createBot({ state, db, log, createTicket, setReady }) {
       throw new Error("ShardNote mangler rettighederne Manage Roles, Manage Channels eller Send Messages på serveren.");
     }
 
-    const prefixRoles = new Set(Array.isArray(options.prefixRoles) ? options.prefixRoles.map(String) : [
-      "owner", "admin", "moderator", "support", "vip", "member", "muted"
-    ]);
-    const prefixChannels = new Set(Array.isArray(options.prefixChannels) ? options.prefixChannels.map(String) : [
-      "welcome", "rules", "verification", "announcements", "chat", "suggestions", "support", "ticketPanel",
-      "vipChat", "staffChat", "logs", "generalVoice", "vipVoice"
-    ]);
-    const roleName = (key, base) => prefixRoles.has(key) ? "F5 " + base : base;
+    const prefixRoles = new Set(Array.isArray(options.prefixRoles) ? options.prefixRoles.map(String) : (config.prefixRoles || []));
+    const prefixChannels = new Set(Array.isArray(options.prefixChannels) ? options.prefixChannels.map(String) : (config.prefixChannels || []));
+    const roleKeys = ["owner","admin","moderator","support","vip","member","muted","developer","police","ems","criminal","civil","friend","coach","player","trial","subscriber","customer","creator"];
+    const roleKey = base => {
+      const norm = String(base).toLowerCase();
+      const map = {
+        "ejer":"owner","admin":"admin","moderator":"moderator","support":"support","vip":"vip","medlem":"member","muted":"muted",
+        "developer":"developer","politi":"police","ems":"ems","kriminel":"criminal","civil":"civil","ven":"friend","coach":"coach",
+        "spiller":"player","trial":"trial","subscriber":"subscriber","kunde":"customer","creator":"creator"
+      };
+      return map[norm] || roleKeys.find(k => norm.includes(k)) || norm;
+    };
+    const selectedPrefixRole = base => prefixRoles.has(roleKey(base)) ? "F5 " + base : base;
 
-    const roleSpecs = [
-      { key: "owner", name: roleName("owner", "👑 Ejer"), color: 0xf1c40f, hoist: true, permissions: [PermissionFlagsBits.Administrator] },
-      { key: "admin", name: roleName("admin", "🛡️ Admin"), color: 0xe74c3c, hoist: true, permissions: [
-        PermissionFlagsBits.ManageGuild, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles,
-        PermissionFlagsBits.ManageMessages, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers,
-        PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ViewAuditLog
-      ] },
-      { key: "moderator", name: roleName("moderator", "🔨 Moderator"), color: 0xe67e22, hoist: true, permissions: [
-        PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers,
-        PermissionFlagsBits.KickMembers, PermissionFlagsBits.ViewAuditLog
-      ] },
-      { key: "support", name: roleName("support", "🎫 Support"), color: 0x3498db, hoist: true, permissions: [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory,
-        PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks
-      ] },
-      { key: "vip", name: roleName("vip", "⭐ VIP"), color: 0x9b59b6, hoist: true, permissions: [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory,
-        PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak
-      ] },
-      { key: "member", name: roleName("member", "✅ Medlem"), color: 0x2ecc71, hoist: false, permissions: [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory,
-        PermissionFlagsBits.Connect, PermissionFlagsBits.Speak
-      ] },
-      { key: "muted", name: roleName("muted", "🔇 Muted"), color: 0x7f8c8d, hoist: false, permissions: [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory
-      ] }
-    ];
+    const roleSpecs = config.roles.map((base,index) => ({
+      key: roleKey(base),
+      name: selectedPrefixRole(base),
+      color: [0xf1c40f,0xe74c3c,0xe67e22,0x3498db,0x9b59b6,0x2ecc71,0x7f8c8d,0x1abc9c][index % 8],
+      hoist: index < Math.min(5, config.roles.length),
+      permissions: index===0 ? [PermissionFlagsBits.Administrator] :
+        index===1 ? [PermissionFlagsBits.ManageGuild,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageRoles,PermissionFlagsBits.ManageMessages,PermissionFlagsBits.KickMembers,PermissionFlagsBits.BanMembers,PermissionFlagsBits.ModerateMembers,PermissionFlagsBits.ViewAuditLog] :
+        index===2 ? [PermissionFlagsBits.ManageMessages,PermissionFlagsBits.ModerateMembers,PermissionFlagsBits.KickMembers,PermissionFlagsBits.ViewAuditLog] :
+        [PermissionFlagsBits.ViewChannel,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.Connect,PermissionFlagsBits.Speak]
+    }));
 
     const roles = {};
     let createdRoles = 0;
     let existingRoles = 0;
-
     for (const spec of roleSpecs) {
       let role = guild.roles.cache.find(r => r.name === spec.name);
       if (!role) {
@@ -372,7 +473,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
           hoist: spec.hoist,
           mentionable: false,
           permissions: spec.permissions,
-          reason: "ShardNote Discord-skitse: F5 VIP"
+          reason: "ShardNote Discord-skitse: " + config.name
         });
         createdRoles++;
       } else {
@@ -381,264 +482,146 @@ function createBot({ state, db, log, createTicket, setReady }) {
       roles[spec.key] = role;
     }
 
-    const staffRoles = [roles.owner.id, roles.admin.id, roles.moderator.id, roles.support.id];
-    const communityRoles = [roles.owner.id, roles.admin.id, roles.moderator.id, roles.support.id, roles.vip.id, roles.member.id];
-    const botMemberId = guild.client.user.id;
+    const roleList = Object.values(roles);
+    const ownerRole = roles.owner;
+    const adminRole = roles.admin;
+    const staffRoleIds = roleList.slice(0, Math.min(4, roleList.length)).map(r=>r.id);
+    const memberRoleIds = roleList.map(r=>r.id);
+    const botId = guild.client.user.id;
     const overwrite = (id, allow = [], deny = []) => ({ id, allow, deny });
 
     const publicOverwrites = [
-      overwrite(guild.roles.everyone.id, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages
-      ]),
-      overwrite(botMemberId, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages
-      ])
+      overwrite(guild.roles.everyone.id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages]),
+      overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
-
     const privateOverwrites = [
-      overwrite(guild.roles.everyone.id, [], [PermissionFlagsBits.ViewChannel]),
-      ...staffRoles.map(id => overwrite(id, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages
-      ])),
-      overwrite(botMemberId, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages
-      ])
+      overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel]),
+      ...staffRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages])),
+      overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
-
     const communityOverwrites = [
-      overwrite(guild.roles.everyone.id, [], [PermissionFlagsBits.ViewChannel]),
-      ...communityRoles.map(id => overwrite(id, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages
-      ])),
-      overwrite(botMemberId, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages
-      ])
+      overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel]),
+      ...memberRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages])),
+      overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
-
-    const vipOverwrites = [
-      overwrite(guild.roles.everyone.id, [], [PermissionFlagsBits.ViewChannel]),
-      ...[roles.owner.id, roles.admin.id, roles.moderator.id, roles.support.id, roles.vip.id].map(id => overwrite(id, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages
-      ])),
-      overwrite(botMemberId, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages
-      ])
-    ];
-
     const voiceOverwrites = [
-      overwrite(guild.roles.everyone.id, [], [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect]),
-      ...[roles.owner.id, roles.admin.id, roles.moderator.id, roles.support.id, roles.vip.id, roles.member.id].map(id => overwrite(id, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect
-      ])),
-      overwrite(botMemberId, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak,
-        PermissionFlagsBits.ManageChannels
-      ])
+      overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.Connect]),
+      ...memberRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.Connect])),
+      overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.Connect,PermissionFlagsBits.Speak,PermissionFlagsBits.ManageChannels])
     ];
 
-    const staffCategoryOverwrites = [
-      overwrite(guild.roles.everyone.id, [], [PermissionFlagsBits.ViewChannel]),
-      ...staffRoles.map(id => overwrite(id, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages
-      ])),
-      overwrite(botMemberId, [
-        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages,
-        PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages
-      ])
-    ];
-
-    function prefixedName(key, name) {
-      const clean = String(name || "").trim();
-      const shouldPrefix = prefixChannels.has(key);
-      return shouldPrefix ? "F5 " + clean : clean;
+    function channelName(key,name) {
+      return prefixChannels.has(key) ? "F5 " + name : name;
     }
 
-    async function ensureCategory(name, permissionOverwrites) {
-      let category = guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name === name);
-      if (!category) {
-        const old = guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name === name.replace(/^F5 /, ""));
-        if (old) category = old;
-      }
-      if (!category) {
-        category = await guild.channels.create({
-          name,
-          type: ChannelType.GuildCategory,
-          permissionOverwrites,
-          reason: "ShardNote Discord-skitse: F5 VIP"
-        });
-      } else if (permissionOverwrites?.length) {
-        await category.permissionOverwrites.set(permissionOverwrites, "ShardNote Discord-skitse: F5 VIP").catch(() => {});
-      }
-      return category;
+    async function ensureCategory(name, overwrites) {
+      let c=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&x.name===name);
+      if(!c) c=await guild.channels.create({name,type:ChannelType.GuildCategory,permissionOverwrites:overwrites,reason:"ShardNote skitse: "+config.name});
+      else if(overwrites?.length) await c.permissionOverwrites.set(overwrites,"ShardNote skitse: "+config.name).catch(()=>{});
+      return c;
     }
 
-    async function ensureText(key, name, parent, permissionOverwrites = null) {
-      const targetName = prefixedName(key, name);
-      let channel = guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === targetName && c.parentId === parent.id);
-      if (!channel) {
-        const plain = guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === name && c.parentId === parent.id);
-        const prefixed = guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === "F5 " + name && c.parentId === parent.id);
-        channel = plain || prefixed;
-        if (channel && channel.name !== targetName) {
-          await channel.setName(targetName, "ShardNote Discord-skitse: F5 prefix").catch(() => {});
-        }
+    async function ensureText(key,name,parent,overwrites=null) {
+      const target=channelName(key,name);
+      let c=guild.channels.cache.find(x=>x.type===ChannelType.GuildText&&x.name===target&&x.parentId===parent.id);
+      if(!c){
+        const plain=guild.channels.cache.find(x=>x.type===ChannelType.GuildText&&x.name===name&&x.parentId===parent.id);
+        const pref=guild.channels.cache.find(x=>x.type===ChannelType.GuildText&&x.name==="F5 "+name&&x.parentId===parent.id);
+        c=plain||pref;
+        if(c&&c.name!==target) await c.setName(target,"ShardNote F5 prefix").catch(()=>{});
       }
-      if (!channel) {
-        channel = await guild.channels.create({
-          name: targetName,
-          type: ChannelType.GuildText,
-          parent: parent.id,
-          ...(permissionOverwrites ? { permissionOverwrites } : {}),
-          reason: "ShardNote Discord-skitse: F5 VIP"
-        });
-      } else if (permissionOverwrites?.length) {
-        await channel.permissionOverwrites.set(permissionOverwrites, "ShardNote Discord-skitse: F5 VIP").catch(() => {});
-      }
-      return channel;
+      if(!c) c=await guild.channels.create({name:target,type:ChannelType.GuildText,parent:parent.id,...(overwrites?{permissionOverwrites:overwrites}:{}),reason:"ShardNote skitse: "+config.name});
+      else if(overwrites?.length) await c.permissionOverwrites.set(overwrites,"ShardNote skitse: "+config.name).catch(()=>{});
+      return c;
     }
 
-    async function ensureVoice(key, name, parent, permissionOverwrites) {
-      const targetName = prefixedName(key, name);
-      let channel = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name === targetName && c.parentId === parent.id);
-      if (!channel) {
-        const plain = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name === name && c.parentId === parent.id);
-        const prefixed = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name === "F5 " + name && c.parentId === parent.id);
-        channel = plain || prefixed;
-        if (channel && channel.name !== targetName) {
-          await channel.setName(targetName, "ShardNote Discord-skitse: F5 prefix").catch(() => {});
-        }
+    async function ensureVoice(key,name,parent,overwrites) {
+      const target=channelName(key,name);
+      let c=guild.channels.cache.find(x=>x.type===ChannelType.GuildVoice&&x.name===target&&x.parentId===parent.id);
+      if(!c){
+        const plain=guild.channels.cache.find(x=>x.type===ChannelType.GuildVoice&&x.name===name&&x.parentId===parent.id);
+        const pref=guild.channels.cache.find(x=>x.type===ChannelType.GuildVoice&&x.name==="F5 "+name&&x.parentId===parent.id);
+        c=plain||pref;
+        if(c&&c.name!==target) await c.setName(target,"ShardNote F5 prefix").catch(()=>{});
       }
-      if (!channel) {
-        channel = await guild.channels.create({
-          name: targetName,
-          type: ChannelType.GuildVoice,
-          parent: parent.id,
-          permissionOverwrites,
-          reason: "ShardNote Discord-skitse: F5 VIP"
-        });
-      } else if (permissionOverwrites?.length) {
-        await channel.permissionOverwrites.set(permissionOverwrites, "ShardNote Discord-skitse: F5 VIP").catch(() => {});
-      }
-      return channel;
+      if(!c) c=await guild.channels.create({name:target,type:ChannelType.GuildVoice,parent:parent.id,permissionOverwrites:overwrites,reason:"ShardNote skitse: "+config.name});
+      else if(overwrites?.length) await c.permissionOverwrites.set(overwrites,"ShardNote skitse: "+config.name).catch(()=>{});
+      return c;
     }
 
-    const info = await ensureCategory("📌 INFORMATION", publicOverwrites);
-    const community = await ensureCategory("💬 COMMUNITY", communityOverwrites);
-    const support = await ensureCategory("🎫 SUPPORT", publicOverwrites);
-    const tickets = await ensureCategory("🎟️ TICKETS", privateOverwrites);
-    const vip = await ensureCategory("⭐ VIP", vipOverwrites);
-    const staff = await ensureCategory("🔒 STAFF", staffCategoryOverwrites);
-    const voice = await ensureCategory("🔊 VOICE", voiceOverwrites);
-
-    const welcome = await ensureText("welcome", "velkommen", info);
-    const rules = await ensureText("rules", "regler", info);
-    const verification = await ensureText("verification", "verification", info);
-    const announcements = await ensureText("announcements", "annonceringer", info);
-    const chat = await ensureText("chat", "chat", community);
-    const suggestions = await ensureText("suggestions", "forslag", community);
-    const supportChannel = await ensureText("support", "support", support);
-    const ticketPanel = await ensureText("ticketPanel", "ticket-panel", support);
-    const vipChat = await ensureText("vipChat", "vip-chat", vip);
-    const staffChat = await ensureText("staffChat", "staff-chat", staff);
-    const logs = await ensureText("logs", "logs", staff);
-    const generalVoice = await ensureVoice("generalVoice", "Fælles", voice, voiceOverwrites);
-    const vipVoice = await ensureVoice("vipVoice", "VIP Lounge", voice, vipOverwrites);
-
-    for (const channel of [welcome, rules, verification, announcements]) {
-      await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false }, { reason: "ShardNote F5 VIP template" }).catch(() => {});
+    const categories=[];
+    for(let i=0;i<config.categories.length;i++) {
+      const name=config.categories[i];
+      const overwrites = /SUPPORT|COMMUNITY|INFORMATION|FIVEM|RUST|GAMING|STREAM|CLAN|CREATOR|SHOP|CHAT|SPIL|RP|JOBS|VOICE/i.test(name) ? publicOverwrites : privateOverwrites;
+      categories.push(await ensureCategory(name,overwrites));
     }
 
-    const settings = await getGuildSettings(guild.id);
-    const templateSettings = {
-      welcome_channel_id: welcome.id,
+    const findCategory = (patterns, fallbackIndex=0) => categories.find(c=>patterns.some(p=>c.name.toLowerCase().includes(p))) || categories[fallbackIndex] || categories[0];
+
+    let textIndex=0;
+    const textChannels=[];
+    for (const base of config.channels) {
+      if(base === "Fælles" || base.endsWith(" VC") || base.includes("Voice") || base.includes("Lounge")) continue;
+      const key=base.toLowerCase().replace(/[^a-z0-9]+/g,"");
+      const parent=findCategory(
+        [base.includes("support")||base.includes("ticket")?"support":null, base.includes("log")||base.includes("staff")?"staff":null, base.includes("vip")?"vip":null, base.includes("game")||base.includes("chat")||base.includes("clips")?"community":null].filter(Boolean),
+        0
+      );
+      textChannels.push(await ensureText(key,base,parent));
+    }
+    const voiceNames=config.channels.filter(x=>x==="Fælles"||x.includes("VC")||x.includes("Voice")||x.includes("Lounge"));
+    for(const v of voiceNames){
+      const parent=findCategory(["voice","spil","gaming","community"],categories.length-1);
+      textChannels.push(await ensureVoice(v.toLowerCase().replace(/[^a-z0-9]+/g,""),v,parent,voiceOverwrites));
+    }
+
+    const byBase = name => textChannels.find(c=>c.name.replace(/^F5 /,"")===name);
+    const welcome = byBase("velkommen") || textChannels[0];
+    const logs = byBase("logs") || textChannels.find(c=>c.name.includes("log")) || textChannels[0];
+    const support = byBase("support");
+    const ticketPanel = byBase("ticket-panel");
+    const suggestions = byBase("forslag") || byBase("suggestions");
+    const verification = byBase("verification");
+
+    if(welcome) await welcome.send({embeds:[new EmbedBuilder().setTitle("👋 "+config.name+" server").setDescription("Serveren er sat op af ShardNote.").setColor(0x6d5dfc)]}).catch(()=>{});
+    if(config.features?.automod_enabled && logs) await logs.send({content:"✅ ShardNote AutoMod er aktiveret via "+config.name+"-skitsen."}).catch(()=>{});
+    if(suggestions && config.features?.levels_enabled) await suggestions.send({content:"💡 Forslag og community-funktioner er klar."}).catch(()=>{});
+    if(verification){
+      const memberRole=roles.member || roleList[roleList.length-1];
+      if(memberRole && !String(verification.name).startsWith("F5 ")) {
+        await verification.send({embeds:[new EmbedBuilder().setTitle("✅ Verification").setDescription("Tryk for at få "+memberRole+"-rollen." ).setColor(0x42d392),components:[new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("verify").setLabel("✅ Verificer mig").setStyle(ButtonStyle.Success))]}).catch(()=>{});
+      }
+    }
+    if(ticketPanel && config.features?.automod_enabled){
+      await ticketPanel.send({embeds:[new EmbedBuilder().setTitle("🎫 ShardNote Ticket").setDescription("Tryk på knappen for at oprette en privat support-ticket.").setColor(0x6d5dfc)],components:[new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("ticket_create").setLabel("🎫 Opret ticket").setStyle(ButtonStyle.Primary))]}).catch(()=>{});
+    }
+
+    const current = await getGuildSettings(guild.id);
+    const updates = {
+      welcome_channel_id: welcome?.id || null,
       welcome_message: "Velkommen {user} til {server}! 👋",
-      leave_channel_id: welcome.id,
+      leave_channel_id: welcome?.id || null,
       leave_message: "{user} har forladt {server}.",
-      log_channel_id: logs.id,
-      suggestion_channel_id: suggestions.id,
-      support_role_id: roles.support.id,
-      ticket_category_id: tickets.id,
-      verification_role_id: roles.member.id,
-      automod_enabled: true,
-      invite_filter: true,
-      levels_enabled: true,
-      economy_enabled: true,
-      anti_raid_enabled: true,
-      lockdown: false
+      log_channel_id: logs?.id || null,
+      suggestion_channel_id: suggestions?.id || null,
+      support_role_id: roles.support?.id || null,
+      ticket_category_id: categories.find(c=>c.name.includes("TICKETS"))?.id || categories.find(c=>c.name.includes("SUPPORT"))?.id || null,
+      verification_role_id: roles.member?.id || roleList[roleList.length-1]?.id || null,
+      ...config.features
     };
-
-    for (const [key, value] of Object.entries(templateSettings)) {
-      if (settings[key] !== value) await setGuildSetting(guild.id, key, value);
-    }
-
-    async function hasPanel(channel, needle) {
-      const messages = await channel.messages.fetch({ limit: 20 }).catch(() => null);
-      return Boolean(messages?.some(message =>
-        String(message.content || "").includes(needle) ||
-        message.embeds?.some(embed => String(embed.title || "").includes(needle))
-      ));
-    }
-
-    if (!await hasPanel(ticketPanel, "ShardNote Ticket")) {
-      await ticketPanel.send({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle("🎫 ShardNote Ticket")
-            .setDescription("Tryk på knappen for at oprette en privat support-ticket.")
-            .setColor(0x6d5dfc)
-        ],
-        components: [
-          new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId("ticket_create").setLabel("🎫 Opret ticket").setStyle(ButtonStyle.Primary)
-          )
-        ]
-      });
-    }
-
-    if (!await hasPanel(verification, "ShardNote Verification")) {
-      await verification.send({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle("✅ ShardNote Verification")
-            .setDescription("Tryk på knappen for at få **F5 Medlem**-rollen og adgang til community-kanalerne.")
-            .setColor(0x42d392)
-        ],
-        components: [
-          new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId("verify").setLabel("✅ Verificer mig").setStyle(ButtonStyle.Success)
-          )
-        ]
-      });
-    }
-
-    if (!await hasPanel(welcome, "F5 VIP server")) {
-      await welcome.send({
-        embeds: [
-          new EmbedBuilder()
-            .setTitle("👋 F5 VIP server")
-            .setDescription("Serveren er sat op af ShardNote. Læs reglerne og gennemfør verification for at få adgang til community-kanalerne.")
-            .setColor(0x9b59b6)
-        ]
-      });
+    for(const [key,value] of Object.entries(updates)){
+      if(value !== undefined && current[key] !== value) await setGuildSetting(guild.id,key,value);
     }
 
     return {
-      template: "f5-vip",
-      name: "F5 VIP",
+      template: templateKey,
+      name: config.name,
       createdRoles,
       existingRoles,
-      categories: 7,
-      roleNames: roleSpecs.map(role => role.name),
-      channels: [
-        welcome.name, rules.name, verification.name, announcements.name,
-        chat.name, suggestions.name, supportChannel.name, ticketPanel.name,
-        vipChat.name, staffChat.name, logs.name, generalVoice.name, vipVoice.name
-      ],
-      configured: templateSettings
+      roles: roleSpecs.map(r=>r.name),
+      categories: categories.map(c=>c.name),
+      channels: textChannels.map(c=>c.name),
+      features: config.features
     };
   }
 
