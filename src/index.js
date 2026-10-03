@@ -1619,6 +1619,7 @@ body.locked > .app{display:none}
 <div id="toast" class="toast"></div>
 
 <script src="/app.js" defer></script>
+<script src="/features.js" defer></script>
 </body>
 </html>`;
 
