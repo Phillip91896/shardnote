@@ -35,7 +35,7 @@ function navigate(page){
   if(page==="commands") loadCommands();
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
-  if(page==="admin"){ loadUsers(); loadLoginHistory(); loadDatabaseSummary(); }
+  if(page==="admin"){ loadUsers(); loadDatabaseSummary(); }
 }
 
 async function api(url, options){
@@ -120,34 +120,56 @@ async function saveSettings(){
 function renderLogLocked(){
   document.getElementById("logContent").style.display="none";
   document.getElementById("logLockPanel").style.display="block";
+  document.getElementById("logCategoryList").innerHTML="";
   document.getElementById("logPassword").value="";
 }
 
-function logCategory(type){
-  return ({
-    security:"Sikkerhed & login",
-    ticket:"Tickets",
-    message:"Beskeder",
-    command:"Commands",
-    settings:"Indstillinger",
-    success:"System",
-    warning:"Advarsler",
-    error:"Fejl"
-  })[type] || "Andet";
+async function loadLogCategories(){
+  const categories=await api("/api/logs/categories");
+  const icons={login:"🔐",security:"🛡️",tickets:"🎫",messages:"✉️",commands:"⌘",settings:"⚙️",system:"✅",warnings:"⚠️",errors:"❌"};
+  document.getElementById("logCategoryList").innerHTML=categories.map(c=>`
+    <details class="log-category" data-category="${escapeHtml(c.key)}" ontoggle="loadLogCategory(this)">
+      <summary><span>${icons[c.key]||"•"} ${escapeHtml(c.label)}</span><b>${c.count}</b></summary>
+      <div class="log-category-body"><div class="empty">Åbner…</div></div>
+    </details>
+  `).join("");
+  document.getElementById("logLockPanel").style.display="none";
+  document.getElementById("logContent").style.display="block";
+}
+
+async function loadLogCategory(element){
+  if(!element.open || element.dataset.loaded==="1") return;
+  const category=element.dataset.category;
+  const body=element.querySelector(".log-category-body");
+  body.innerHTML='<div class="empty">Henter logs…</div>';
+  try{
+    const items=await api("/api/logs?category="+encodeURIComponent(category));
+    if(category==="login"){
+      body.innerHTML=items.length
+        ? `<div class="table-wrap"><table class="table"><thead><tr><th>Tid</th><th>Bruger</th><th>Resultat</th><th>IP</th><th>Sted</th><th>Browser/enhed</th></tr></thead><tbody>${items.map(item=>{
+            const place=[item.city,item.country].filter(Boolean).join(", ")||"Ukendt";
+            return `<tr><td>${new Date(item.createdAt).toLocaleString("da-DK")}</td><td>${escapeHtml(item.userName||item.userEmail||"Ukendt")}</td><td><span class="badge ${item.success?"open":"closed"}">${item.success?"Succes":"Fejlet"}</span></td><td>${escapeHtml(item.ipAddress||"Ukendt")}</td><td>${escapeHtml(place)}</td><td title="${escapeHtml(item.userAgent||"")}">${escapeHtml(item.userAgent||"Ukendt")}</td></tr>`;
+          }).join("")}</tbody></table></div>`
+        : '<div class="empty">Ingen login-logs endnu.</div>';
+    }else{
+      body.innerHTML=items.length
+        ? `<table class="table"><thead><tr><th>Type</th><th>Hændelse</th><th>Tid</th></tr></thead><tbody>${items.map(item=>`<tr><td><span class="badge ${item.type==="error"?"closed":item.type==="warning"?"pending":"open"}">${escapeHtml(item.type)}</span></td><td>${escapeHtml(item.message)}</td><td>${new Date(item.time).toLocaleString("da-DK")}</td></tr>`).join("")}</tbody></table>`
+        : '<div class="empty">Ingen logs i denne kategori endnu.</div>';
+    }
+    element.dataset.loaded="1";
+  }catch(e){
+    body.innerHTML=`<div class="empty">${escapeHtml(e.message)}</div>`;
+  }
 }
 
 async function unlockLogs(){
   const password=document.getElementById("logPassword").value;
   document.getElementById("logUnlockError").textContent="";
   try{
-    await api("/api/logs/unlock",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({password})
-    });
+    await api("/api/logs/unlock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});
     document.getElementById("logLockPanel").style.display="none";
     document.getElementById("logContent").style.display="block";
-    await loadLogs();
+    await loadLogCategories();
     toast("Logs er åbnet i 15 minutter");
   }catch(e){
     document.getElementById("logUnlockError").textContent=e.message;
@@ -162,28 +184,10 @@ async function lockLogs(){
 
 async function loadLogs(){
   try{
-    const logs=await api("/api/logs");
-    const groups={};
-    logs.forEach(l=>{
-      const key=logCategory(l.type);
-      if(!groups[key]) groups[key]=[];
-      groups[key].push(l);
-    });
-    const order=["Sikkerhed & login","Tickets","Beskeder","Commands","Indstillinger","System","Advarsler","Fejl","Andet"];
-    const html=order.filter(name=>groups[name]).map(name=>{
-      const items=groups[name];
-      return `<details class="log-category">
-        <summary><span>${escapeHtml(name)}</span><b>${items.length}</b></summary>
-        <div class="log-category-body">
-          <table class="table"><thead><tr><th>Type</th><th>Hændelse</th><th>Tid</th></tr></thead><tbody>
-          ${items.map(l=>`<tr><td><span class="badge ${l.type==="error"?"closed":l.type==="warning"?"pending":"open"}">${escapeHtml(l.type)}</span></td><td>${escapeHtml(l.message)}</td><td>${new Date(l.time).toLocaleString("da-DK")}</td></tr>`).join("")}
-          </tbody></table>
-        </div>
-      </details>`;
-    }).join("");
-    document.getElementById("logContent").innerHTML=(html||'<div class="empty">Ingen logs endnu.</div>')+`<div class="actions" style="margin-top:18px"><button class="btn danger" onclick="lockLogs()">🔒 Lås logs</button></div>`;
+    await loadLogCategories();
   }catch(e){
-    if(e.message.includes("Logs er låst")) renderLogLocked(); else toast(e.message);
+    if(e.message.includes("Logs er låst")) renderLogLocked();
+    else toast(e.message);
   }
 }
 
@@ -199,17 +203,6 @@ async function loadUsers(){
         : "";
       return `<div class="activity-item"><div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div><div style="flex:1"><b>${escapeHtml(u.name)}</b><small>${escapeHtml(u.email)} · ${escapeHtml(u.role)}</small></div>${roleButton} ${deleteButton}</div>`;
     }).join("")||'<div class="empty">Ingen brugere.</div>';
-  }catch(e){toast(e.message)}
-}
-async function loadLoginHistory(){
-  try{
-    const items=await api("/api/admin/login-history?limit=200");
-    document.getElementById("loginHistoryList").innerHTML=items.length
-      ? `<div class="table-wrap"><table class="table"><thead><tr><th>Tid</th><th>Bruger</th><th>Resultat</th><th>IP</th><th>Sted</th><th>Browser/enhed</th></tr></thead><tbody>${items.map(item=>{
-          const place=[item.city,item.country].filter(Boolean).join(", ")||"Ukendt";
-          return `<tr><td>${new Date(item.createdAt).toLocaleString("da-DK")}</td><td>${escapeHtml(item.userName||item.userEmail||"Ukendt")}</td><td><span class="badge ${item.success?"open":"closed"}">${item.success?"Succes":"Fejlet"}</span></td><td>${escapeHtml(item.ipAddress||"Ukendt")}</td><td>${escapeHtml(place)}</td><td title="${escapeHtml(item.userAgent||"")}">${escapeHtml(item.userAgent||"Ukendt")}</td></tr>`;
-        }).join("")}</tbody></table></div>`
-      : '<div class="empty">Ingen login-historik endnu.</div>';
   }catch(e){toast(e.message)}
 }
 
@@ -348,6 +341,7 @@ window.register=register;
 window.addBotToDiscord=addBotToDiscord;
 window.unlockLogs=unlockLogs;
 window.lockLogs=lockLogs;
+window.loadLogCategory=loadLogCategory;
 async function createUser(){
   try{
     await api("/api/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("newUserName").value,email:document.getElementById("newUserEmail").value,password:document.getElementById("newUserPassword").value,role:document.getElementById("newUserRole").value})});
