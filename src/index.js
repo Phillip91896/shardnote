@@ -1,6 +1,7 @@
 const express = require("express");
 const crypto = require("crypto");
 const path = require("path");
+const { Pool } = require("pg");
 const { Client, GatewayIntentBits } = require("discord.js");
 
 const app = express();
@@ -9,6 +10,32 @@ const PORT = process.env.PORT || 3000;
 app.use(express.json({ limit: "1mb" }));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "../public"), { maxAge: 0 }));
+
+const db = process.env.DATABASE_URL
+  ? new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 5,
+      idleTimeoutMillis: 30000,
+      connectionTimeoutMillis: 10000
+    })
+  : null;
+
+async function initDatabase() {
+  if (!db) return;
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id BIGSERIAL PRIMARY KEY,
+      name VARCHAR(80) NOT NULL,
+      email VARCHAR(160) NOT NULL UNIQUE,
+      role VARCHAR(20) NOT NULL DEFAULT 'member',
+      password_hash TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await ensureAdmin();
+}
 
 const startedAt = Date.now();
 
@@ -53,12 +80,32 @@ function parseCookies(req) {
   }));
 }
 
-function ensureAdmin() {
+async function ensureAdmin() {
+  const email = (process.env.ADMIN_EMAIL || "admin@shardnote.local").trim().toLowerCase();
+  const password = process.env.ADMIN_PASSWORD || "change-me-now";
+
+  if (db) {
+    const existing = await db.query("SELECT id FROM users LIMIT 1");
+    if (!existing.rowCount) {
+      await db.query(
+        "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, $3, $4)",
+        ["Administrator", email, "admin", hashPassword(password)]
+      );
+      log("security", "Initial admin account is ready in database");
+    }
+    return;
+  }
+
   if (!state.users.length) {
-    const email = process.env.ADMIN_EMAIL || "admin@shardnote.local";
-    const password = process.env.ADMIN_PASSWORD || "change-me-now";
-    state.users.push({ id: 1, name: "Administrator", email, role: "admin", passwordHash: hashPassword(password), createdAt: new Date().toISOString() });
-    log("security", "Initial admin account is ready");
+    state.users.push({
+      id: 1,
+      name: "Administrator",
+      email,
+      role: "admin",
+      passwordHash: hashPassword(password),
+      createdAt: new Date().toISOString()
+    });
+    log("security", "Initial admin account is ready in memory");
   }
 }
 function currentUser(req) {
@@ -129,59 +176,141 @@ if (process.env.DISCORD_TOKEN) {
 }
 
 
-app.post("/api/login", (req, res) => {
-  ensureAdmin();
-  const email = String(req.body.email || "").trim().toLowerCase();
-  const password = String(req.body.password || "");
-  const user = state.users.find(u => u.email.toLowerCase() === email && u.passwordHash === hashPassword(password));
-  if (!user) {
-    log("security", `Failed login attempt for ${email || "unknown user"}`);
-    return res.status(401).json({ error: "Forkert email eller adgangskode." });
+app.post("/api/login", async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const password = String(req.body.password || "");
+
+    let user;
+    if (db) {
+      const result = await db.query(
+        "SELECT id, name, email, role, password_hash, created_at FROM users WHERE email = $1 LIMIT 1",
+        [email]
+      );
+      const row = result.rows[0];
+      if (row && row.password_hash === hashPassword(password)) {
+        user = {
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          role: row.role,
+          passwordHash: row.password_hash,
+          createdAt: row.created_at
+        };
+      }
+    } else {
+      user = state.users.find(
+        u => u.email.toLowerCase() === email && u.passwordHash === hashPassword(password)
+      );
+    }
+
+    if (!user) {
+      log("security", `Failed login attempt for ${email || "unknown user"}`);
+      return res.status(401).json({ error: "Forkert email eller adgangskode." });
+    }
+
+    const sid = crypto.randomBytes(32).toString("hex");
+    sessions.set(sid, {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    });
+
+    res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    log("security", `User ${user.email} logged in`);
+    res.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Login kunne ikke gennemføres." });
   }
-  const sid = crypto.randomBytes(32).toString("hex");
-  sessions.set(sid, { id: user.id, name: user.name, email: user.email, role: user.role });
-  res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
-  log("security", `User ${user.email} logged in`);
-  res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 
-app.post("/api/register", (req, res) => {
-  ensureAdmin();
+app.post("/api/register", async (req, res) => {
+  try {
+    await ensureAdmin();
 
-  const name = String(req.body.name || "").trim().slice(0, 80);
-  const email = String(req.body.email || "").trim().toLowerCase().slice(0, 160);
-  const password = String(req.body.password || "");
+    const name = String(req.body.name || "").trim().slice(0, 80);
+    const email = String(req.body.email || "").trim().toLowerCase().slice(0, 160);
+    const password = String(req.body.password || "");
 
-  if (name.length < 2) {
-    return res.status(400).json({ error: "Navnet skal være mindst 2 tegn." });
+    if (name.length < 2) {
+      return res.status(400).json({ error: "Navnet skal være mindst 2 tegn." });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Skriv en gyldig emailadresse." });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Adgangskoden skal være mindst 8 tegn." });
+    }
+
+    let user;
+
+    if (db) {
+      const existing = await db.query("SELECT id FROM users WHERE email = $1 LIMIT 1", [email]);
+      if (existing.rowCount) {
+        return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+      }
+
+      try {
+        const result = await db.query(
+          "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, 'member', $3) RETURNING id, name, email, role, created_at",
+          [name, email, hashPassword(password)]
+        );
+        user = result.rows[0];
+      } catch (error) {
+        if (error.code === "23505") {
+          return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+        }
+        throw error;
+      }
+    } else {
+      if (state.users.some(u => u.email === email)) {
+        return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+      }
+
+      user = {
+        id: Date.now(),
+        name,
+        email,
+        role: "member",
+        passwordHash: hashPassword(password),
+        createdAt: new Date().toISOString()
+      };
+      state.users.push(user);
+    }
+
+    const sid = crypto.randomBytes(32).toString("hex");
+    sessions.set(sid, {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    });
+
+    res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    log("security", `New account registered: ${email}`);
+    res.status(201).json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kontoen kunne ikke oprettes." });
   }
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: "Skriv en gyldig emailadresse." });
-  }
-  if (password.length < 8) {
-    return res.status(400).json({ error: "Adgangskoden skal være mindst 8 tegn." });
-  }
-  if (state.users.some(u => u.email === email)) {
-    return res.status(409).json({ error: "Der findes allerede en konto med den email." });
-  }
-
-  const user = {
-    id: Date.now(),
-    name,
-    email,
-    role: "member",
-    passwordHash: hashPassword(password),
-    createdAt: new Date().toISOString()
-  };
-
-  state.users.push(user);
-
-  const sid = crypto.randomBytes(32).toString("hex");
-  sessions.set(sid, { id: user.id, name: user.name, email: user.email, role: user.role });
-  res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
-
-  log("security", `New account registered: ${email}`);
-  res.status(201).json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
 });
 
 app.post("/api/logout", (req, res) => {
@@ -197,34 +326,107 @@ app.get("/api/me", (req, res) => {
   res.json({ user });
 });
 
-app.get("/api/admin/users", requireAuth, requireAdmin, (req, res) => {
-  ensureAdmin();
-  res.json(state.users.map(({ passwordHash, ...u }) => u));
+app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    if (db) {
+      const result = await db.query(
+        "SELECT id, name, email, role, created_at AS \"createdAt\" FROM users ORDER BY id ASC"
+      );
+      return res.json(result.rows);
+    }
+
+    res.json(state.users.map(({ passwordHash, ...u }) => u));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente brugere." });
+  }
 });
 
-app.post("/api/admin/users", requireAuth, requireAdmin, (req, res) => {
-  ensureAdmin();
-  const name = String(req.body.name || "").trim().slice(0, 80);
-  const email = String(req.body.email || "").trim().toLowerCase().slice(0, 160);
-  const password = String(req.body.password || "");
-  const role = req.body.role === "admin" ? "admin" : "member";
-  if (!name || !email || password.length < 8) return res.status(400).json({ error: "Navn, email og adgangskode på mindst 8 tegn er påkrævet." });
-  if (state.users.some(u => u.email === email)) return res.status(409).json({ error: "Email findes allerede." });
-  const user = { id: Date.now(), name, email, role, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
-  state.users.push(user);
-  log("security", `Admin ${req.user.email} created user ${email}`);
-  res.status(201).json({ id: user.id, name, email, role, createdAt: user.createdAt });
+app.post("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    const name = String(req.body.name || "").trim().slice(0, 80);
+    const email = String(req.body.email || "").trim().toLowerCase().slice(0, 160);
+    const password = String(req.body.password || "");
+    const role = req.body.role === "admin" ? "admin" : "member";
+
+    if (!name || !email || password.length < 8) {
+      return res.status(400).json({ error: "Navn, email og adgangskode på mindst 8 tegn er påkrævet." });
+    }
+
+    let user;
+
+    if (db) {
+      try {
+        const result = await db.query(
+          "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role, created_at",
+          [name, email, role, hashPassword(password)]
+        );
+        user = result.rows[0];
+      } catch (error) {
+        if (error.code === "23505") {
+          return res.status(409).json({ error: "Email findes allerede." });
+        }
+        throw error;
+      }
+    } else {
+      if (state.users.some(u => u.email === email)) {
+        return res.status(409).json({ error: "Email findes allerede." });
+      }
+      user = {
+        id: Date.now(),
+        name,
+        email,
+        role,
+        passwordHash: hashPassword(password),
+        createdAt: new Date().toISOString()
+      };
+      state.users.push(user);
+    }
+
+    log("security", `Admin ${req.user.email} created user ${email}`);
+    res.status(201).json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.created_at || user.createdAt
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Brugeren kunne ikke oprettes." });
+  }
 });
 
-app.delete("/api/admin/users/:id", requireAuth, requireAdmin, (req, res) => {
-  ensureAdmin();
-  const id = Number(req.params.id);
-  if (id === req.user.id) return res.status(400).json({ error: "Du kan ikke slette din egen konto." });
-  const before = state.users.length;
-  state.users = state.users.filter(u => u.id !== id);
-  if (before === state.users.length) return res.status(404).json({ error: "Bruger ikke fundet." });
-  log("security", `Admin ${req.user.email} deleted user #${id}`);
-  res.json({ ok: true });
+app.delete("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    if (String(req.params.id) === String(req.user.id)) {
+      return res.status(400).json({ error: "Du kan ikke slette din egen konto." });
+    }
+
+    if (db) {
+      const result = await db.query("DELETE FROM users WHERE id = $1 RETURNING id", [req.params.id]);
+      if (!result.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
+    } else {
+      const id = Number(req.params.id);
+      const before = state.users.length;
+      state.users = state.users.filter(u => u.id !== id);
+      if (before === state.users.length) {
+        return res.status(404).json({ error: "Bruger ikke fundet." });
+      }
+    }
+
+    log("security", `Admin ${req.user.email} deleted user #${req.params.id}`);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Brugeren kunne ikke slettes." });
+  }
 });
 
 
@@ -513,7 +715,24 @@ app.get("/", (req, res) => {
   res.type("html").send(html);
 });
 
-app.listen(PORT, () => {
-  log("success", `ShardNote web server started on port ${PORT}`);
-  console.log(`ShardNote running on port ${PORT}`);
-});
+async function startServer() {
+  try {
+    if (db) {
+      await initDatabase();
+      log("success", "PostgreSQL database connected");
+    } else {
+      await ensureAdmin();
+      log("warning", "DATABASE_URL is not configured. User data is temporary until a database is connected.");
+    }
+
+    app.listen(PORT, () => {
+      log("success", `ShardNote web server started on port ${PORT}`);
+      console.log(`ShardNote running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Database initialization failed:", error);
+    process.exit(1);
+  }
+}
+
+startServer();
