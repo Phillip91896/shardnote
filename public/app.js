@@ -377,3 +377,202 @@ async function deleteUser(id){if(!confirm("Slet denne bruger?"))return;try{await
 
 checkLogin();
 setInterval(()=>{if(currentUser)loadStats()},15000);
+
+
+/* ShardNote multilingual UI */
+(function(){
+  const LANGS = {
+    da:{name:"Dansk",flag:"🇩🇰"}, en:{name:"English",flag:"🇬🇧"}, de:{name:"Deutsch",flag:"🇩🇪"},
+    fr:{name:"Français",flag:"🇫🇷"}, es:{name:"Español",flag:"🇪🇸"}, it:{name:"Italiano",flag:"🇮🇹"},
+    nl:{name:"Nederlands",flag:"🇳🇱"}, pt:{name:"Português",flag:"🇵🇹"}, sv:{name:"Svenska",flag:"🇸🇪"},
+    no:{name:"Norsk",flag:"🇳🇴"}, fi:{name:"Suomi",flag:"🇫🇮"}, pl:{name:"Polski",flag:"🇵🇱"},
+    tr:{name:"Türkçe",flag:"🇹🇷"}, ru:{name:"Русский",flag:"🇷🇺"}, uk:{name:"Українська",flag:"🇺🇦"},
+    ja:{name:"日本語",flag:"🇯🇵"}, ko:{name:"한국어",flag:"🇰🇷"}, zh:{name:"中文",flag:"🇨🇳"}
+  };
+
+  const P = {
+    "Dashboard":["Dashboard","Dashboard","Dashboard","Tableau de bord","Panel","Bacheca","Dashboard","Painel","Instrumentpanel","Dashbord","Hallintapaneeli","Panel","Gösterge Paneli","Панель","Панель","ダッシュボード","대시보드","仪表板"],
+    "Tickets":["Tickets","Tickets","Tickets","Tickets","Tickets","Ticket","Tickets","Tickets","Tickets","Billetter","Tiketit","Tickety","Biletler","Тикеты","Тікети","チケット","티켓","工单"],
+    "Beskeder":["Beskeder","Messages","Nachrichten","Messages","Mensajes","Messaggi","Berichten","Mensagens","Meddelanden","Meldinger","Viestit","Wiadomości","Mesajlar","Сообщения","Повідомлення","メッセージ","메시지","消息"],
+    "Commands":["Commands","Commands","Befehle","Commandes","Comandos","Comandi","Commando's","Comandos","Kommandon","Kommandoer","Komennot","Komendy","Komutlar","Команды","Команди","コマンド","명령어","命令"],
+    "Musik":["Musik","Music","Musik","Musique","Música","Musica","Muziek","Música","Musik","Musikk","Musiikki","Muzyka","Müzik","Музыка","Музика","音楽","음악","音乐"],
+    "Indstillinger":["Indstillinger","Settings","Einstellungen","Paramètres","Configuración","Impostazioni","Instellingen","Definições","Inställningar","Innstillinger","Asetukset","Ustawienia","Ayarlar","Настройки","Налаштування","設定","설정","设置"],
+    "Logs":["Logs","Logs","Protokolle","Journaux","Registros","Log","Logboeken","Logs","Loggar","Logger","Lokit","Logi","Kayıtlar","Логи","Журнали","ログ","로그","日志"],
+    "Admin-panel":["Admin-panel","Admin panel","Admin-Panel","Panneau admin","Panel de admin","Pannello admin","Adminpaneel","Painel de admin","Adminpanel","Adminpanel","Admin-paneeli","Panel administratora","Yönetici paneli","Панель администратора","Панель адміністратора","管理パネル","관리자 패널","管理面板"],
+    "Discord Control Center":["Discord Control Center","Discord Control Center","Discord Kontrollzentrum","Centre de contrôle Discord","Centro de control de Discord","Centro di controllo Discord","Discord Controlecentrum","Centro de controlo do Discord","Discord-kontrollcenter","Discord-kontrollsenter","Discord-ohjauskeskus","Centrum sterowania Discord","Discord Kontrol Merkezi","Центр управления Discord","Центр керування Discord","Discordコントロールセンター","Discord 제어 센터","Discord 控制中心"],
+    "Connecting…":["Forbinder…","Connecting…","Verbindung…","Connexion…","Conectando…","Connessione…","Verbinden…","A ligar…","Ansluter…","Kobler til…","Yhdistetään…","Łączenie…","Bağlanıyor…","Подключение…","Підключення…","接続中…","연결 중…","连接中…"],
+    "Discord connected":["Discord forbundet","Discord connected","Discord verbunden","Discord connecté","Discord conectado","Discord connesso","Discord verbonden","Discord ligado","Discord ansluten","Discord tilkoblet","Discord yhdistetty","Discord połączony","Discord bağlı","Discord подключён","Discord підключено","Discord接続済み","Discord 연결됨","Discord 已连接"],
+    "Web mode":["Webtilstand","Web mode","Webmodus","Mode web","Modo web","Modalità web","Webmodus","Modo web","Webbläge","Webmodus","Web-tila","Tryb webowy","Web modu","Веб-режим","Веб-режим","ウェブモード","웹 모드","网页模式"],
+    "Online":["Online","Online","Online","En ligne","En línea","Online","Online","Online","Online","På nett","Online","Online","Çevrimiçi","Онлайн","Онлайн","オンライン","온라인","在线"],
+    "Offline":["Offline","Offline","Offline","Hors ligne","Desconectado","Offline","Offline","Offline","Offline","Frakoblet","Offline","Offline","Çevrimdışı","Офлайн","Офлайн","オフライン","오프라인","离线"],
+    "SERVERE":["SERVERE","SERVERS","SERVER","SERVEURS","SERVIDORES","SERVER","SERVERS","SERVIDORES","SERVRAR","SERVERE","PALVELIMET","SERWERY","SUNUCULAR","СЕРВЕРЫ","СЕРВЕРИ","サーバー","서버","服务器"],
+    "BRUGERE":["BRUGERE","USERS","BENUTZER","UTILISATEURS","USUARIOS","UTENTI","GEBRUIKERS","UTILIZADORES","ANVÄNDARE","BRUKERE","KÄYTTÄJÄT","UŻYTKOWNICY","KULLANICILAR","ПОЛЬЗОВАТЕЛИ","КОРИСТУВАЧІ","ユーザー","사용자","用户"],
+    "ÅBNE TICKETS":["ÅBNE TICKETS","OPEN TICKETS","OFFENE TICKETS","TICKETS OUVERTS","TICKETS ABIERTOS","TICKET APERTI","OPEN TICKETS","TICKETS ABERTOS","ÖPPNA ÄRENDEN","ÅPNE TICKETS","AVOIMET TIKETIT","OTWARTE TICKETY","AÇIK BİLETLER","ОТКРЫТЫЕ ТИКЕТЫ","ВІДКРИТІ ТІКЕТИ","未処理チケット","열린 티켓","未关闭工单"],
+    "Live connection":["Live forbindelse","Live connection","Live-Verbindung","Connexion en direct","Conexión en vivo","Connessione live","Live verbinding","Ligação em direto","Liveanslutning","Direkte tilkobling","Live-yhteys","Połączenie na żywo","Canlı bağlantı","Живое соединение","Живе з'єднання","ライブ接続","실시간 연결","实时连接"],
+    "Seneste tickets":["Seneste tickets","Latest tickets","Neueste Tickets","Derniers tickets","Últimos tickets","Ultimi ticket","Laatste tickets","Tickets recentes","Senaste ärenden","Siste tickets","Viimeisimmät tiketit","Najnowsze tickety","Son biletler","Последние тикеты","Останні тікети","最新チケット","최근 티켓","最新工单"],
+    "Se alle":["Se alle","See all","Alle anzeigen","Voir tout","Ver todo","Vedi tutto","Alles bekijken","Ver tudo","Visa alla","Se alle","Näytä kaikki","Zobacz wszystkie","Tümünü gör","Показать все","Показати все","すべて表示","모두 보기","查看全部"],
+    "Aktivitet":["Aktivitet","Activity","Aktivität","Activité","Actividad","Attività","Activiteit","Atividade","Aktivitet","Aktivitet","Toiminta","Aktywność","Etkinlik","Активность","Активність","アクティビティ","활동","活动"],
+    "Alle logs":["Alle logs","All logs","Alle Protokolle","Tous les journaux","Todos los registros","Tutti i log","Alle logboeken","Todos os logs","Alla loggar","Alle logger","Kaikki lokit","Wszystkie logi","Tüm kayıtlar","Все логи","Усі журнали","すべてのログ","모든 로그","所有日志"],
+    "Ingen tickets endnu.":["Ingen tickets endnu.","No tickets yet.","Noch keine Tickets.","Aucun ticket pour le moment.","Aún no hay tickets.","Nessun ticket.","Nog geen tickets.","Ainda não há tickets.","Inga ärenden ännu.","Ingen tickets ennå.","Ei tikettejä vielä.","Brak ticketów.","Henüz bilet yok.","Тикетов пока нет.","Тікетів поки немає.","まだチケットはありません。","아직 티켓이 없습니다.","暂无工单。"],
+    "Ticket-system":["Ticket-system","Ticket system","Ticket-System","Système de tickets","Sistema de tickets","Sistema ticket","Ticketsysteem","Sistema de tickets","Ärendesystem","Ticketsystem","Tiketointijärjestelmä","System ticketów","Bilet sistemi","Система тикетов","Система тікетів","チケットシステム","티켓 시스템","工单系统"],
+    "+ Ny ticket":["+ Ny ticket","+ New ticket","+ Neues Ticket","+ Nouveau ticket","+ Nuevo ticket","+ Nuovo ticket","+ Nieuw ticket","+ Novo ticket","+ Nytt ärende","+ Ny ticket","+ Uusi tiketti","+ Nowy ticket","+ Yeni bilet","+ Новый тикет","+ Новий тікет","+ 新規チケット","+ 새 티켓","+ 新工单"],
+    "Skift status":["Skift status","Change status","Status ändern","Changer le statut","Cambiar estado","Cambia stato","Status wijzigen","Alterar estado","Ändra status","Endre status","Vaihda tila","Zmień status","Durumu değiştir","Изменить статус","Змінити статус","ステータス変更","상태 변경","更改状态"],
+    "Send besked":["Send besked","Send message","Nachricht senden","Envoyer un message","Enviar mensaje","Invia messaggio","Bericht verzenden","Enviar mensagem","Skicka meddelande","Send melding","Lähetä viesti","Wyślij wiadomość","Mesaj gönder","Отправить сообщение","Надіслати повідомлення","メッセージ送信","메시지 보내기","发送消息"],
+    "Kør command":["Kør command","Run command","Befehl ausführen","Exécuter la commande","Ejecutar comando","Esegui comando","Commando uitvoeren","Executar comando","Kör kommando","Kjør kommando","Suorita komento","Uruchom komendę","Komutu çalıştır","Выполнить команду","Виконати команду","コマンド実行","명령 실행","运行命令"],
+    "Gem ændringer":["Gem ændringer","Save changes","Änderungen speichern","Enregistrer les modifications","Guardar cambios","Salva modifiche","Wijzigingen opslaan","Guardar alterações","Spara ändringar","Lagre endringer","Tallenna muutokset","Zapisz zmiany","Değişiklikleri kaydet","Сохранить изменения","Зберегти зміни","変更を保存","변경 사항 저장","保存更改"],
+    "Udfør":["Udfør","Execute","Ausführen","Exécuter","Ejecutar","Esegui","Uitvoeren","Executar","Utför","Utfør","Suorita","Wykonaj","Uygula","Выполнить","Виконати","実行","실행","执行"],
+    "Opdater":["Opdater","Refresh","Aktualisieren","Actualiser","Actualizar","Aggiorna","Vernieuwen","Atualizar","Uppdatera","Oppdater","Päivitä","Odśwież","Yenile","Обновить","Оновити","更新","새로고침","刷新"],
+    "Lås":["Lås","Lock","Sperren","Verrouiller","Bloquear","Blocca","Vergrendelen","Bloquear","Lås","Lås","Lukitse","Zablokuj","Kilitle","Заблокировать","Заблокувати","ロック","잠금","锁定"],
+    "Åbn logcenter":["Åbn logcenter","Open log center","Logcenter öffnen","Ouvrir le centre des logs","Abrir centro de registros","Apri centro log","Logcentrum openen","Abrir centro de logs","Öppna loggcenter","Åpne logsenter","Avaa lokikeskus","Otwórz centrum logów","Log merkezini aç","Открыть центр логов","Відкрити центр журналів","ログセンターを開く","로그 센터 열기","打开日志中心"],
+    "Indtast din admin-adgangskode for at åbne logcenteret.":["Indtast din admin-adgangskode for at åbne logcenteret.","Enter your admin password to open the log center.","Gib dein Admin-Passwort ein, um das Logcenter zu öffnen.","Entrez votre mot de passe admin pour ouvrir le centre des logs.","Introduce tu contraseña de administrador para abrir el centro de registros.","Inserisci la password admin per aprire il centro log.","Voer je admin-wachtwoord in om het logcentrum te openen.","Digite sua senha de administrador para abrir o centro de logs.","Ange ditt adminlösenord för att öppna loggcentret.","Skriv inn admin-passordet for å åpne logsenteret.","Anna ylläpitäjän salasana avataksesi lokikeskuksen.","Wpisz hasło administratora, aby otworzyć centrum logów.","Log merkezini açmak için yönetici şifrenizi girin.","Введите пароль администратора, чтобы открыть центр логов.","Введіть пароль адміністратора, щоб відкрити центр журналів.","ログセンターを開くには管理者パスワードを入力してください。","로그 센터를 열려면 관리자 비밀번호를 입력하세요.","输入管理员密码以打开日志中心。"],
+    "Database-overblik":["Database-overblik","Database overview","Datenbankübersicht","Aperçu de la base de données","Resumen de base de datos","Panoramica database","Database-overzicht","Visão geral da base de dados","Databasöversikt","Databaseoversikt","Tietokannan yleiskatsaus","Przegląd bazy danych","Veritabanı özeti","Обзор базы данных","Огляд бази даних","データベース概要","데이터베이스 개요","数据库概览"],
+    "Brugere":["Brugere","Users","Benutzer","Utilisateurs","Usuarios","Utenti","Gebruikers","Utilizadores","Användare","Brukere","Käyttäjät","Użytkownicy","Kullanıcılar","Пользователи","Користувачі","ユーザー","사용자","用户"],
+    "Email":["Email","Email","E-Mail","E-mail","Correo electrónico","Email","E-mail","E-mail","E-post","E-post","Sähköposti","Email","E-posta","Электронная почта","Електронна пошта","メール","이메일","电子邮件"],
+    "Adgangskode":["Adgangskode","Password","Passwort","Mot de passe","Contraseña","Password","Wachtwoord","Palavra-passe","Lösenord","Passord","Salasana","Hasło","Şifre","Пароль","Пароль","パスワード","비밀번호","密码"],
+    "Rolle":["Rolle","Role","Rolle","Rôle","Rol","Ruolo","Rol","Função","Roll","Rolle","Rooli","Rola","Rol","Роль","Роль","ロール","역할","角色"],
+    "Member":["Member","Member","Mitglied","Membre","Miembro","Membro","Lid","Membro","Medlem","Medlem","Jäsen","Członek","Üye","Участник","Учасник","メンバー","멤버","成员"],
+    "Administrator":["Administrator","Administrator","Administrator","Administrateur","Administrador","Amministratore","Beheerder","Administrador","Administratör","Administrator","Ylläpitäjä","Administrator","Yönetici","Администратор","Адміністратор","管理者","관리자","管理员"],
+    "+ Tilføj bruger":["+ Tilføj bruger","+ Add user","+ Benutzer hinzufügen","+ Ajouter un utilisateur","+ Añadir usuario","+ Aggiungi utente","+ Gebruiker toevoegen","+ Adicionar utilizador","+ Lägg till användare","+ Legg til bruker","+ Lisää käyttäjä","+ Dodaj użytkownika","+ Kullanıcı ekle","+ Добавить пользователя","+ Додати користувача","+ ユーザー追加","+ 사용자 추가","+ 添加用户"],
+    "Login logs":["Login logs","Login logs","Login-Protokolle","Journaux de connexion","Registros de inicio de sesión","Log di accesso","Inloglogs","Logs de login","Inloggningsloggar","Innloggingslogger","Kirjautumislogit","Logi logowania","Giriş kayıtları","Логи входов","Журнали входу","ログインログ","로그인 로그","登录日志"],
+    "Log ind":["Log ind","Log in","Anmelden","Se connecter","Iniciar sesión","Accedi","Inloggen","Iniciar sessão","Logga in","Logg inn","Kirjaudu","Zaloguj się","Giriş yap","Войти","Увійти","ログイン","로그인","登录"],
+    "Opret konto":["Opret konto","Create account","Konto erstellen","Créer un compte","Crear cuenta","Crea account","Account aanmaken","Criar conta","Skapa konto","Opprett konto","Luo tili","Utwórz konto","Hesap oluştur","Создать аккаунт","Створити обліковий запис","アカウント作成","계정 만들기","创建账户"],
+    "Log ind på dit ShardNote-kontrolpanel.":["Log ind på dit ShardNote-kontrolpanel.","Log in to your ShardNote control panel.","Melde dich im ShardNote-Kontrollzentrum an.","Connectez-vous à votre panneau de contrôle ShardNote.","Inicia sesión en tu panel de control de ShardNote.","Accedi al pannello di controllo ShardNote.","Log in op je ShardNote-controlepaneel.","Inicie sessão no painel de controlo ShardNote.","Logga in på din ShardNote-kontrollpanel.","Logg inn på ShardNote-kontrollpanelet.","Kirjaudu ShardNote-ohjauspaneeliin.","Zaloguj się do panelu ShardNote.","ShardNote kontrol panelinize giriş yapın.","Войдите в панель управления ShardNote.","Увійдіть до панелі керування ShardNote.","ShardNoteコントロールパネルにログインしてください。","ShardNote 제어판에 로그인하세요.","登录 ShardNote 控制面板。"],
+    "Har du ikke en konto?":["Har du ikke en konto?","Don't have an account?","Noch kein Konto?","Pas encore de compte ?","¿No tienes una cuenta?","Non hai un account?","Nog geen account?","Ainda não tem uma conta?","Har du inget konto?","Har du ingen konto?","Eikö sinulla ole tiliä?","Nie masz konta?","Hesabınız yok mu?","Нет аккаунта?","Немає облікового запису?","アカウントをお持ちでないですか？","계정이 없나요?","还没有账户？"],
+    "Har du allerede en konto?":["Har du allerede en konto?","Already have an account?","Schon ein Konto?","Vous avez déjà un compte ?","¿Ya tienes una cuenta?","Hai già un account?","Heb je al een account?","Já tem uma conta?","Har du redan ett konto?","Har du allerede en konto?","Onko sinulla jo tili?","Masz już konto?","Zaten hesabınız var mı?","Уже есть аккаунт?","Вже маєте обліковий запис?","すでにアカウントをお持ちですか？","이미 계정이 있나요?","已有账户？"],
+    "Navn":["Navn","Name","Name","Nom","Nombre","Nome","Naam","Nome","Namn","Navn","Nimi","Nazwa","Ad","Имя","Ім'я","名前","이름","姓名"],
+    "Velkomstbeskeder":["Velkomstbeskeder","Welcome messages","Willkommensnachrichten","Messages de bienvenue","Mensajes de bienvenida","Messaggi di benvenuto","Welkomstberichten","Mensagens de boas-vindas","Välkomstmeddelanden","Velkomstmeldinger","Tervetuloviestit","Wiadomości powitalne","Hoş geldin mesajları","Приветственные сообщения","Вітальні повідомлення","ウェルカムメッセージ","환영 메시지","欢迎消息"]
+  };
+
+  const keys = Object.keys(P);
+  const dict = {};
+  Object.keys(LANGS).forEach((lang, index)=>{
+    dict[lang]={};
+    keys.forEach(key=>{ dict[lang][key]=P[key][index] || P[key][0]; });
+  });
+
+  const styles = document.createElement("style");
+  styles.textContent = `
+    .sn-language-picker{display:flex;align-items:center;gap:7px;margin-right:4px}
+    .sn-language-picker select{border:1px solid var(--border);background:#171722;color:#fff;border-radius:10px;padding:8px 10px;font-size:12px;outline:none;cursor:pointer}
+    .sn-language-picker select:focus{border-color:var(--accent)}
+    @media(max-width:760px){.sn-language-picker select{max-width:120px}}
+  `;
+  document.head.appendChild(styles);
+
+  let current = localStorage.getItem("shardnote_language");
+  if(!current || !LANGS[current]){
+    const browser = (navigator.language || "da").slice(0,2).toLowerCase();
+    current = LANGS[browser] ? browser : "da";
+  }
+
+  const originalText = new WeakMap();
+  const originalAttrs = new WeakMap();
+
+  function translateValue(value){
+    const text = String(value || "").trim();
+    if(!text) return value;
+    return dict[current]?.[text] || text;
+  }
+
+  function translateNode(node){
+    if(node.nodeType !== Node.TEXT_NODE) return;
+    const raw = node.nodeValue.trim();
+    if(!raw) return;
+    let base = originalText.get(node);
+    if(!base || raw === dict[current]?.[base]) base = originalText.get(node) || raw;
+    originalText.set(node, base);
+    const translated = translateValue(base);
+    if(node.nodeValue !== node.nodeValue.replace(base, translated)){
+      node.nodeValue = node.nodeValue.replace(base, translated);
+    }
+  }
+
+  function translateAttributes(root=document){
+    root.querySelectorAll("input,textarea,select").forEach(el=>{
+      const attrs=["placeholder","aria-label","title"];
+      const saved=originalAttrs.get(el)||{};
+      attrs.forEach(attr=>{
+        const val=el.getAttribute(attr);
+        if(!val) return;
+        if(!saved[attr] || val===dict[current]?.[saved[attr]]) saved[attr]=val;
+        el.setAttribute(attr,translateValue(saved[attr]));
+      });
+      originalAttrs.set(el,saved);
+    });
+  }
+
+  function translatePage(){
+    document.querySelectorAll(".nav button span:last-child").forEach(el=>{
+      const key=el.textContent.trim();
+      if(P[key]) el.textContent=translateValue(key);
+    });
+    document.querySelectorAll(".nav button[data-page]").forEach(btn=>{
+      const page=btn.dataset.page;
+      if(titles[page]) {
+        const label=btn.querySelector("span:last-child");
+        if(label) label.textContent=translateValue(titles[page]==="Admin-panel"?"Admin-panel":titles[page]);
+      }
+    });
+    const activePage=[...document.querySelectorAll(".page.active")][0];
+    const pageKey=activePage?.id?.replace("page-","");
+    const title=document.getElementById("pageTitle");
+    if(title && titles[pageKey]) title.textContent=translateValue(titles[pageKey]==="Admin-panel"?"Admin-panel":titles[pageKey]);
+    document.querySelectorAll("body *").forEach(el=>{
+      if(["SCRIPT","STYLE","SELECT","OPTION"].includes(el.tagName)) return;
+      [...el.childNodes].forEach(translateNode);
+    });
+    translateAttributes(document);
+    document.title="ShardNote — "+translateValue("Discord Control Center");
+  }
+
+  function installPicker(){
+    if(document.getElementById("snLanguagePicker")) return;
+    const host=document.querySelector(".topbar > div:last-child");
+    if(!host) return;
+    const wrap=document.createElement("div");
+    wrap.id="snLanguagePicker";
+    wrap.className="sn-language-picker";
+    const select=document.createElement("select");
+    select.setAttribute("aria-label","Language");
+    Object.entries(LANGS).forEach(([code,data])=>{
+      const opt=document.createElement("option");
+      opt.value=code;
+      opt.textContent=data.flag+" "+data.name;
+      select.appendChild(opt);
+    });
+    select.value=current;
+    select.addEventListener("change",()=>{
+      current=select.value;
+      localStorage.setItem("shardnote_language",current);
+      translatePage();
+      if(typeof loadSettings==="function") setTimeout(()=>{try{applyButtonLabels();translatePage()}catch(e){}},0);
+    });
+    wrap.appendChild(select);
+    host.insertBefore(wrap,host.firstChild);
+  }
+
+  const originalNavigate=window.navigate;
+  window.navigate=function(page){
+    const result=originalNavigate(page);
+    setTimeout(translatePage,0);
+    return result;
+  };
+
+  const observer=new MutationObserver((mutations)=>{
+    let should=false;
+    for(const m of mutations){
+      if(m.type==="childList" || m.type==="characterData" || m.type==="attributes"){should=true;break;}
+    }
+    if(should) requestAnimationFrame(translatePage);
+  });
+
+  function start(){
+    installPicker();
+    translatePage();
+    observer.observe(document.body,{childList:true,subtree:true,characterData:true,attributes:true,attributeFilter:["placeholder","title","aria-label"]});
+  }
+
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",start,{once:true});
+  else start();
+})();
+
