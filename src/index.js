@@ -1182,7 +1182,7 @@ app.patch("/api/tickets/:id", async (req, res) => {
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
     if (["open", "pending", "closed"].includes(req.body.status)) ticket.status = req.body.status;
     if (["low", "normal", "high"].includes(req.body.priority)) ticket.priority = req.body.priority;
-    log("ticket", `Ticket #${ticket.id} updated`);
+    log("ticket", `Ticket #${ticket.id} updated`, req.user.id);
     res.json(ticket);
   } catch (error) {
     console.error(error);
@@ -1203,7 +1203,7 @@ app.delete("/api/tickets/:id", async (req, res) => {
     const before = state.tickets.length;
     state.tickets = state.tickets.filter(t => !(String(t.id) === String(req.params.id) && String(t.ownerUserId || "") === String(req.user.id)));
     if (before === state.tickets.length) return res.status(404).json({ error: "Ticket not found" });
-    log("ticket", `Ticket #${req.params.id} deleted`);
+    log("ticket", `Ticket #${req.params.id} deleted`, req.user.id);
     res.json({ ok: true });
   } catch (error) {
     console.error(error);
@@ -1237,8 +1237,8 @@ app.post("/api/messages", async (req, res) => {
     const channel = String(req.body.channel || "Dashboard").slice(0, 80);
     const result = db
       ? await db.query(
-          `INSERT INTO public.messages (channel, content, author)
-           VALUES ($1, $2, $3)
+          `INSERT INTO public.messages (channel, content, author, owner_user_id)
+           VALUES ($1, $2, $3, $4)
            RETURNING id, channel, content, author, created_at AS "time"`,
           [channel, content.slice(0, 2000), req.user?.email || "Dashboard", req.user.id]
         )
@@ -1254,7 +1254,7 @@ app.post("/api/messages", async (req, res) => {
 
     state.messages.unshift(item);
     state.messages = state.messages.slice(0, 500);
-    log("message", "Message created from dashboard");
+    log("message", "Message created from dashboard", req.user.id);
     res.status(201).json(item);
   } catch (error) {
     console.error(error);
@@ -1409,7 +1409,9 @@ app.get("/api/logs/categories", requireAuth, requireAdmin, requireLogsAccess, as
       const logsResult = await db.query(
         `SELECT type, COUNT(*)::int AS count
          FROM public.logs
-         GROUP BY type`
+         WHERE owner_user_id = $1
+         GROUP BY type`,
+        [req.user.id]
       );
       for (const row of logsResult.rows) counts[row.type] = row.count;
 
@@ -1419,7 +1421,10 @@ app.get("/api/logs/categories", requireAuth, requireAdmin, requireLogsAccess, as
       counts.login = loginResult.rows[0].count;
     } else {
       counts.login = state.loginAudit.length;
-      for (const item of state.logs) counts[item.type] = (counts[item.type] || 0) + 1;
+      for (const item of state.logs) {
+        if (String(item.ownerUserId || "") !== String(req.user.id)) continue;
+        counts[item.type] = (counts[item.type] || 0) + 1;
+      }
     }
 
     res.json(Object.entries(LOG_CATEGORIES).map(([key, config]) => ({
