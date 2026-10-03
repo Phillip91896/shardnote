@@ -23,16 +23,24 @@ app.post("/api/billing/webhook", express.raw({ type: "application/json" }), asyn
       const userId=object.metadata?.user_id;
       const subscriptionId=typeof object.subscription==="string"?object.subscription:object.subscription?.id||null;
       const customerId=typeof object.customer==="string"?object.customer:object.customer?.id||null;
-      if(userId)await updateUserSubscription({userId,status:"active",customerId,subscriptionId});
+      if(userId){
+        await updateUserSubscription({userId,status:"active",customerId,subscriptionId});
+        log("billing", `Subscription activated for user #${userId}`);
+      }
     }
     if(event.type==="customer.subscription.created"||event.type==="customer.subscription.updated"||event.type==="customer.subscription.deleted"){
       const userId=object.metadata?.user_id;
-      if(userId)await updateUserSubscription({userId,status:event.type==="customer.subscription.deleted"?"canceled":object.status,customerId:typeof object.customer==="string"?object.customer:object.customer?.id,subscriptionId:object.id,currentPeriodEnd:object.current_period_end});
-      else if(event.type==="customer.subscription.deleted")await updateUserSubscriptionByStripeSubscription(object.id,"canceled");
+      const status=event.type==="customer.subscription.deleted"?"canceled":object.status;
+      if(userId)await updateUserSubscription({userId,status,customerId:typeof object.customer==="string"?object.customer:object.customer?.id,subscriptionId:object.id,currentPeriodEnd:object.current_period_end});
+      else if(event.type==="customer.subscription.deleted")await updateUserSubscriptionByStripeSubscription(object.id,status);
+      if(userId)log("billing", `Subscription ${status} for user #${userId}`);
     }
     if(event.type==="invoice.payment_failed"){
       const subscriptionId=typeof object.subscription==="string"?object.subscription:object.subscription?.id||null;
-      if(subscriptionId)await updateUserSubscriptionByStripeSubscription(subscriptionId,"past_due");
+      if(subscriptionId){
+        await updateUserSubscriptionByStripeSubscription(subscriptionId,"past_due");
+        log("billing", `Subscription payment failed for Stripe subscription ${subscriptionId}`);
+      }
     }
     return res.json({received:true});
   }catch(error){console.error("[ShardNote] Stripe webhook handler failed:",error);return res.status(500).send("Webhook handler failed.");}
@@ -543,7 +551,12 @@ app.post("/api/login", async (req, res) => {
     let user;
     if (db) {
       const result = await db.query(
-        "SELECT id, name, email, role, password_hash, created_at FROM users WHERE email = $1 LIMIT 1",
+        `SELECT id, name, email, role, password_hash, created_at,
+                subscription_status AS "subscriptionStatus",
+                stripe_customer_id AS "stripeCustomerId",
+                stripe_subscription_id AS "stripeSubscriptionId",
+                subscription_current_period_end AS "subscriptionCurrentPeriodEnd"
+         FROM users WHERE email = $1 LIMIT 1`,
         [email]
       );
       const row = result.rows[0];
@@ -555,11 +568,12 @@ app.post("/api/login", async (req, res) => {
           role: row.role,
           passwordHash: row.password_hash,
           createdAt: row.created_at,
-          subscriptionStatus: "inactive",
-          stripeCustomerId: null,
-          stripeSubscriptionId: null,
-          subscriptionCurrentPeriodEnd: null
+          subscriptionStatus: row.subscriptionStatus || "inactive",
+          stripeCustomerId: row.stripeCustomerId || null,
+          stripeSubscriptionId: row.stripeSubscriptionId || null,
+          subscriptionCurrentPeriodEnd: row.subscriptionCurrentPeriodEnd || null
         };
+        if (stripe && user.stripeSubscriptionId) await refreshSubscriptionFromStripe(user);
       }
     } else {
       user = state.users.find(
