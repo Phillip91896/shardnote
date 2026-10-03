@@ -442,43 +442,75 @@ function createBot({ state, db, log, createTicket, setReady }) {
       ])
     ];
 
+    function f5Name(name) {
+      const clean = String(name || "").trim();
+      return clean.toLowerCase().startsWith("f5 ") ? clean : "F5 " + clean;
+    }
+
     async function ensureCategory(name, permissionOverwrites) {
-      let category = guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name === name);
+      const targetName = f5Name(name);
+      let category = guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name === targetName);
+      if (!category) {
+        const old = guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name === name);
+        if (old) {
+          category = await old.setName(targetName, "ShardNote Discord-skitse: F5 prefix").catch(() => old);
+        }
+      }
       if (!category) {
         category = await guild.channels.create({
-          name,
+          name: targetName,
           type: ChannelType.GuildCategory,
           permissionOverwrites,
           reason: "ShardNote Discord-skitse: F5 VIP"
         });
+      } else if (permissionOverwrites?.length) {
+        await category.permissionOverwrites.set(permissionOverwrites, "ShardNote Discord-skitse: F5 VIP").catch(() => {});
       }
       return category;
     }
 
     async function ensureText(name, parent, permissionOverwrites = null) {
-      let channel = guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === name && c.parentId === parent.id);
+      const targetName = f5Name(name);
+      let channel = guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === targetName && c.parentId === parent.id);
+      if (!channel) {
+        const old = guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === name && c.parentId === parent.id);
+        if (old) {
+          channel = await old.setName(targetName, "ShardNote Discord-skitse: F5 prefix").catch(() => old);
+        }
+      }
       if (!channel) {
         channel = await guild.channels.create({
-          name,
+          name: targetName,
           type: ChannelType.GuildText,
           parent: parent.id,
           ...(permissionOverwrites ? { permissionOverwrites } : {}),
           reason: "ShardNote Discord-skitse: F5 VIP"
         });
+      } else if (permissionOverwrites?.length) {
+        await channel.permissionOverwrites.set(permissionOverwrites, "ShardNote Discord-skitse: F5 VIP").catch(() => {});
       }
       return channel;
     }
 
     async function ensureVoice(name, parent, permissionOverwrites) {
-      let channel = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name === name && c.parentId === parent.id);
+      const targetName = f5Name(name);
+      let channel = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name === targetName && c.parentId === parent.id);
+      if (!channel) {
+        const old = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name === name && c.parentId === parent.id);
+        if (old) {
+          channel = await old.setName(targetName, "ShardNote Discord-skitse: F5 prefix").catch(() => old);
+        }
+      }
       if (!channel) {
         channel = await guild.channels.create({
-          name,
+          name: targetName,
           type: ChannelType.GuildVoice,
           parent: parent.id,
           permissionOverwrites,
           reason: "ShardNote Discord-skitse: F5 VIP"
         });
+      } else if (permissionOverwrites?.length) {
+        await channel.permissionOverwrites.set(permissionOverwrites, "ShardNote Discord-skitse: F5 VIP").catch(() => {});
       }
       return channel;
     }
