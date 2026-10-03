@@ -542,7 +542,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
       .filter(r => r.key === "muted")
       .map(r => roles[r.key]?.id)
       .filter(Boolean);
-    const memberRoleIds = roleList.filter(r => !mutedRoleIds.includes(r.id)).map(r=>r.id);
+    const memberRoleIds = roleList.map(r=>r.id);
     const botId = guild.client.user.id;
     const overwrite = (id, allow = [], deny = []) => ({ id, allow, deny });
 
