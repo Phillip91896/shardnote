@@ -135,6 +135,7 @@ async function initDatabase() {
     ALTER TABLE public.users
       ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(30) NOT NULL DEFAULT 'inactive',
       ADD COLUMN IF NOT EXISTS trial_used BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS plan VARCHAR(30) NOT NULL DEFAULT 'member',
       ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(120),
       ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(120),
       ADD COLUMN IF NOT EXISTS subscription_current_period_end TIMESTAMPTZ
@@ -532,6 +533,14 @@ function requirePaid(req, res, next) {
   if (!hasPaidAccess(req.user)) return res.status(402).json({ requiresSubscription: true, error: "Et aktivt ShardNote-abonnement kræves." });
   next();
 }
+function requirePlan(minimumPlan, req, res, next) {
+  if (req.user?.role === "admin") return next();
+  const rank = { member: 0, member_plus: 1, member_pro: 2, member_premium: 3 };
+  const current = rank[req.user?.plan || "member"] ?? 0;
+  const needed = rank[minimumPlan] ?? 0;
+  if (current < needed) return res.status(403).json({ requiresPlan: minimumPlan, error: "Denne funktion kræver " + minimumPlan + "." });
+  next();
+}
 async function isGuildLinkedToUser(userId, guildId) {
   if (!db) return false;
   const result = await db.query(
@@ -609,6 +618,7 @@ app.post("/api/login", async (req, res) => {
         `SELECT id, name, email, role, password_hash, created_at,
                 subscription_status AS "subscriptionStatus",
                 trial_used AS "trialUsed",
+                plan,
                 stripe_customer_id AS "stripeCustomerId",
                 stripe_subscription_id AS "stripeSubscriptionId",
                 subscription_current_period_end AS "subscriptionCurrentPeriodEnd"
@@ -626,6 +636,7 @@ app.post("/api/login", async (req, res) => {
           createdAt: row.created_at,
           subscriptionStatus: row.subscriptionStatus || "inactive",
           trialUsed: !!row.trialUsed,
+          plan: ["member","member_plus","member_pro","member_premium"].includes(row.plan) ? row.plan : "member",
           stripeCustomerId: row.stripeCustomerId || null,
           stripeSubscriptionId: row.stripeSubscriptionId || null,
           subscriptionCurrentPeriodEnd: row.subscriptionCurrentPeriodEnd || null
@@ -668,6 +679,7 @@ app.post("/api/login", async (req, res) => {
         role: user.role,
         subscriptionStatus: user.subscriptionStatus || "inactive",
         trialUsed: !!user.trialUsed,
+        plan: user.plan || "member",
         hasPaidAccess: hasPaidAccess(user)
       }
     });
@@ -705,7 +717,7 @@ app.post("/api/register", async (req, res) => {
 
       try {
         const result = await db.query(
-          "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, 'member', $3) RETURNING id, name, email, role, created_at",
+          "INSERT INTO users (name, email, role, password_hash, plan) VALUES ($1, $2, 'member', $3, 'member') RETURNING id, name, email, role, plan, created_at",
           [name, email, hashPassword(password)]
         );
         user = result.rows[0];
@@ -746,7 +758,8 @@ app.post("/api/register", async (req, res) => {
         id: user.id,
         name: user.name,
         email: user.email,
-        role: user.role
+        role: user.role,
+        plan: user.plan || "member"
       }
     });
   } catch (error) {
@@ -766,7 +779,7 @@ app.get("/api/me", async (req,res)=>{
   const user=await getSessionUser(req);
   if(!user)return res.status(401).json({error:"Ikke logget ind."});
   if(stripe&&user.stripeSubscriptionId)await refreshSubscriptionFromStripe(user);
-  res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role,subscriptionStatus:user.subscriptionStatus||"inactive",trialUsed:!!user.trialUsed,hasPaidAccess:hasPaidAccess(user)}});
+  res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role,plan:user.plan||"member",subscriptionStatus:user.subscriptionStatus||"inactive",trialUsed:!!user.trialUsed,hasPaidAccess:hasPaidAccess(user)}});
 });
 
 app.get("/api/admin/login-history", requireAuth, requireAdmin, async (req, res) => {
@@ -859,6 +872,7 @@ app.post("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
     const email = String(req.body.email || "").trim().toLowerCase().slice(0, 160);
     const password = String(req.body.password || "");
     const role = req.body.role === "admin" ? "admin" : "member";
+    const plan = ["member","member_plus","member_pro","member_premium"].includes(req.body.plan) ? req.body.plan : "member";
 
     if (!name || !email || password.length < 8) {
       return res.status(400).json({ error: "Navn, email og adgangskode på mindst 8 tegn er påkrævet." });
@@ -869,8 +883,8 @@ app.post("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
     if (db) {
       try {
         const result = await db.query(
-          "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role, created_at",
-          [name, email, role, hashPassword(password)]
+          "INSERT INTO users (name, email, role, password_hash, plan) VALUES ($1, $2, $3, $4, $5) RETURNING id, name, email, role, plan, created_at",
+          [name, email, role, hashPassword(password), plan]
         );
         user = result.rows[0];
       } catch (error) {
@@ -888,6 +902,7 @@ app.post("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
         name,
         email,
         role,
+        plan,
         passwordHash: hashPassword(password),
         createdAt: new Date().toISOString()
       };
@@ -900,6 +915,7 @@ app.post("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
+      plan: user.plan || "member",
       createdAt: user.created_at || user.createdAt
     });
   } catch (error) {
@@ -951,6 +967,47 @@ app.patch("/api/admin/users/:id/role", requireAuth, requireAdmin, async (req, re
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Rollen kunne ikke ændres." });
+  }
+});
+
+app.patch("/api/admin/users/:id/plan", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+    const allowed = ["member","member_plus","member_pro","member_premium"];
+    const plan = allowed.includes(req.body.plan) ? req.body.plan : "member";
+    if (db) {
+      const result = await db.query(
+        "UPDATE users SET plan = $1 WHERE id = $2 RETURNING id, name, email, role, plan, created_at",
+        [plan, req.params.id]
+      );
+      if (!result.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
+      const user = result.rows[0];
+      log("security", `Admin ${req.user.email} changed ${user.email} plan to ${plan}`);
+      return res.json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        plan: user.plan,
+        createdAt: user.created_at
+      });
+    }
+    const id = Number(req.params.id);
+    const user = state.users.find(u => u.id === id);
+    if (!user) return res.status(404).json({ error: "Bruger ikke fundet." });
+    user.plan = plan;
+    log("security", `Admin ${req.user.email} changed ${user.email} plan to ${plan}`);
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      plan: user.plan,
+      createdAt: user.createdAt
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Pakken kunne ikke ændres." });
   }
 });
 
@@ -1519,7 +1576,7 @@ app.get("/api/logs", requireAuth, requireAdmin, requireLogsAccess, async (req, r
 });
 
 
-app.get("/api/bot/guilds", requireAuth, requirePaid, async (req, res) => {
+app.get("/api/bot/guilds", requireAuth, requirePaid, (req,res,next)=>requirePlan("member_plus",req,res,next), async (req, res) => {
   try {
     if (!discordReady) return res.json([]);
     let guildsSource = [...client.guilds.cache.values()];
@@ -1544,7 +1601,7 @@ app.get("/api/bot/guilds", requireAuth, requirePaid, async (req, res) => {
   }
 });
 
-app.get("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, async (req, res) => {
+app.get("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, (req,res,next)=>requirePlan("member_plus",req,res,next), async (req, res) => {
   try {
     if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
     const guild = client.guilds.cache.get(String(req.params.guildId));
@@ -1590,7 +1647,7 @@ app.get("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, async (re
   }
 });
 
-app.patch("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, async (req, res) => {
+app.patch("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, (req,res,next)=>requirePlan("member_plus",req,res,next), async (req, res) => {
   try {
     if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
     const guild = client.guilds.cache.get(String(req.params.guildId));
