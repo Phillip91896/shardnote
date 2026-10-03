@@ -574,6 +574,36 @@ app.get("/api/admin/login-history", requireAuth, requireAdmin, async (req, res) 
   }
 });
 
+app.get("/api/admin/database-summary", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!db) {
+      return res.json({
+        connected: false,
+        tables: [
+          { name: "users", rows: state.users.length },
+          { name: "tickets", rows: state.tickets.length },
+          { name: "messages", rows: state.messages.length },
+          { name: "logs", rows: state.logs.length },
+          { name: "bot_settings", rows: 1 },
+          { name: "login_audit", rows: state.loginAudit.length }
+        ]
+      });
+    }
+
+    const tableNames = ["users", "tickets", "messages", "logs", "bot_settings", "login_audit"];
+    const tables = [];
+    for (const name of tableNames) {
+      const result = await db.query(`SELECT COUNT(*)::int AS count FROM public.${name}`);
+      tables.push({ name, rows: result.rows[0].count });
+    }
+
+    res.json({ connected: true, tables });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente database-status." });
+  }
+});
+
 app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
   try {
     await ensureAdmin();
@@ -1145,6 +1175,11 @@ body.locked > .app{display:none}
 </section>
 
 <section class="page" id="page-admin">
+  <div class="card" style="margin-bottom:18px">
+    <div class="section-title"><h2>Database-overblik</h2><span id="databaseStatus" class="badge pending">Tjekker…</span></div>
+    <div id="databaseTables" class="activity"></div>
+  </div>
+
   <div class="grid two">
     <div class="card">
       <div class="section-title"><h2>Admin-panel</h2><span>Brugere og adgang</span></div>
@@ -1159,6 +1194,11 @@ body.locked > .app{display:none}
       <div class="section-title"><h2>Brugere</h2><button class="btn small" onclick="loadUsers()">Opdater</button></div>
       <div id="userList"></div>
     </div>
+  </div>
+
+  <div class="card" style="margin-top:18px">
+    <div class="section-title"><div><h2>Login-historik</h2><span>IP, omtrentligt sted, tidspunkt og browser</span></div><button class="btn small" onclick="loadLoginHistory()">Opdater</button></div>
+    <div id="loginHistoryList"></div>
   </div>
 </section>
 </main>
