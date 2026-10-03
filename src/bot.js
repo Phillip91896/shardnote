@@ -1128,8 +1128,75 @@ function createBot({ state, db, log, createTicket, setReady }) {
     }
   });
 
+  client.on("guildMemberAdd", async (member) => {
+    try {
+      const settings = await getGuildSettings(member.guild.id);
+      const now = Date.now();
+      const recent = (raidBuckets.get(member.guild.id) || []).filter(ts => now - ts < 10000);
+      recent.push(now);
+      raidBuckets.set(member.guild.id, recent);
+      if (settings.anti_raid_enabled && recent.length >= 6) {
+        await sendGuildLog(member.guild, "🚨 Anti-Raid", recent.length + " joins på meget kort tid. Overvej /lockdown.", "security");
+      }
+
+      if (settings.autorole_id) {
+        const role = member.guild.roles.cache.get(settings.autorole_id);
+        if (role?.editable) await member.roles.add(role, "ShardNote autorole").catch(() => {});
+      }
+
+      if (settings.welcome_channel_id) {
+        const channel = member.guild.channels.cache.get(settings.welcome_channel_id);
+        if (channel?.isTextBased()) {
+          const text = String(settings.welcome_message || "Velkommen {user} til {server}! 👋")
+            .replaceAll("{user}", String(member))
+            .replaceAll("{server}", member.guild.name);
+          await channel.send(text).catch(() => {});
+        }
+      }
+
+      await sendGuildLog(member.guild, "Join", member.user.tag + " joined serveren.", "success");
+    } catch (error) {
+      log("error", "guildMemberAdd error: " + error.message);
+    }
+  });
+
+  client.on("guildMemberRemove", async (member) => {
+    try {
+      const settings = await getGuildSettings(member.guild.id);
+      if (settings.leave_channel_id) {
+        const channel = member.guild.channels.cache.get(settings.leave_channel_id);
+        if (channel?.isTextBased()) {
+          const text = String(settings.leave_message || "{user} har forladt {server}.")
+            .replaceAll("{user}", member.user.tag)
+            .replaceAll("{server}", member.guild.name);
+          await channel.send(text).catch(() => {});
+        }
+      }
+      await sendGuildLog(member.guild, "Leave", member.user.tag + " left serveren.", "warning");
+    } catch (error) {
+      log("error", "guildMemberRemove error: " + error.message);
+    }
+  });
+
+  client.on("channelDelete", async (channel) => {
+    if (!channel.guild) return;
+    await sendGuildLog(channel.guild, "Anti-Nuke", "Kanal slettet: " + channel.name, "security");
+  });
+
+  client.on("roleDelete", async (role) => {
+    if (!role.guild) return;
+    await sendGuildLog(role.guild, "Anti-Nuke", "Rolle slettet: " + role.name, "security");
+  });
+
   client.on("messageCreate", async (message) => {
     if (message.author.bot) return;
+
+    try {
+      if (await runAutoMod(message)) return;
+      await addXp(message.guild, message.author);
+    } catch (error) {
+      log("error", "AutoMod/XP error: " + error.message);
+    }
 
     const prefix = state.settings.prefix || "!";
     if (!message.content.startsWith(prefix)) return;
