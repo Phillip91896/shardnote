@@ -1256,14 +1256,14 @@ body.locked > .app{display:none}
     <div class="card"><div class="stat-title">ÅBNE TICKETS</div><div class="stat-value" id="statTickets">0</div><div class="stat-foot">Needs attention</div></div>
   </div>
   <div class="grid two" style="margin-top:18px">
-    <div class="card"><div class="section-title"><h2>Seneste tickets</h2><button class="btn small" onclick="navigate('tickets')">Se alle</button></div><div id="dashTickets"></div></div>
+    <div class="card"><div class="section-title"><h2>Seneste tickets</h2><button class="btn small" data-button-label="dashboardSeeAll" onclick="navigate('tickets')">Se alle</button></div><div id="dashTickets"></div></div>
     <div class="card"><div class="section-title"><h2>Aktivitet</h2><button class="btn small" onclick="navigate('logs')">Alle logs</button></div><div id="dashLogs" class="activity"></div></div>
   </div>
 </section>
 
 <section class="page" id="page-tickets">
   <div class="card">
-    <div class="section-title"><h2>Ticket-system</h2><button class="btn primary" onclick="newTicket()">+ Ny ticket</button></div>
+    <div class="section-title"><h2>Ticket-system</h2><button class="btn primary" data-button-label="ticketNew" onclick="newTicket()">+ Ny ticket</button></div>
     <div id="ticketList"></div>
   </div>
 </section>
@@ -1276,7 +1276,7 @@ body.locked > .app{display:none}
         <div class="field"><label>Kanal</label><input id="messageChannel" placeholder="#general"></div>
         <div class="field"><label>Indhold</label><input id="messageContent" placeholder="Skriv din besked…"></div>
       </div>
-      <div class="actions"><button class="btn primary" onclick="sendMessage()">Send besked</button></div>
+      <div class="actions"><button class="btn primary" data-button-label="messageSend" onclick="sendMessage()">Send besked</button></div>
       <p id="messageHint" style="color:var(--muted);font-size:12px;margin-top:12px">Live Discord-afsendelse kræver en gyldig DISCORD_TOKEN i Render.</p>
     </div>
     <div class="card"><div class="section-title"><h2>Seneste beskeder</h2></div><div id="messageList"></div></div>
@@ -1288,7 +1288,7 @@ body.locked > .app{display:none}
     <div class="card">
       <div class="section-title"><h2>Command Center</h2><span id="commandCount">0 commands</span></div>
       <div class="field"><label>Command</label><input id="commandInput" placeholder="!ping"></div>
-      <div class="actions"><button class="btn primary" onclick="runCommand()">Kør command</button></div>
+      <div class="actions"><button class="btn primary" data-button-label="commandRun" onclick="runCommand()">Kør command</button></div>
       <div id="commandResult" style="margin-top:14px;color:var(--green)"></div>
     </div>
     <div class="card"><div class="section-title"><h2>Tilgængelige commands</h2></div><div id="commandList"></div></div>
@@ -1303,13 +1303,13 @@ body.locked > .app{display:none}
       <div class="field"><label>URL / søgning</label><input id="musicQuery" placeholder="YouTube URL eller søgning"></div>
       <div class="field"><label>Handling</label><select id="musicAction"><option>Play</option><option>Pause</option><option>Resume</option><option>Skip</option><option>Stop</option></select></div>
     </div>
-    <div class="actions"><button class="btn primary" onclick="musicAction()">Udfør</button></div>
+    <div class="actions"><button class="btn primary" data-button-label="musicExecute" onclick="musicAction()">Udfør</button></div>
   </div>
 </section>
 
 <section class="page" id="page-settings">
   <div class="card">
-    <div class="section-title"><h2>Indstillinger</h2><button class="btn primary" onclick="saveSettings()">Gem ændringer</button></div>
+    <div class="section-title"><h2>Indstillinger</h2><button class="btn primary" data-button-label="settingsSave" onclick="saveSettings()">Gem ændringer</button></div>
     <div class="field" style="max-width:280px"><label>Bot prefix</label><input id="prefix" maxlength="5" placeholder="!"></div>
     <div class="switch-row"><div><b>Maintenance mode</b><div style="color:var(--muted);font-size:12px">Vis dashboardet som vedligeholdelse</div></div><button id="maintenanceSwitch" class="switch" onclick="toggleSetting('maintenance')"><i></i></button></div>
     <div class="switch-row"><div><b>Auto-reply</b><div style="color:var(--muted);font-size:12px">Tillad automatiske svar</div></div><button id="autoReplySwitch" class="switch" onclick="toggleSetting('autoReply')"><i></i></button></div>
@@ -1322,8 +1322,8 @@ body.locked > .app{display:none}
     <div class="section-title">
       <div><h2>Logcenter</h2><span>Kun administratorer · kræver adgangskode</span></div>
       <div class="actions" style="margin:0">
-        <button class="btn small" onclick="loadLogs()">Opdater</button>
-        <button class="btn small danger" onclick="lockLogs()">🔒 Lås</button>
+        <button class="btn small" data-button-label="logsRefresh" onclick="loadLogs()">Opdater</button>
+        <button class="btn small danger" data-button-label="logsLock" onclick="lockLogs()">🔒 Lås</button>
       </div>
     </div>
     <div id="logLockPanel">
@@ -1333,7 +1333,7 @@ body.locked > .app{display:none}
         <div style="color:var(--muted);font-size:12px;margin:8px 0 15px">Indtast din admin-adgangskode for at åbne logcenteret.</div>
         <div style="max-width:360px;margin:0 auto">
           <input id="logPassword" type="password" placeholder="Admin-adgangskode" style="width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none">
-          <button class="btn primary" style="margin-top:10px;width:100%" onclick="unlockLogs()">🔓 Åbn logcenter</button>
+          <button class="btn primary" data-button-label="logsUnlock" style="margin-top:10px;width:100%" onclick="unlockLogs()">🔓 Åbn logcenter</button>
           <div id="logUnlockError" style="color:var(--red);font-size:12px;margin-top:10px"></div>
         </div>
       </div>
@@ -1358,11 +1358,11 @@ body.locked > .app{display:none}
       <div class="field" style="margin-top:12px"><label>Email</label><input id="newUserEmail" type="email" placeholder="jonas@example.com"></div>
       <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="newUserPassword" type="password" placeholder="Mindst 8 tegn"></div>
       <div class="field" style="margin-top:12px"><label>Rolle</label><select id="newUserRole"><option value="member">Member</option><option value="admin">Administrator</option></select></div>
-      <div class="actions"><button class="btn primary" onclick="createUser()">+ Tilføj bruger</button></div>
+      <div class="actions"><button class="btn primary" data-button-label="adminAddUser" onclick="createUser()">+ Tilføj bruger</button></div>
       <p style="color:var(--muted);font-size:12px;margin-top:12px">Kun administratorer kan åbne og ændre dette panel.</p>
     </div>
     <div class="card">
-      <div class="section-title"><h2>Brugere</h2><button class="btn small" onclick="loadUsers()">Opdater</button></div>
+      <div class="section-title"><h2>Brugere</h2><button class="btn small" data-button-label="adminRefresh" onclick="loadUsers()">Opdater</button></div>
       <div id="userList"></div>
     </div>
   </div>
