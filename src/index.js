@@ -167,6 +167,21 @@ function log(type, message) {
 
 
 const sessions = new Map();
+const logsUnlocks = new Map();
+
+function getSessionId(req) {
+  return parseCookies(req).shardnote_session;
+}
+
+function hasLogsAccess(req) {
+  const sid = getSessionId(req);
+  const expiresAt = sid ? logsUnlocks.get(sid) : 0;
+  if (!expiresAt || expiresAt <= Date.now()) {
+    if (sid) logsUnlocks.delete(sid);
+    return false;
+  }
+  return true;
+}
 
 function getClientIp(req) {
   const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
@@ -1022,12 +1037,51 @@ app.patch("/api/settings", async (req, res) => {
   }
 });
 
-app.get("/api/logs", async (req, res) => {
+app.post("/api/logs/unlock", requireAuth, requireAdmin, async (req, res) => {
   try {
+    const password = String(req.body.password || "");
+    if (!password) return res.status(400).json({ error: "Adgangskode mangler." });
+
+    let valid = false;
+    if (db) {
+      const result = await db.query(
+        "SELECT password_hash FROM public.users WHERE id = $1 AND role = 'admin' LIMIT 1",
+        [req.user.id]
+      );
+      const row = result.rows[0];
+      valid = !!row && row.password_hash === hashPassword(password);
+    } else {
+      const user = state.users.find(u => String(u.id) === String(req.user.id));
+      valid = !!user && user.role === "admin" && user.passwordHash === hashPassword(password);
+    }
+
+    if (!valid) return res.status(401).json({ error: "Forkert adgangskode." });
+
+    const sid = getSessionId(req);
+    logsUnlocks.set(sid, Date.now() + 15 * 60 * 1000);
+    log("security", `Logs unlocked by ${req.user.email}`);
+    res.json({ ok: true, expiresInSeconds: 900 });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke låse logs op." });
+  }
+});
+
+app.post("/api/logs/lock", requireAuth, requireAdmin, (req, res) => {
+  const sid = getSessionId(req);
+  if (sid) logsUnlocks.delete(sid);
+  res.json({ ok: true });
+});
+
+app.get("/api/logs", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!hasLogsAccess(req)) {
+      return res.status(423).json({ locked: true, error: "Logs er låst. Indtast din admin-adgangskode for at åbne dem." });
+    }
     if (db) {
       const result = await db.query(
         `SELECT id, type, message, created_at AS "time"
-         FROM public.logs ORDER BY created_at DESC LIMIT 100`
+         FROM public.logs ORDER BY created_at DESC LIMIT 200`
       );
       state.logs = result.rows;
     }
@@ -1060,7 +1114,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 .page{display:none}.page.active{display:block}.grid{display:grid;gap:18px}.stats{grid-template-columns:repeat(4,minmax(0,1fr))}.card{background:linear-gradient(180deg,rgba(22,22,33,.96),rgba(13,13,20,.96));border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow)}.stat-title{color:var(--muted);font-size:13px}.stat-value{font-size:30px;font-weight:800;margin-top:8px}.stat-foot{font-size:12px;color:var(--green);margin-top:7px}
 .two{grid-template-columns:1.35fr 1fr}.section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.section-title h2{font-size:17px;margin:0}.section-title span{font-size:12px;color:var(--muted)}
 .btn{border:1px solid var(--border);background:#171722;color:#fff;border-radius:10px;padding:10px 13px}.btn:hover{border-color:#4a4962;background:#1d1d2a}.btn.primary{background:linear-gradient(135deg,var(--accent),#795cff);border-color:transparent}.btn.danger{color:#ff8a96}.btn.small{padding:7px 10px;font-size:12px}
-.table{width:100%;border-collapse:collapse}.table th,.table td{padding:12px 8px;border-bottom:1px solid #22222e;text-align:left;font-size:13px}.table th{color:var(--muted);font-weight:600}.badge{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:700}.badge.open{background:rgba(66,211,146,.12);color:var(--green)}.badge.pending{background:rgba(244,201,93,.12);color:var(--yellow)}.badge.closed{background:rgba(255,102,120,.12);color:var(--red)}
+.table{width:100%;border-collapse:collapse}.table th,.table td{padding:12px 8px;border-bottom:1px solid #22222e;text-align:left;font-size:13px}.table th{color:var(--muted);font-weight:600}.badge{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:700}.badge.open{background:rgba(66,211,146,.12);color:var(--green)}.badge.pending{background:rgba(244,201,93,.12);color:var(--yellow)}.badge.closed{background:rgba(255,102,120,.12);color:var(--red)}.log-category{border:1px solid var(--border);border-radius:12px;background:#0e0e16;margin-bottom:10px;overflow:hidden}.log-category summary{cursor:pointer;list-style:none;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-weight:700}.log-category summary::-webkit-details-marker{display:none}.log-category summary b{background:#1c1b2b;padding:4px 8px;border-radius:999px;font-size:11px;color:var(--muted)}.log-category-body{padding:0 12px 12px}
 .activity{display:grid;gap:11px}.activity-item{display:flex;gap:11px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #22222e}.activity-item:last-child{border:0}.activity-icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:#1c1b2b}.activity-item b{font-size:13px}.activity-item small{display:block;color:var(--muted);margin-top:3px}
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:grid;gap:7px}.field label{font-size:12px;color:var(--muted)}.field input,.field textarea,.field select{width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none}.field textarea{min-height:120px;resize:vertical}.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent)}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:12px}
@@ -1171,7 +1225,25 @@ body.locked > .app{display:none}
 </section>
 
 <section class="page" id="page-logs">
-  <div class="card"><div class="section-title"><h2>System logs</h2><button class="btn small" onclick="loadLogs()">Opdater</button></div><div id="logList"></div></div>
+  <div class="card">
+    <div class="section-title">
+      <div><h2>System logs</h2><span>Beskyttet med din admin-adgangskode</span></div>
+      <button class="btn small" onclick="loadLogs()">Opdater</button>
+    </div>
+    <div id="logLockPanel">
+      <div class="empty">
+        <div style="font-size:34px;margin-bottom:10px">🔒</div>
+        <b>Logs er låst</b>
+        <div style="color:var(--muted);font-size:12px;margin:8px 0 15px">Indtast din admin-adgangskode for at åbne loghistorikken.</div>
+        <div style="max-width:360px;margin:0 auto">
+          <input id="logPassword" type="password" placeholder="Admin-adgangskode" style="width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none">
+          <button class="btn primary" style="margin-top:10px;width:100%" onclick="unlockLogs()">🔓 Åbn logs</button>
+          <div id="logUnlockError" style="color:var(--red);font-size:12px;margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+    <div id="logContent" style="display:none"></div>
+  </div>
 </section>
 
 <section class="page" id="page-admin">
