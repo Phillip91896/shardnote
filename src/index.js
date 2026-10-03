@@ -23,17 +23,26 @@ app.post("/api/billing/webhook", express.raw({ type: "application/json" }), asyn
       const userId=object.metadata?.user_id;
       const subscriptionId=typeof object.subscription==="string"?object.subscription:object.subscription?.id||null;
       const customerId=typeof object.customer==="string"?object.customer:object.customer?.id||null;
+      const plan=object.metadata?.plan;
       if(userId){
         await updateUserSubscription({userId,status:"active",customerId,subscriptionId});
-        log("billing", `Subscription activated for user #${userId}`);
+        if(db && ["member","member_plus","member_pro","member_premium"].includes(plan)){
+          await db.query("UPDATE public.users SET plan = $1 WHERE id = $2",[plan,userId]);
+        }
+        log("billing", "Subscription activated for user #" + userId + " (" + (plan || "member") + ")", userId);
       }
     }
     if(event.type==="customer.subscription.created"||event.type==="customer.subscription.updated"||event.type==="customer.subscription.deleted"){
       const userId=object.metadata?.user_id;
       const status=event.type==="customer.subscription.deleted"?"canceled":object.status;
-      if(userId)await updateUserSubscription({userId,status,customerId:typeof object.customer==="string"?object.customer:object.customer?.id,subscriptionId:object.id,currentPeriodEnd:object.current_period_end});
-      else if(event.type==="customer.subscription.deleted")await updateUserSubscriptionByStripeSubscription(object.id,status);
-      if(userId)log("billing", `Subscription ${status} for user #${userId}`);
+      const plan=object.metadata?.plan;
+      if(userId) {
+        await updateUserSubscription({userId,status,customerId:typeof object.customer==="string"?object.customer:object.customer?.id,subscriptionId:object.id,currentPeriodEnd:object.current_period_end});
+        if(db && event.type!=="customer.subscription.deleted" && ["member","member_plus","member_pro","member_premium"].includes(plan)){
+          await db.query("UPDATE public.users SET plan = $1 WHERE id = $2",[plan,userId]);
+        }
+      } else if(event.type==="customer.subscription.deleted") await updateUserSubscriptionByStripeSubscription(object.id,status);
+      if(userId)log("billing", "Subscription " + status + " for user #" + userId + " (" + (plan || "member") + ")", userId);
     }
     if(event.type==="invoice.payment_failed"){
       const subscriptionId=typeof object.subscription==="string"?object.subscription:object.subscription?.id||null;
@@ -1073,9 +1082,16 @@ app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
   try{
     if(!stripe)return res.status(503).json({error:"Stripe er ikke konfigureret endnu."});
     if(hasPaidAccess(req.user))return res.status(400).json({error:"Du har allerede adgang."});
+
+    const requestedPlan=["member","member_plus"].includes(req.body?.plan) ? req.body.plan : "member";
+    const planInfo={
+      member:{amount:267,name:"ShardNote Member"},
+      member_plus:{amount:468,name:"ShardNote Member Plus"}
+    }[requestedPlan];
+
     let customerId=req.user.stripeCustomerId;
     if(!customerId){
-      const customer=await stripe.customers.create({email:req.user.email,name:req.user.name,metadata:{user_id:String(req.user.id)}});
+      const customer=await stripe.customers.create({email:req.user.email,name:req.user.name,metadata:{user_id:String(req.user.id),plan:requestedPlan}});
       customerId=customer.id;
       await updateUserSubscription({userId:req.user.id,status:"inactive",customerId});
     }
@@ -1084,10 +1100,10 @@ app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
     const session=await stripe.checkout.sessions.create({
       mode:"subscription",
       customer:customerId,
-      line_items:[{price_data:{currency:"eur",unit_amount:267,recurring:{interval:"month"},product_data:{name:"ShardNote Premium"}},quantity:1}],
-      metadata:{user_id:String(req.user.id)},
+      line_items:[{price_data:{currency:"eur",unit_amount:planInfo.amount,recurring:{interval:"month"},product_data:{name:planInfo.name}},quantity:1}],
+      metadata:{user_id:String(req.user.id),plan:requestedPlan},
       subscription_data:{
-        metadata:{user_id:String(req.user.id)},
+        metadata:{user_id:String(req.user.id),plan:requestedPlan},
         ...(firstTrial ? {trial_period_days:10} : {})
       },
       success_url:PUBLIC_SITE_URL+"/?payment=success",
@@ -1101,7 +1117,7 @@ app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
       if(localUser)localUser.trialUsed=true;
     }
 
-    res.json({url:session.url});
+    res.json({url:session.url,plan:requestedPlan});
   }catch(error){
     console.error("[ShardNote] Stripe checkout failed:",error);
     res.status(500).json({error:"Betalingssiden kunne ikke åbnes."});
