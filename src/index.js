@@ -1073,19 +1073,100 @@ app.post("/api/logs/lock", requireAuth, requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-app.get("/api/logs", requireAuth, requireAdmin, async (req, res) => {
+function requireLogsAccess(req, res, next) {
+  if (!hasLogsAccess(req)) {
+    return res.status(423).json({
+      locked: true,
+      error: "Logs er låst. Indtast din admin-adgangskode for at åbne dem."
+    });
+  }
+  next();
+}
+
+const LOG_CATEGORIES = {
+  login: { label: "Login", source: "login_audit" },
+  security: { label: "Sikkerhed", type: "security" },
+  tickets: { label: "Tickets", type: "ticket" },
+  messages: { label: "Beskeder", type: "message" },
+  commands: { label: "Commands", type: "command" },
+  settings: { label: "Indstillinger", type: "settings" },
+  system: { label: "System", type: "success" },
+  warnings: { label: "Advarsler", type: "warning" },
+  errors: { label: "Fejl", type: "error" }
+};
+
+app.get("/api/logs/categories", requireAuth, requireAdmin, requireLogsAccess, async (req, res) => {
   try {
-    if (!hasLogsAccess(req)) {
-      return res.status(423).json({ locked: true, error: "Logs er låst. Indtast din admin-adgangskode for at åbne dem." });
-    }
+    const counts = {};
     if (db) {
+      const logsResult = await db.query(
+        `SELECT type, COUNT(*)::int AS count
+         FROM public.logs
+         GROUP BY type`
+      );
+      for (const row of logsResult.rows) counts[row.type] = row.count;
+
+      const loginResult = await db.query(
+        "SELECT COUNT(*)::int AS count FROM public.login_audit"
+      );
+      counts.login = loginResult.rows[0].count;
+    } else {
+      counts.login = state.loginAudit.length;
+      for (const item of state.logs) counts[item.type] = (counts[item.type] || 0) + 1;
+    }
+
+    res.json(Object.entries(LOG_CATEGORIES).map(([key, config]) => ({
+      key,
+      label: config.label,
+      count: key === "login" ? (counts.login || 0) : (counts[config.type] || 0)
+    })));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente log-kategorier." });
+  }
+});
+
+app.get("/api/logs", requireAuth, requireAdmin, requireLogsAccess, async (req, res) => {
+  try {
+    const category = String(req.query.category || "").toLowerCase();
+    const config = LOG_CATEGORIES[category];
+    if (!config) return res.status(400).json({ error: "Ugyldig log-kategori." });
+
+    if (db) {
+      if (category === "login") {
+        const result = await db.query(
+          `SELECT
+             id,
+             user_id AS "userId",
+             user_name AS "userName",
+             user_email AS "userEmail",
+             event_type AS "eventType",
+             success,
+             host(ip_address) AS "ipAddress",
+             user_agent AS "userAgent",
+             country,
+             city,
+             created_at AS "createdAt"
+           FROM public.login_audit
+           ORDER BY created_at DESC
+           LIMIT 500`
+        );
+        return res.json(result.rows);
+      }
+
       const result = await db.query(
         `SELECT id, type, message, created_at AS "time"
-         FROM public.logs ORDER BY created_at DESC LIMIT 200`
+         FROM public.logs
+         WHERE type = $1
+         ORDER BY created_at DESC
+         LIMIT 500`,
+        [config.type]
       );
-      state.logs = result.rows;
+      return res.json(result.rows);
     }
-    res.json(state.logs);
+
+    if (category === "login") return res.json(state.loginAudit.slice(0, 500));
+    return res.json(state.logs.filter(item => item.type === config.type).slice(0, 500));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Kunne ikke hente logs." });
@@ -1114,7 +1195,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 .page{display:none}.page.active{display:block}.grid{display:grid;gap:18px}.stats{grid-template-columns:repeat(4,minmax(0,1fr))}.card{background:linear-gradient(180deg,rgba(22,22,33,.96),rgba(13,13,20,.96));border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow)}.stat-title{color:var(--muted);font-size:13px}.stat-value{font-size:30px;font-weight:800;margin-top:8px}.stat-foot{font-size:12px;color:var(--green);margin-top:7px}
 .two{grid-template-columns:1.35fr 1fr}.section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.section-title h2{font-size:17px;margin:0}.section-title span{font-size:12px;color:var(--muted)}
 .btn{border:1px solid var(--border);background:#171722;color:#fff;border-radius:10px;padding:10px 13px}.btn:hover{border-color:#4a4962;background:#1d1d2a}.btn.primary{background:linear-gradient(135deg,var(--accent),#795cff);border-color:transparent}.btn.danger{color:#ff8a96}.btn.small{padding:7px 10px;font-size:12px}
-.table{width:100%;border-collapse:collapse}.table th,.table td{padding:12px 8px;border-bottom:1px solid #22222e;text-align:left;font-size:13px}.table th{color:var(--muted);font-weight:600}.badge{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:700}.badge.open{background:rgba(66,211,146,.12);color:var(--green)}.badge.pending{background:rgba(244,201,93,.12);color:var(--yellow)}.badge.closed{background:rgba(255,102,120,.12);color:var(--red)}.log-category{border:1px solid var(--border);border-radius:12px;background:#0e0e16;margin-bottom:10px;overflow:hidden}.log-category summary{cursor:pointer;list-style:none;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-weight:700}.log-category summary::-webkit-details-marker{display:none}.log-category summary b{background:#1c1b2b;padding:4px 8px;border-radius:999px;font-size:11px;color:var(--muted)}.log-category-body{padding:0 12px 12px}
+.table{width:100%;border-collapse:collapse}.table th,.table td{padding:12px 8px;border-bottom:1px solid #22222e;text-align:left;font-size:13px}.table th{color:var(--muted);font-weight:600}.badge{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:700}.badge.open{background:rgba(66,211,146,.12);color:var(--green)}.badge.pending{background:rgba(244,201,93,.12);color:var(--yellow)}.badge.closed{background:rgba(255,102,120,.12);color:var(--red)}.log-category{border:1px solid var(--border);border-radius:12px;background:#0e0e16;margin-bottom:10px;overflow:hidden}.log-category summary{cursor:pointer;list-style:none;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-weight:700}.log-category summary::-webkit-details-marker{display:none}.log-category summary b{background:#1c1b2b;padding:4px 8px;border-radius:999px;font-size:11px;color:var(--muted)}.log-category-body{padding:0 12px 12px}.log-category-intro{padding:10px 12px;margin-bottom:12px;border:1px dashed var(--border);border-radius:10px;color:var(--muted);font-size:12px}.log-category summary{user-select:none}.log-category-body{overflow:auto}
 .activity{display:grid;gap:11px}.activity-item{display:flex;gap:11px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #22222e}.activity-item:last-child{border:0}.activity-icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:#1c1b2b}.activity-item b{font-size:13px}.activity-item small{display:block;color:var(--muted);margin-top:3px}
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:grid;gap:7px}.field label{font-size:12px;color:var(--muted)}.field input,.field textarea,.field select{width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none}.field textarea{min-height:120px;resize:vertical}.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent)}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:12px}
@@ -1227,22 +1308,28 @@ body.locked > .app{display:none}
 <section class="page" id="page-logs">
   <div class="card">
     <div class="section-title">
-      <div><h2>System logs</h2><span>Beskyttet med din admin-adgangskode</span></div>
-      <button class="btn small" onclick="loadLogs()">Opdater</button>
+      <div><h2>Logcenter</h2><span>Kun administratorer · kræver adgangskode</span></div>
+      <div class="actions" style="margin:0">
+        <button class="btn small" onclick="loadLogs()">Opdater</button>
+        <button class="btn small danger" onclick="lockLogs()">🔒 Lås</button>
+      </div>
     </div>
     <div id="logLockPanel">
       <div class="empty">
-        <div style="font-size:34px;margin-bottom:10px">🔒</div>
-        <b>Logs er låst</b>
-        <div style="color:var(--muted);font-size:12px;margin:8px 0 15px">Indtast din admin-adgangskode for at åbne loghistorikken.</div>
+        <div style="font-size:34px;margin-bottom:10px">🔐</div>
+        <b>Logcenter er låst</b>
+        <div style="color:var(--muted);font-size:12px;margin:8px 0 15px">Indtast din admin-adgangskode for at åbne logcenteret.</div>
         <div style="max-width:360px;margin:0 auto">
           <input id="logPassword" type="password" placeholder="Admin-adgangskode" style="width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none">
-          <button class="btn primary" style="margin-top:10px;width:100%" onclick="unlockLogs()">🔓 Åbn logs</button>
+          <button class="btn primary" style="margin-top:10px;width:100%" onclick="unlockLogs()">🔓 Åbn logcenter</button>
           <div id="logUnlockError" style="color:var(--red);font-size:12px;margin-top:10px"></div>
         </div>
       </div>
     </div>
-    <div id="logContent" style="display:none"></div>
+    <div id="logContent" style="display:none">
+      <div class="log-category-intro">Hver logtype ligger separat. Åbn kun den kategori, du vil se.</div>
+      <div id="logCategoryList"></div>
+    </div>
   </div>
 </section>
 
@@ -1268,10 +1355,6 @@ body.locked > .app{display:none}
     </div>
   </div>
 
-  <div class="card" style="margin-top:18px">
-    <div class="section-title"><div><h2>Login-historik</h2><span>IP, omtrentligt sted, tidspunkt og browser</span></div><button class="btn small" onclick="loadLoginHistory()">Opdater</button></div>
-    <div id="loginHistoryList"></div>
-  </div>
 </section>
 </main>
 </div>
