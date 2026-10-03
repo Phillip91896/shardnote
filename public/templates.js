@@ -113,14 +113,14 @@
               '<div><label><input type="checkbox" data-prefix-role="muted"> Muted</label></div>'+
             '</div>'+
             '<div><b>Kanaler</b>'+
-              '<div><label><input type="checkbox" data-prefix-channel="welcome"> velkommen</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-channel="rules"> regler</label></div>'+
+              '<div><label><input type="checkbox" data-prefix-channel="velkommen"> velkommen</label></div>'+
+              '<div><label><input type="checkbox" data-prefix-channel="regler"> regler</label></div>'+
               '<div><label><input type="checkbox" data-prefix-channel="verification"> verification</label></div>'+
               '<div><label><input type="checkbox" data-prefix-channel="chat"> chat</label></div>'+
               '<div><label><input type="checkbox" data-prefix-channel="support"> support</label></div>'+
               '<div><label><input type="checkbox" data-prefix-channel="logs"> logs</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-channel="vipChat"> vip-chat</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-channel="staffChat"> staff-chat</label></div>'+
+              '<div><label><input type="checkbox" data-prefix-channel="vipchat"> vip-chat</label></div>'+
+              '<div><label><input type="checkbox" data-prefix-channel="staffchat"> staff-chat</label></div>'+
             '</div>'+
           '</div>'+
         '</div>'+
