@@ -120,8 +120,11 @@ async function loadSettings(){
 function toggleSetting(key){settings[key]=!settings[key];document.getElementById(key+"Switch").classList.toggle("on",settings[key])}
 async function saveSettings(){
   settings.prefix=document.getElementById("prefix").value||"!";
-  await api("/api/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(settings)});
-  toast("Indstillinger gemt");loadLogs();
+  settings.buttonLabels={};
+  Object.keys(DEFAULT_BUTTON_LABELS).forEach(key=>{const input=document.getElementById("buttonLabel_"+key);if(input)settings.buttonLabels[key]=String(input.value||DEFAULT_BUTTON_LABELS[key]).trim().slice(0,80);});
+  settings=await api("/api/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(settings)});
+  applyButtonLabels();
+  toast("Indstillinger gemt");
 }
 function renderLogLocked(){
   document.getElementById("logContent").style.display="none";
