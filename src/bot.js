@@ -228,10 +228,11 @@ const commands = [
   }
 ];
 
-function createBot({ state, log, createTicket, setReady }) {
+function createBot({ state, db, log, createTicket, setReady }) {
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
+      GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildMessages,
       GatewayIntentBits.MessageContent
     ]
