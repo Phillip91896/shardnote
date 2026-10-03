@@ -579,6 +579,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
   });
 
   client.on("interactionCreate", async (interaction) => {
+    if (interaction.isButton()) return handleFeatureButton(interaction).catch(error => log("error", "Button error: " + error.message));
     if (!interaction.isChatInputCommand()) return;
 
     try {
@@ -661,6 +662,454 @@ function createBot({ state, db, log, createTicket, setReady }) {
           ].join("\n")
         );
       }
+      if (!interaction.guild) {
+        return interaction.reply({ content: "Denne command virker kun i en Discord-server.", ephemeral: true });
+      }
+
+      const requirePermission = (permission) => {
+        if (!interaction.memberPermissions?.has(permission)) {
+          interaction.reply({ content: "Du har ikke de nødvendige rettigheder.", ephemeral: true });
+          return false;
+        }
+        return true;
+      };
+
+      if (interaction.commandName === "ticket-panel") {
+        if (!requirePermission(PermissionFlagsBits.ManageGuild)) return;
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId("ticket_create").setLabel("🎫 Opret ticket").setStyle(ButtonStyle.Primary)
+        );
+        await interaction.channel.send({
+          embeds: [new EmbedBuilder().setTitle("🎫 Support").setDescription("Tryk på knappen for at åbne en privat support-ticket.").setColor(0x6d5dfc)],
+          components: [row]
+        });
+        return interaction.reply({ content: "✅ Ticket-panel sendt.", ephemeral: true });
+      }
+
+      if (interaction.commandName === "ticket-close") {
+        if (!interaction.channel?.name?.startsWith("ticket-")) return interaction.reply({ content: "Dette er ikke en ticket-kanal.", ephemeral: true });
+        if (!requirePermission(PermissionFlagsBits.ManageChannels)) return;
+        const match = interaction.channel.name.match(/ticket-(\d+)/);
+        if (db && match) await db.query("UPDATE public.tickets SET status='closed' WHERE id=$1", [match[1]]).catch(() => {});
+        await interaction.channel.setName("closed-" + interaction.channel.name).catch(() => {});
+        return interaction.reply("🔒 Ticket lukket.");
+      }
+
+      if (interaction.commandName === "ticket-claim") {
+        if (!interaction.channel?.name?.startsWith("ticket-")) return interaction.reply({ content: "Dette er ikke en ticket-kanal.", ephemeral: true });
+        if (!requirePermission(PermissionFlagsBits.ManageMessages)) return;
+        const match = interaction.channel.name.match(/ticket-(\d+)/);
+        if (db && match) await db.query("UPDATE public.tickets SET claimed_by=$1 WHERE id=$2", [interaction.user.id, match[1]]).catch(() => {});
+        return interaction.reply("✅ Ticket claimed af " + interaction.user + ".");
+      }
+
+      if (interaction.commandName === "ticket-transcript") {
+        if (!interaction.channel?.name?.startsWith("ticket-")) return interaction.reply({ content: "Dette er ikke en ticket-kanal.", ephemeral: true });
+        if (!requirePermission(PermissionFlagsBits.ManageMessages)) return;
+        await interaction.deferReply({ ephemeral: true });
+        const text = await transcript(interaction.channel);
+        return interaction.editReply({
+          content: "📄 Transcript klar.",
+          files: [new AttachmentBuilder(Buffer.from(text || "Ingen beskeder."), { name: "ticket-transcript.txt" })]
+        });
+      }
+
+      if (interaction.commandName === "warn") {
+        if (!requirePermission(PermissionFlagsBits.ModerateMembers)) return;
+        const user = interaction.options.getUser("user", true);
+        const reason = interaction.options.getString("reason", true).slice(0, 500);
+        let caseId = null;
+        if (db) {
+          const result = await db.query(
+            "INSERT INTO public.warnings (guild_id,user_id,moderator_id,reason) VALUES ($1,$2,$3,$4) RETURNING id",
+            [interaction.guild.id, user.id, interaction.user.id, reason]
+          );
+          caseId = result.rows[0]?.id;
+        }
+        const member = await getMember(interaction.guild, user.id);
+        if (member) await member.send("⚠️ Du har fået en advarsel i " + interaction.guild.name + ". Grund: " + reason).catch(() => {});
+        await sendGuildLog(interaction.guild, "Advarsel", interaction.user.tag + " warned " + user.tag + ": " + reason, "security");
+        return interaction.reply("⚠️ " + user.tag + " er blevet advaret" + (caseId ? " (case #" + caseId + ")" : "") + ".");
+      }
+
+      if (interaction.commandName === "warnings") {
+        if (!requirePermission(PermissionFlagsBits.ModerateMembers)) return;
+        const user = interaction.options.getUser("user", true);
+        if (!db) return interaction.reply({ content: "Database kræves for warnings.", ephemeral: true });
+        const result = await db.query(
+          "SELECT moderator_id, reason, created_at FROM public.warnings WHERE guild_id=$1 AND user_id=$2 ORDER BY created_at DESC LIMIT 20",
+          [interaction.guild.id, user.id]
+        );
+        const text = result.rows.length
+          ? result.rows.map((row, index) => (index + 1) + ". " + row.reason).join("\n")
+          : "Ingen advarsler.";
+        return interaction.reply({ content: "**Advarsler for " + user.tag + "**\n" + text, ephemeral: true });
+      }
+
+      if (interaction.commandName === "clearwarnings") {
+        if (!requirePermission(PermissionFlagsBits.ModerateMembers)) return;
+        const user = interaction.options.getUser("user", true);
+        if (db) await db.query("DELETE FROM public.warnings WHERE guild_id=$1 AND user_id=$2", [interaction.guild.id, user.id]);
+        return interaction.reply("✅ Advarsler slettet for " + user.tag + ".");
+      }
+
+      if (interaction.commandName === "kick") {
+        if (!requirePermission(PermissionFlagsBits.KickMembers)) return;
+        const user = interaction.options.getUser("user", true);
+        const member = await getMember(interaction.guild, user.id);
+        const reason = (interaction.options.getString("reason") || "Ingen grund angivet").slice(0, 500);
+        if (!member?.kickable) return interaction.reply({ content: "Jeg kan ikke kicke den bruger.", ephemeral: true });
+        await member.kick(reason);
+        await sendGuildLog(interaction.guild, "Kick", interaction.user.tag + " kickede " + user.tag + ": " + reason, "security");
+        return interaction.reply("👢 " + user.tag + " er blevet kicked.");
+      }
+
+      if (interaction.commandName === "ban") {
+        if (!requirePermission(PermissionFlagsBits.BanMembers)) return;
+        const user = interaction.options.getUser("user", true);
+        const reason = (interaction.options.getString("reason") || "Ingen grund angivet").slice(0, 500);
+        const days = interaction.options.getInteger("delete_days") || 0;
+        await interaction.guild.members.ban(user.id, { deleteMessageSeconds: days * 86400, reason });
+        await sendGuildLog(interaction.guild, "Ban", interaction.user.tag + " bannede " + user.tag + ": " + reason, "security");
+        return interaction.reply("🔨 " + user.tag + " er blevet bannet.");
+      }
+
+      if (interaction.commandName === "unban") {
+        if (!requirePermission(PermissionFlagsBits.BanMembers)) return;
+        const userId = interaction.options.getString("user_id", true).trim();
+        await interaction.guild.members.unban(userId);
+        return interaction.reply("✅ " + userId + " er unbannet.");
+      }
+
+      if (interaction.commandName === "timeout") {
+        if (!requirePermission(PermissionFlagsBits.ModerateMembers)) return;
+        const user = interaction.options.getUser("user", true);
+        const raw = interaction.options.getString("duration", true).trim().toLowerCase();
+        const match = raw.match(/^(\d+)\s*(s|m|h|d)$/);
+        if (!match) return interaction.reply({ content: "Brug fx 10m, 2h eller 1d.", ephemeral: true });
+        const multiplier = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[match[2]];
+        const duration = Number(match[1]) * multiplier;
+        if (!Number.isFinite(duration) || duration > 28 * 86400000) return interaction.reply({ content: "Timeout må højst være 28 dage.", ephemeral: true });
+        const member = await getMember(interaction.guild, user.id);
+        if (!member?.moderatable) return interaction.reply({ content: "Jeg kan ikke timeoute den bruger.", ephemeral: true });
+        await member.timeout(duration, interaction.options.getString("reason") || "ShardNote timeout");
+        return interaction.reply("⏳ " + user.tag + " er i timeout i " + (duration >= 3600000 ? Math.floor(duration / 3600000) + "h" : Math.floor(duration / 60000) + "m") + ".");
+      }
+
+      if (interaction.commandName === "untimeout") {
+        if (!requirePermission(PermissionFlagsBits.ModerateMembers)) return;
+        const user = interaction.options.getUser("user", true);
+        const member = await getMember(interaction.guild, user.id);
+        if (!member?.moderatable) return interaction.reply({ content: "Jeg kan ikke fjerne timeout.", ephemeral: true });
+        await member.timeout(null, "ShardNote untimeout");
+        return interaction.reply("✅ Timeout fjernet.");
+      }
+
+      if (interaction.commandName === "purge") {
+        if (!requirePermission(PermissionFlagsBits.ManageMessages)) return;
+        const amount = interaction.options.getInteger("amount", true);
+        const deleted = await interaction.channel.bulkDelete(amount, true);
+        return interaction.reply({ content: "🧹 Slettede " + deleted.size + " beskeder.", ephemeral: true });
+      }
+
+      if (interaction.commandName === "slowmode") {
+        if (!requirePermission(PermissionFlagsBits.ManageChannels)) return;
+        const seconds = interaction.options.getInteger("seconds", true);
+        await interaction.channel.setRateLimitPerUser(seconds, "ShardNote slowmode");
+        return interaction.reply("🐢 Slowmode sat til " + seconds + " sekunder.");
+      }
+
+      if (interaction.commandName === "lockdown" || interaction.commandName === "unlockdown") {
+        if (!requirePermission(PermissionFlagsBits.Administrator)) return;
+        const locked = interaction.commandName === "lockdown";
+        await setLockdown(interaction.guild, locked);
+        return interaction.reply(locked ? "🔒 Serveren er låst ned." : "🔓 Serveren er åben igen.");
+      }
+
+      if (interaction.commandName === "announce") {
+        if (!requirePermission(PermissionFlagsBits.ManageGuild)) return;
+        const target = interaction.options.getChannel("channel") || interaction.channel;
+        const embed = new EmbedBuilder()
+          .setTitle(interaction.options.getString("title", true).slice(0, 200))
+          .setDescription(interaction.options.getString("message", true).slice(0, 2000))
+          .setColor(0x6d5dfc)
+          .setFooter({ text: "ShardNote • " + interaction.guild.name });
+        await target.send({ embeds: [embed] });
+        return interaction.reply({ content: "✅ Announcement sendt.", ephemeral: true });
+      }
+
+      if (interaction.commandName === "poll") {
+        const poll = {
+          question: interaction.options.getString("question", true).slice(0, 250),
+          options: [
+            { label: interaction.options.getString("option1", true).slice(0, 60), votes: 0 },
+            { label: interaction.options.getString("option2", true).slice(0, 60), votes: 0 }
+          ],
+          voters: new Map()
+        };
+        const option3 = interaction.options.getString("option3");
+        if (option3) poll.options.push({ label: option3.slice(0, 60), votes: 0 });
+        const message = await interaction.channel.send({
+          embeds: [pollEmbed(poll)],
+          components: [pollButtons(interaction.id, poll.options)]
+        });
+        polls.set(interaction.id, poll);
+        return interaction.reply({ content: "✅ Poll oprettet: " + message.url, ephemeral: true });
+      }
+
+      if (interaction.commandName === "suggest") {
+        const settings = await getGuildSettings(interaction.guild.id);
+        const channel = settings.suggestion_channel_id
+          ? interaction.guild.channels.cache.get(settings.suggestion_channel_id)
+          : interaction.channel;
+        if (!channel?.isTextBased()) return interaction.reply({ content: "Suggestion-kanalen er ikke tilgængelig.", ephemeral: true });
+        const text = interaction.options.getString("text", true).slice(0, 1800);
+        const message = await channel.send({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle("💡 Nyt forslag")
+              .setDescription(text)
+              .addFields({ name: "Fra", value: interaction.user.tag, inline: true }, { name: "Status", value: "Pending", inline: true })
+              .setColor(0x42d392)
+          ]
+        });
+        if (db) await db.query(
+          "INSERT INTO public.suggestions (guild_id,user_id,content,channel_id,message_id) VALUES ($1,$2,$3,$4,$5)",
+          [interaction.guild.id, interaction.user.id, text, channel.id, message.id]
+        );
+        return interaction.reply({ content: "✅ Forslag sendt.", ephemeral: true });
+      }
+
+      if (interaction.commandName === "role-panel") {
+        if (!requirePermission(PermissionFlagsBits.ManageRoles)) return;
+        const role = interaction.options.getRole("role", true);
+        if (!role.editable) return interaction.reply({ content: "Bot-rollen skal stå over den valgte rolle.", ephemeral: true });
+        const button = new ButtonBuilder()
+          .setCustomId("role:" + role.id)
+          .setLabel(interaction.options.getString("label", true).slice(0, 80))
+          .setStyle(ButtonStyle.Primary);
+        await interaction.channel.send({
+          embeds: [new EmbedBuilder().setTitle("🎭 Rollepanel").setDescription("Tryk for at få eller fjerne " + role + ".").setColor(0x6d5dfc)],
+          components: [new ActionRowBuilder().addComponents(button)]
+        });
+        return interaction.reply({ content: "✅ Rollepanel sendt.", ephemeral: true });
+      }
+
+      if (interaction.commandName === "verify-panel") {
+        if (!requirePermission(PermissionFlagsBits.ManageGuild)) return;
+        const settings = await getGuildSettings(interaction.guild.id);
+        if (!settings.verification_role_id) return interaction.reply({ content: "Sæt først en verification-role.", ephemeral: true });
+        await interaction.channel.send({
+          embeds: [new EmbedBuilder().setTitle("✅ Verification").setDescription("Tryk for at blive verificeret.").setColor(0x42d392)],
+          components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("verify").setLabel("✅ Verificer mig").setStyle(ButtonStyle.Success))]
+        });
+        return interaction.reply({ content: "✅ Verification-panel sendt.", ephemeral: true });
+      }
+
+      const settingMap = {
+        "set-log-channel": ["log_channel_id", "channel"],
+        "set-autorole": ["autorole_id", "role"],
+        "set-support-role": ["support_role_id", "role"],
+        "set-ticket-category": ["ticket_category_id", "category"],
+        "set-verification-role": ["verification_role_id", "role"],
+        "set-suggestion-channel": ["suggestion_channel_id", "channel"]
+      };
+
+      if (settingMap[interaction.commandName]) {
+        if (!requirePermission(PermissionFlagsBits.ManageGuild)) return;
+        const config = settingMap[interaction.commandName];
+        const value = interaction.options.getChannel(config[1]) || interaction.options.getRole("role");
+        if (!value) return interaction.reply({ content: "Mangler værdi.", ephemeral: true });
+        if (value.isRole?.() && !value.editable) return interaction.reply({ content: "Bot-rollen skal stå over rollen.", ephemeral: true });
+        await setGuildSetting(interaction.guild.id, config[0], value.id);
+        return interaction.reply("✅ Indstilling gemt.");
+      }
+
+      if (interaction.commandName === "set-welcome" || interaction.commandName === "set-leave") {
+        if (!requirePermission(PermissionFlagsBits.ManageGuild)) return;
+        const channel = interaction.options.getChannel("channel", true);
+        const isWelcome = interaction.commandName === "set-welcome";
+        const key = isWelcome ? "welcome_channel_id" : "leave_channel_id";
+        const messageKey = isWelcome ? "welcome_message" : "leave_message";
+        const message = interaction.options.getString("message") || (isWelcome ? "Velkommen {user} til {server}! 👋" : "{user} har forladt {server}.");
+        await setGuildSetting(interaction.guild.id, key, channel.id);
+        await setGuildSetting(interaction.guild.id, messageKey, message.slice(0, 1000));
+        return interaction.reply("✅ Indstilling gemt.");
+      }
+
+      if (interaction.commandName === "set-features") {
+        if (!requirePermission(PermissionFlagsBits.ManageGuild)) return;
+        await setGuildSetting(interaction.guild.id, "automod_enabled", interaction.options.getBoolean("automod", true));
+        await setGuildSetting(interaction.guild.id, "invite_filter", interaction.options.getBoolean("invite_filter", true));
+        await setGuildSetting(interaction.guild.id, "levels_enabled", interaction.options.getBoolean("levels", true));
+        await setGuildSetting(interaction.guild.id, "economy_enabled", interaction.options.getBoolean("economy", true));
+        await setGuildSetting(interaction.guild.id, "anti_raid_enabled", interaction.options.getBoolean("anti_raid", true));
+        return interaction.reply("✅ Bot-funktionerne er opdateret.");
+      }
+
+      if (interaction.commandName === "giveaway") {
+        if (!requirePermission(PermissionFlagsBits.ManageGuild)) return;
+        const raw = interaction.options.getString("duration", true).trim().toLowerCase();
+        const match = raw.match(/^(\d+)\s*(s|m|h|d)$/);
+        if (!match) return interaction.reply({ content: "Brug fx 10m, 2h eller 1d.", ephemeral: true });
+        const multiplier = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[match[2]];
+        const duration = Number(match[1]) * multiplier;
+        if (!Number.isFinite(duration) || duration < 1000 || duration > 28 * 86400000) return interaction.reply({ content: "Varigheden skal være mellem 1 sekund og 28 dage.", ephemeral: true });
+
+        const prize = interaction.options.getString("prize", true).slice(0, 200);
+        const winners = Math.max(1, Math.min(20, interaction.options.getInteger("winners") || 1));
+        const endsAt = new Date(Date.now() + duration);
+        const tempId = interaction.guild.id + "-" + Date.now();
+        const row = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId("giveaway:" + tempId).setLabel("🎉 Deltag").setStyle(ButtonStyle.Primary)
+        );
+        const message = await interaction.channel.send({
+          embeds: [new EmbedBuilder().setTitle("🎉 Giveaway: " + prize).setDescription("Vindere: **" + winners + "**\nSlutter: <t:" + Math.floor(endsAt.getTime() / 1000) + ":R>\n\nTryk på **Deltag**.").setColor(0xf4c95d)],
+          components: [row]
+        });
+        giveaways.set(tempId, { guildId: interaction.guild.id, channelId: interaction.channel.id, messageId: message.id, prize, winners });
+        giveawayEntries.set(tempId, new Set());
+        let giveawayId = tempId;
+        if (db) {
+          await db.query("CREATE TABLE IF NOT EXISTS public.giveaway_entries (giveaway_id BIGINT NOT NULL,user_id VARCHAR(32) NOT NULL,PRIMARY KEY(giveaway_id,user_id))");
+          const result = await db.query(
+            "INSERT INTO public.giveaways (guild_id,channel_id,message_id,prize,winners,ends_at,host_id) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id",
+            [interaction.guild.id, interaction.channel.id, message.id, prize, winners, endsAt.toISOString(), interaction.user.id]
+          );
+          giveawayId = String(result.rows[0].id);
+          giveaways.set(giveawayId, giveaways.get(tempId));
+          giveawayEntries.set(giveawayId, giveawayEntries.get(tempId));
+          giveaways.delete(tempId);
+          giveawayEntries.delete(tempId);
+        }
+        setTimeout(async () => {
+          const item = giveaways.get(String(giveawayId));
+          if (!item) return;
+          const channel = client.channels.cache.get(item.channelId);
+          if (!channel?.isTextBased()) return;
+          const dbEntries = db
+            ? await db.query("SELECT user_id FROM public.giveaway_entries WHERE giveaway_id=$1", [giveawayId]).catch(() => ({ rows: [] }))
+            : { rows: [] };
+          const candidates = dbEntries.rows.length ? dbEntries.rows.map(row => row.user_id) : [...(giveawayEntries.get(String(giveawayId)) || [])];
+          const winnersList = [];
+          while (winnersList.length < Math.min(item.winners, candidates.length)) {
+            winnersList.push(candidates.splice(Math.floor(Math.random() * candidates.length), 1)[0]);
+          }
+          await channel.send(
+            winnersList.length
+              ? "🎉 Giveaway slut! Vinder: " + winnersList.map(id => "<@" + id + ">").join(", ") + "\n**Præmie:** " + item.prize
+              : "🎉 Giveaway slut! Ingen deltagere.\n**Præmie:** " + item.prize
+          ).catch(() => {});
+          if (db) await db.query("UPDATE public.giveaways SET status='ended' WHERE id=$1", [giveawayId]).catch(() => {});
+          giveaways.delete(String(giveawayId));
+          giveawayEntries.delete(String(giveawayId));
+        }, Math.min(duration, 2147483647));
+        return interaction.reply({ content: "🎉 Giveaway startet.", ephemeral: true });
+      }
+
+      if (interaction.commandName === "balance" || interaction.commandName === "daily" || interaction.commandName === "work" || interaction.commandName === "leaderboard" || interaction.commandName === "level") {
+        const settings = await getGuildSettings(interaction.guild.id);
+        if (["balance","daily","work","leaderboard"].includes(interaction.commandName) && !settings.economy_enabled) return interaction.reply({ content: "Økonomi er slået fra.", ephemeral: true });
+        if (interaction.commandName === "level" && !settings.levels_enabled) return interaction.reply({ content: "Levels er slået fra.", ephemeral: true });
+      }
+
+      if (interaction.commandName === "balance") {
+        if (!db) return interaction.reply({ content: "Database kræves.", ephemeral: true });
+        await ensureStats(interaction.guild.id, interaction.user.id);
+        const result = await db.query("SELECT coins,xp,level FROM public.user_stats WHERE guild_id=$1 AND user_id=$2", [interaction.guild.id, interaction.user.id]);
+        const row = result.rows[0] || { coins: 0, xp: 0, level: 0 };
+        return interaction.reply("💰 **" + row.coins + " coins** · level " + row.level + " · " + row.xp + " XP");
+      }
+
+      if (interaction.commandName === "daily") {
+        if (!db) return interaction.reply({ content: "Database kræves.", ephemeral: true });
+        await ensureStats(interaction.guild.id, interaction.user.id);
+        const result = await db.query("SELECT last_daily FROM public.user_stats WHERE guild_id=$1 AND user_id=$2", [interaction.guild.id, interaction.user.id]);
+        const last = result.rows[0]?.last_daily;
+        if (last && Date.now() - new Date(last).getTime() < 86400000) return interaction.reply({ content: "⏰ Din daily er ikke klar endnu.", ephemeral: true });
+        const reward = 250 + Math.floor(Math.random() * 251);
+        await db.query("UPDATE public.user_stats SET coins=coins+$1,last_daily=NOW() WHERE guild_id=$2 AND user_id=$3", [reward, interaction.guild.id, interaction.user.id]);
+        return interaction.reply("🎁 Du fik **" + reward + " coins**.");
+      }
+
+      if (interaction.commandName === "work") {
+        if (!db) return interaction.reply({ content: "Database kræves.", ephemeral: true });
+        await ensureStats(interaction.guild.id, interaction.user.id);
+        const result = await db.query("SELECT last_work FROM public.user_stats WHERE guild_id=$1 AND user_id=$2", [interaction.guild.id, interaction.user.id]);
+        const last = result.rows[0]?.last_work;
+        if (last && Date.now() - new Date(last).getTime() < 3600000) return interaction.reply({ content: "⏰ Du kan arbejde igen senere.", ephemeral: true });
+        const reward = 80 + Math.floor(Math.random() * 221);
+        await db.query("UPDATE public.user_stats SET coins=coins+$1,last_work=NOW() WHERE guild_id=$2 AND user_id=$3", [reward, interaction.guild.id, interaction.user.id]);
+        return interaction.reply("🧰 Du tjente **" + reward + " coins**.");
+      }
+
+      if (interaction.commandName === "leaderboard") {
+        if (!db) return interaction.reply({ content: "Database kræves.", ephemeral: true });
+        const result = await db.query("SELECT user_id,xp,level,coins FROM public.user_stats WHERE guild_id=$1 ORDER BY xp DESC,coins DESC LIMIT 10", [interaction.guild.id]);
+        const description = result.rows.length
+          ? result.rows.map((row, index) => "**" + (index + 1) + ".** <@" + row.user_id + "> — level " + row.level + ", " + row.xp + " XP, " + row.coins + " coins").join("\n")
+          : "Ingen data endnu.";
+        return interaction.reply({ embeds: [new EmbedBuilder().setTitle("🏆 Leaderboard").setDescription(description).setColor(0x6d5dfc)] });
+      }
+
+      if (interaction.commandName === "level") {
+        if (!db) return interaction.reply({ content: "Database kræves.", ephemeral: true });
+        const user = interaction.options.getUser("user") || interaction.user;
+        await ensureStats(interaction.guild.id, user.id);
+        const result = await db.query("SELECT xp,level FROM public.user_stats WHERE guild_id=$1 AND user_id=$2", [interaction.guild.id, user.id]);
+        const row = result.rows[0] || { xp: 0, level: 0 };
+        return interaction.reply("📈 " + user.tag + " er level **" + row.level + "** med **" + row.xp + " XP**.");
+      }
+
+      if (interaction.commandName === "backup") {
+        if (!requirePermission(PermissionFlagsBits.Administrator)) return;
+        const data = {
+          version: 1,
+          guild: { id: interaction.guild.id, name: interaction.guild.name },
+          createdAt: new Date().toISOString(),
+          roles: interaction.guild.roles.cache.filter(role => role.id !== interaction.guild.id && !role.managed).map(role => ({
+            name: role.name,
+            color: role.hexColor,
+            hoist: role.hoist,
+            mentionable: role.mentionable
+          })),
+          channels: interaction.guild.channels.cache.filter(channel => channel.type !== ChannelType.DM).map(channel => ({
+            name: channel.name,
+            type: channel.type,
+            parentId: channel.parentId || null
+          }))
+        };
+        const attachment = new AttachmentBuilder(Buffer.from(JSON.stringify(data, null, 2)), { name: "shardnote-backup.json" });
+        return interaction.reply({ content: "💾 Backup klar.", files: [attachment], ephemeral: true });
+      }
+
+      if (interaction.commandName === "restore") {
+        if (!requirePermission(PermissionFlagsBits.Administrator)) return;
+        const file = interaction.options.getAttachment("file", true);
+        if (!String(file.name || "").toLowerCase().endsWith(".json")) return interaction.reply({ content: "Upload en .json backup.", ephemeral: true });
+        const response = await fetch(file.url);
+        if (!response.ok) return interaction.reply({ content: "Backup kunne ikke hentes.", ephemeral: true });
+        const backup = await response.json();
+        if (backup?.version !== 1) return interaction.reply({ content: "Ukendt ShardNote-backup.", ephemeral: true });
+        let roles = 0;
+        let channels = 0;
+        const existingRoles = new Set(interaction.guild.roles.cache.map(role => role.name));
+        for (const role of backup.roles || []) {
+          if (role.name === "@everyone" || existingRoles.has(role.name)) continue;
+          await interaction.guild.roles.create({
+            name: role.name,
+            hoist: Boolean(role.hoist),
+            mentionable: Boolean(role.mentionable),
+            reason: "ShardNote restore"
+          }).then(() => roles++).catch(() => {});
+        }
+        for (const channel of backup.channels || []) {
+          if (interaction.guild.channels.cache.find(c => c.name === channel.name && c.type === channel.type)) continue;
+          await interaction.guild.channels.create({ name: channel.name, type: channel.type, reason: "ShardNote restore" }).then(() => channels++).catch(() => {});
+        }
+        return interaction.reply("♻️ Restore færdig: " + roles + " roller og " + channels + " kanaler.");
+      }
+
     } catch (error) {
       console.error("[ShardNote] Command error:", error);
       log("error", "Command error: " + error.message);
