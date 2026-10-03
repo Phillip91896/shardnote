@@ -1663,6 +1663,39 @@ app.get("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, (req,res,
   }
 });
 
+app.post("/api/bot/guilds/:guildId/templates/:templateKey", requireAuth, requirePaid, (req,res,next)=>requirePlan("member_plus",req,res,next), async (req, res) => {
+  try {
+    if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
+
+    const guild = client.guilds.cache.get(String(req.params.guildId));
+    if (!guild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
+
+    if (req.user?.role !== "admin" && !(await isGuildLinkedToUser(req.user.id, guild.id))) {
+      return res.status(403).json({ error: "Denne Discord-server er ikke koblet til din ShardNote-konto." });
+    }
+
+    if (!client.dashboardApplyDiscordTemplate) {
+      return res.status(503).json({ error: "Discord-skitser er ikke klar endnu." });
+    }
+
+    const templateKey = String(req.params.templateKey || "").trim().toLowerCase();
+    if (templateKey !== "f5-vip") {
+      return res.status(400).json({ error: "Ukendt Discord-skitse." });
+    }
+
+    const result = await client.dashboardApplyDiscordTemplate(guild.id, templateKey);
+    log("settings", "Discord-skitse F5 VIP blev kørt på " + guild.name, req.user?.id || null);
+    res.json({
+      ok: true,
+      guild: { id: guild.id, name: guild.name },
+      result
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message || "Discord-skitsen kunne ikke opsættes." });
+  }
+});
+
 app.patch("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, (req,res,next)=>requirePlan("member_plus",req,res,next), async (req, res) => {
   try {
     if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
