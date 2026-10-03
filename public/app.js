@@ -1,22 +1,6 @@
 const pages = ["dashboard","tickets","messages","commands","music","settings","logs","admin"];
 const titles = {dashboard:"Dashboard",tickets:"Tickets",messages:"Beskeder",commands:"Commands",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
-let settings = {
-  prefix:"!",
-  maintenance:false,
-  autoReply:true,
-  welcomeMessages:true,
-  buttonLabels:{
-    dashboard:"Dashboard",
-    tickets:"Tickets",
-    messages:"Beskeder",
-    commands:"Commands",
-    music:"Musik",
-    settings:"Indstillinger",
-    logs:"Logs",
-    admin:"Admin"
-  }
-};
-
+let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true};
 
 async function addBotToDiscord(){
   try{
@@ -44,7 +28,6 @@ function navigate(page){
     if(el) el.classList.toggle("active",p===page);
   });
   document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
-  applyButtonLabels();
   const title=document.getElementById("pageTitle");
   if(title) title.textContent=titles[page] || page;
   if(page==="tickets") loadTickets();
@@ -123,81 +106,10 @@ async function runCommand(){
   try{const r=await api("/api/commands",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({command})});document.getElementById("commandResult").textContent=r.message;loadLogs()}catch(e){toast(e.message)}
 }
 function musicAction(){toast("Musikmodulet er klar til Discord voice-integration.")}
-function applyButtonLabels(){
-  const labels=settings.buttonLabels || {};
-  document.querySelectorAll(".nav button[data-page]").forEach(btn=>{
-    const key=btn.dataset.page;
-    const label=labels[key];
-    if(label) {
-      const span=btn.querySelector(".nav-label");
-      if(span) span.textContent=label;
-      titles[key]=label;
-    }
-  });
-  const title=document.getElementById("pageTitle");
-  const active=document.querySelector(".nav button.active")?.dataset.page;
-  if(title && active) title.textContent=titles[active] || active;
-}
-
-const defaultButtonLabels={
-  dashboard:"Dashboard",
-  tickets:"Tickets",
-  messages:"Beskeder",
-  commands:"Commands",
-  music:"Musik",
-  settings:"Indstillinger",
-  logs:"Logs",
-  admin:"Admin"
-};
-
-function renderButtonLabelEditor(){
-  const editor=document.getElementById("buttonLabelEditor");
-  if(!editor) return;
-  editor.innerHTML=Object.entries(defaultButtonLabels).map(([key, label])=>{
-    const value=(settings.buttonLabels && settings.buttonLabels[key]) || label;
-    return `<div class="field"><label>${escapeHtml(label)}</label><input data-button-label="${key}" maxlength="40" value="${escapeHtml(value)}"></div>`;
-  }).join("");
-}
-
 async function loadSettings(){
   settings=await api("/api/settings");
-  settings.buttonLabels=settings.buttonLabels||{...defaultButtonLabels};
   document.getElementById("prefix").value=settings.prefix;
   ["maintenance","autoReply","welcomeMessages"].forEach(k=>document.getElementById(k+"Switch").classList.toggle("on",!!settings[k]));
-  applyButtonLabels();
-  renderButtonLabelEditor();
-}
-
-async function saveButtonLabels(){
-  const labels={};
-  document.querySelectorAll("[data-button-label]").forEach(input=>{
-    labels[input.dataset.buttonLabel]=input.value.trim() || defaultButtonLabels[input.dataset.buttonLabel];
-  });
-  settings.buttonLabels=labels;
-  try{
-    await api("/api/settings",{
-      method:"PATCH",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({buttonLabels:labels})
-    });
-    applyButtonLabels();
-    renderButtonLabelEditor();
-    toast("Knapnavne gemt");
-  }catch(e){toast(e.message)}
-}
-
-async function resetButtonLabels(){
-  settings.buttonLabels={...defaultButtonLabels};
-  try{
-    await api("/api/settings",{
-      method:"PATCH",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({buttonLabels:settings.buttonLabels})
-    });
-    applyButtonLabels();
-    renderButtonLabelEditor();
-    toast("Knapnavne nulstillet");
-  }catch(e){toast(e.message)}
 }
 function toggleSetting(key){settings[key]=!settings[key];document.getElementById(key+"Switch").classList.toggle("on",settings[key])}
 async function saveSettings(){
