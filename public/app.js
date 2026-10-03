@@ -155,7 +155,7 @@ function showRegister(){
   box.innerHTML=`<div class="login-card">
     <div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div>
     <h1>Opret konto</h1>
-    <p>Opret din egen ShardNote-konto. Nye konti oprettes som Staff.</p>
+    <p>Opret din egen ShardNote-konto. Nye konti oprettes som Member.</p>
     <form onsubmit="register(event)">
       <div class="field"><label>Navn</label><input id="registerName" required maxlength="80" autocomplete="name" placeholder="Dit navn"></div>
       <div class="field" style="margin-top:12px"><label>Email</label><input id="registerEmail" type="email" required autocomplete="email" placeholder="din@email.dk"></div>
