@@ -178,6 +178,14 @@ async function initDatabase() {
   `);
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS giveaway_entries (
+      giveaway_id BIGINT NOT NULL,
+      user_id VARCHAR(32) NOT NULL,
+      PRIMARY KEY (giveaway_id, user_id)
+    )
+  `);
+
+  await db.query(`
     INSERT INTO bot_settings (id, prefix, maintenance, auto_reply, welcome_messages)
     VALUES (1, '!', FALSE, TRUE, TRUE)
     ON CONFLICT (id) DO NOTHING
