@@ -126,10 +126,52 @@ async function checkLogin(){
 function showLogin(){
   document.body.classList.add("locked");
   if(document.getElementById("loginScreen")) return;
-  const box=document.createElement("div"); box.id="loginScreen";
-  box.innerHTML=`<div class="login-card"><div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div><h1>Log ind</h1><p>Log ind på dit ShardNote-kontrolpanel.</p><form onsubmit="login(event)"><div class="field"><label>Email</label><input id="loginEmail" type="email" required autocomplete="username"></div><div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="loginPassword" type="password" required autocomplete="current-password"></div><button class="btn primary" style="width:100%;margin-top:16px">Log ind</button><div id="loginError" style="color:var(--red);font-size:12px;margin-top:10px"></div></form></div>`;
+
+  const box=document.createElement("div");
+  box.id="loginScreen";
+  box.innerHTML=`<div class="login-card">
+    <div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div>
+    <h1>Log ind</h1>
+    <p>Log ind på dit ShardNote-kontrolpanel.</p>
+    <form onsubmit="login(event)">
+      <div class="field"><label>Email</label><input id="loginEmail" type="email" required autocomplete="username" placeholder="din@email.dk"></div>
+      <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="loginPassword" type="password" required autocomplete="current-password" placeholder="Din adgangskode"></div>
+      <button class="btn primary" style="width:100%;margin-top:16px">Log ind</button>
+      <div id="loginError" style="color:var(--red);font-size:12px;margin-top:10px"></div>
+    </form>
+    <div style="text-align:center;margin-top:18px;color:var(--muted);font-size:12px">
+      Har du ikke en konto?
+      <button type="button" class="btn small" style="margin-left:6px" onclick="showRegister()">Opret konto</button>
+    </div>
+  </div>`;
   document.body.appendChild(box);
 }
+
+function showRegister(){
+  document.body.classList.add("locked");
+
+  const box=document.getElementById("loginScreen") || document.createElement("div");
+  box.id="loginScreen";
+  box.innerHTML=`<div class="login-card">
+    <div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div>
+    <h1>Opret konto</h1>
+    <p>Opret din egen ShardNote-konto. Nye konti oprettes som Staff.</p>
+    <form onsubmit="register(event)">
+      <div class="field"><label>Navn</label><input id="registerName" required maxlength="80" autocomplete="name" placeholder="Dit navn"></div>
+      <div class="field" style="margin-top:12px"><label>Email</label><input id="registerEmail" type="email" required autocomplete="email" placeholder="din@email.dk"></div>
+      <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="registerPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="Mindst 8 tegn"></div>
+      <button class="btn primary" style="width:100%;margin-top:16px">Opret konto</button>
+      <div id="registerError" style="color:var(--red);font-size:12px;margin-top:10px"></div>
+    </form>
+    <div style="text-align:center;margin-top:18px;color:var(--muted);font-size:12px">
+      Har du allerede en konto?
+      <button type="button" class="btn small" style="margin-left:6px" onclick="showLogin()">Log ind</button>
+    </div>
+  </div>`;
+
+  if(!box.parentElement) document.body.appendChild(box);
+}
+
 async function login(e){
   e.preventDefault();
   const error=document.getElementById("loginError");
@@ -141,6 +183,38 @@ async function login(e){
     loadStats();
   }catch(err){error.textContent=err.message}
 }
+async function register(e){
+  e.preventDefault();
+
+  const error=document.getElementById("registerError");
+  error.textContent="";
+
+  try{
+    const r=await fetch("/api/register",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        name:document.getElementById("registerName").value,
+        email:document.getElementById("registerEmail").value,
+        password:document.getElementById("registerPassword").value
+      })
+    });
+
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error||"Kunne ikke oprette konto.");
+
+    currentUser=data.user;
+    document.getElementById("loginScreen")?.remove();
+    document.body.classList.remove("locked");
+    if(currentUser.role!=="admin") document.querySelector('[data-page="admin"]')?.remove();
+
+    toast("Konto oprettet");
+    loadStats();
+  }catch(err){
+    error.textContent=err.message;
+  }
+}
+
 async function logout(){
   try{
     await fetch("/api/logout",{method:"POST",credentials:"same-origin"});
@@ -150,6 +224,10 @@ async function logout(){
 }
 window.navigate=navigate;
 window.logout=logout;
+window.showLogin=showLogin;
+window.showRegister=showRegister;
+window.login=login;
+window.register=register;
 async function createUser(){
   try{
     await api("/api/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("newUserName").value,email:document.getElementById("newUserEmail").value,password:document.getElementById("newUserPassword").value,role:document.getElementById("newUserRole").value})});
