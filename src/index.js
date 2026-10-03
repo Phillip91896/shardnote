@@ -144,7 +144,8 @@ const state = {
     prefix: "!",
     maintenance: false,
     autoReply: true,
-    welcomeMessages: true
+    welcomeMessages: true,
+    buttonLabels: {}
   }
 };
 
