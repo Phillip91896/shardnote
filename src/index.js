@@ -169,7 +169,7 @@ app.post("/api/register", (req, res) => {
     id: Date.now(),
     name,
     email,
-    role: "staff",
+    role: "member",
     passwordHash: hashPassword(password),
     createdAt: new Date().toISOString()
   };
@@ -207,7 +207,7 @@ app.post("/api/admin/users", requireAuth, requireAdmin, (req, res) => {
   const name = String(req.body.name || "").trim().slice(0, 80);
   const email = String(req.body.email || "").trim().toLowerCase().slice(0, 160);
   const password = String(req.body.password || "");
-  const role = req.body.role === "admin" ? "admin" : "staff";
+  const role = req.body.role === "admin" ? "admin" : "member";
   if (!name || !email || password.length < 8) return res.status(400).json({ error: "Navn, email og adgangskode på mindst 8 tegn er påkrævet." });
   if (state.users.some(u => u.email === email)) return res.status(409).json({ error: "Email findes allerede." });
   const user = { id: Date.now(), name, email, role, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
@@ -488,7 +488,7 @@ body.locked > .app{display:none}
       <div class="field"><label>Navn</label><input id="newUserName" placeholder="Fx Jonas"></div>
       <div class="field" style="margin-top:12px"><label>Email</label><input id="newUserEmail" type="email" placeholder="jonas@example.com"></div>
       <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="newUserPassword" type="password" placeholder="Mindst 8 tegn"></div>
-      <div class="field" style="margin-top:12px"><label>Rolle</label><select id="newUserRole"><option value="staff">Staff</option><option value="admin">Administrator</option></select></div>
+      <div class="field" style="margin-top:12px"><label>Rolle</label><select id="newUserRole"><option value="member">Member</option><option value="admin">Administrator</option></select></div>
       <div class="actions"><button class="btn primary" onclick="createUser()">+ Tilføj bruger</button></div>
       <p style="color:var(--muted);font-size:12px;margin-top:12px">Kun administratorer kan åbne og ændre dette panel.</p>
     </div>
