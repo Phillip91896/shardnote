@@ -1040,6 +1040,7 @@ app.patch("/api/settings", async (req, res) => {
       if (result.rows[0]) state.settings = result.rows[0];
     }
 
+    if (db && req.body.buttonLabels) await db.query("INSERT INTO public.logs (type, message) VALUES ($1, $2)", ["button_labels", JSON.stringify(state.settings.buttonLabels || {})]);
     log("settings", "Dashboard settings updated");
     res.json(state.settings);
   } catch (error) {
