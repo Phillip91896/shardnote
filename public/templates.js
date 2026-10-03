@@ -37,7 +37,10 @@
       if(result) result.innerHTML='<div class="badge pending">Vælg en Discord-server først.</div>';
       return;
     }
-    if(!confirm("F5 VIP-skitsen opretter manglende roller, kategorier og kanaler og konfigurerer ShardNote. Eksisterende ting med samme navn slettes ikke. Fortsæt?")) return;
+    const prefixRoles=[...document.querySelectorAll("[data-prefix-role]:checked")].map(function(el){return el.getAttribute("data-prefix-role");});
+    const prefixChannels=[...document.querySelectorAll("[data-prefix-channel]:checked")].map(function(el){return el.getAttribute("data-prefix-channel");});
+
+    if(!confirm("F5 VIP-skitsen opretter manglende roller, kategorier og kanaler. F5 sættes kun foran de roller og kanaler, du har valgt. Fortsæt?")) return;
 
     button.disabled=true;
     button.textContent="⏳ Sætter serveren op…";
@@ -47,7 +50,7 @@
       const response=await apiCall("/api/bot/guilds/"+encodeURIComponent(guildId)+"/templates/f5-vip",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:"{}"
+        body:JSON.stringify({prefixRoles:prefixRoles,prefixChannels:prefixChannels})
       });
       const r=response.result||{};
       if(result){
@@ -79,13 +82,34 @@
         '<div class="card">'+
           '<div class="section-title"><div><h2>⭐ F5 VIP</h2><span>Komplet F5/VIP Discord-startopsætning</span></div><div class="badge pending">Skitse</div></div>'+
           '<div class="field"><label>Discord-server</label><select id="snTemplatePageGuild"></select></div>'+
-          '<div style="margin-top:15px;color:var(--muted);font-size:13px;line-height:1.8">'+
-            '<b style="color:#fff">Roller</b><br>'+
-            '👑 F5 Ejer · 🛡️ F5 Admin · 🔨 F5 Moderator · 🎫 F5 Support<br>'+
-            '⭐ F5 VIP · ✅ F5 Medlem · 🔇 F5 Muted<br><br>'+
-            '<b style="color:#fff">Områder</b><br>'+
-            'F5 📌 Information · F5 💬 Community · F5 🎫 Support · F5 🎟️ Tickets<br>'+
-            'F5 ⭐ VIP · F5 🔒 Staff · F5 🔊 Voice'+
+          '<div style="margin-top:15px;color:var(--muted);font-size:13px">Vælg selv, hvilke roller og kanaler der skal have <b>F5</b> foran navnet.</div>'+
+          '<div class="grid two" style="margin-top:15px">'+
+            '<div class="card" style="padding:14px;background:#0c0c13">'+
+              '<b>F5 foran roller</b>'+
+              '<div class="field" style="margin-top:10px"><label><input type="checkbox" data-prefix-role="owner"> 👑 Ejer</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-role="admin"> 🛡️ Admin</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-role="moderator"> 🔨 Moderator</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-role="support"> 🎫 Support</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-role="vip"> ⭐ VIP</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-role="member"> ✅ Medlem</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-role="muted"> 🔇 Muted</label></div>'+
+            '</div>'+
+            '<div class="card" style="padding:14px;background:#0c0c13">'+
+              '<b>F5 foran kanaler</b>'+
+              '<div class="field" style="margin-top:10px"><label><input type="checkbox" data-prefix-channel="welcome"> velkommen</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="rules"> regler</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="verification"> verification</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="announcements"> annonceringer</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="chat"> chat</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="suggestions"> forslag</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="support"> support</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="ticketPanel"> ticket-panel</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="vipChat"> vip-chat</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="staffChat"> staff-chat</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="logs"> logs</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="generalVoice"> Fælles</label></div>'+
+              '<div class="field"><label><input type="checkbox" data-prefix-channel="vipVoice"> VIP Lounge</label></div>'+
+            '</div>'+
           '</div>'+
           '<div class="actions" style="margin-top:18px"><button type="button" class="btn primary" id="snTemplatePageApply">🚀 Opsæt F5 VIP på serveren</button></div>'+
           '<div id="snTemplatePageResult" style="margin-top:12px"></div>'+
