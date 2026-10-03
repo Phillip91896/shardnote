@@ -1683,7 +1683,12 @@ app.post("/api/bot/guilds/:guildId/templates/:templateKey", requireAuth, require
       return res.status(400).json({ error: "Ukendt Discord-skitse." });
     }
 
-    const result = await client.dashboardApplyDiscordTemplate(guild.id, templateKey);
+    const body = req.body || {};
+    const cleanList = value => Array.isArray(value) ? value.map(item => String(item)).filter(Boolean).slice(0, 100) : [];
+    const result = await client.dashboardApplyDiscordTemplate(guild.id, templateKey, {
+      prefixRoles: cleanList(body.prefixRoles),
+      prefixChannels: cleanList(body.prefixChannels)
+    });
     log("settings", "Discord-skitse F5 VIP blev kørt på " + guild.name, req.user?.id || null);
     res.json({
       ok: true,
