@@ -7,90 +7,35 @@ const Stripe = require("stripe");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const stripe = process.env.STRIPE_SECRET_KEY
-  ? new Stripe(process.env.STRIPE_SECRET_KEY)
-  : null;
+const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
 const PUBLIC_SITE_URL = String(process.env.PUBLIC_SITE_URL || "https://shardnote-mxj3.onrender.com").replace(/\/$/, "");
 
 app.set("trust proxy", 1);
 
-app.post("/api/billing/webhook", express.raw({ type: "application/json" }), async (req, res) => {
-  if (!stripe || !process.env.STRIPE_WEBHOOK_SECRET) {
-    return res.status(503).send("Stripe webhook is not configured.");
-  }
-
-  const signature = req.headers["stripe-signature"];
+app.post("/api/billing/webhook", express.raw({ type: "application/json" }), async (req,res)=>{
+  if(!stripe||!process.env.STRIPE_WEBHOOK_SECRET)return res.status(503).send("Stripe webhook is not configured.");
   let event;
-
-  try {
-    event = stripe.webhooks.constructEvent(req.body, signature, process.env.STRIPE_WEBHOOK_SECRET);
-  } catch (error) {
-    console.error("[ShardNote] Stripe webhook signature failed:", error.message);
-    return res.status(400).send("Invalid webhook signature.");
-  }
-
-  try {
-    const object = event.data.object;
-
-    if (event.type === "checkout.session.completed") {
-      const userId = object.metadata?.user_id;
-      const subscriptionId = typeof object.subscription === "string"
-        ? object.subscription
-        : object.subscription?.id || null;
-      const customerId = typeof object.customer === "string"
-        ? object.customer
-        : object.customer?.id || null;
-
-      if (userId) {
-        await updateUserSubscription({
-          userId,
-          status: "active",
-          customerId,
-          subscriptionId
-        });
-      }
+  try{event=stripe.webhooks.constructEvent(req.body,req.headers["stripe-signature"],process.env.STRIPE_WEBHOOK_SECRET);}
+  catch(error){console.error("[ShardNote] Stripe webhook signature failed:",error.message);return res.status(400).send("Invalid webhook signature.");}
+  try{
+    const object=event.data.object;
+    if(event.type==="checkout.session.completed"){
+      const userId=object.metadata?.user_id;
+      const subscriptionId=typeof object.subscription==="string"?object.subscription:object.subscription?.id||null;
+      const customerId=typeof object.customer==="string"?object.customer:object.customer?.id||null;
+      if(userId)await updateUserSubscription({userId,status:"active",customerId,subscriptionId});
     }
-
-    if (event.type === "customer.subscription.updated" || event.type === "customer.subscription.created") {
-      const userId = object.metadata?.user_id;
-      if (userId) {
-        await updateUserSubscription({
-          userId,
-          status: object.status,
-          customerId: typeof object.customer === "string" ? object.customer : object.customer?.id,
-          subscriptionId: object.id,
-          currentPeriodEnd: object.current_period_end
-        });
-      }
+    if(event.type==="customer.subscription.created"||event.type==="customer.subscription.updated"||event.type==="customer.subscription.deleted"){
+      const userId=object.metadata?.user_id;
+      if(userId)await updateUserSubscription({userId,status:event.type==="customer.subscription.deleted"?"canceled":object.status,customerId:typeof object.customer==="string"?object.customer:object.customer?.id,subscriptionId:object.id,currentPeriodEnd:object.current_period_end});
+      else if(event.type==="customer.subscription.deleted")await updateUserSubscriptionByStripeSubscription(object.id,"canceled");
     }
-
-    if (event.type === "customer.subscription.deleted") {
-      const userId = object.metadata?.user_id;
-      if (userId) {
-        await updateUserSubscription({
-          userId,
-          status: "canceled",
-          customerId: typeof object.customer === "string" ? object.customer : object.customer?.id,
-          subscriptionId: object.id,
-          currentPeriodEnd: object.current_period_end
-        });
-      }
+    if(event.type==="invoice.payment_failed"){
+      const subscriptionId=typeof object.subscription==="string"?object.subscription:object.subscription?.id||null;
+      if(subscriptionId)await updateUserSubscriptionByStripeSubscription(subscriptionId,"past_due");
     }
-
-    if (event.type === "invoice.payment_failed") {
-      const subscriptionId = typeof object.subscription === "string"
-        ? object.subscription
-        : object.subscription?.id || null;
-      if (subscriptionId) {
-        await updateUserSubscriptionByStripeSubscription(subscriptionId, "past_due");
-      }
-    }
-
-    return res.json({ received: true });
-  } catch (error) {
-    console.error("[ShardNote] Stripe webhook handler failed:", error);
-    return res.status(500).send("Webhook handler failed.");
-  }
+    return res.json({received:true});
+  }catch(error){console.error("[ShardNote] Stripe webhook handler failed:",error);return res.status(500).send("Webhook handler failed.");}
 });
 
 app.use(express.json({ limit: "1mb" }));
@@ -300,3 +245,1530 @@ async function loadPersistentState() {
       FROM public.messages ORDER BY created_at DESC LIMIT 500
     `),
     db.query(`
+      SELECT id, type, message, created_at AS "time"
+      FROM public.logs ORDER BY created_at DESC LIMIT 100
+    `),
+    db.query(`
+      SELECT prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages"
+      FROM public.bot_settings WHERE id = 1 LIMIT 1
+    `)
+  ]);
+
+  state.tickets = tickets.rows;
+  state.messages = messages.rows;
+  state.logs = logs.rows;
+  if (settings.rows[0]) state.settings = settings.rows[0];
+  const buttonLabelLog = state.logs.find(item => item.type === "button_labels");
+  if (buttonLabelLog) {
+    try { state.settings.buttonLabels = JSON.parse(buttonLabelLog.message) || {}; } catch (_) {}
+  }
+}
+
+const startedAt = Date.now();
+
+const state = {
+  users: [],
+  tickets: [],
+  messages: [],
+  logs: [],
+  loginAudit: [],
+  settings: {
+    prefix: "!",
+    maintenance: false,
+    autoReply: true,
+    welcomeMessages: true,
+    buttonLabels: {}
+  }
+};
+
+function log(type, message) {
+  const item = {
+    id: Date.now() + Math.random(),
+    type,
+    message,
+    time: new Date().toISOString()
+  };
+  state.logs.unshift(item);
+  state.logs = state.logs.slice(0, 100);
+
+  if (db) {
+    db.query(
+      "INSERT INTO public.logs (type, message) VALUES ($1, $2)",
+      [type, message]
+    ).catch(error => console.error("[ShardNote] Log persistence failed:", error.message));
+  }
+}
+
+
+const sessions = new Map();
+const logsUnlocks = new Map();
+
+function getSessionId(req) {
+  return parseCookies(req).shardnote_session;
+}
+
+function hasLogsAccess(req) {
+  const sid = getSessionId(req);
+  const expiresAt = sid ? logsUnlocks.get(sid) : 0;
+  if (!expiresAt || expiresAt <= Date.now()) {
+    if (sid) logsUnlocks.delete(sid);
+    return false;
+  }
+  return true;
+}
+
+function getClientIp(req) {
+  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  const ip = forwarded || req.ip || req.socket?.remoteAddress || "";
+  return ip.replace(/^::ffff:/, "");
+}
+
+const geoCache = new Map();
+
+async function lookupIpLocation(ip) {
+  if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("172.16.")) {
+    return { country: null, city: null };
+  }
+
+  if (geoCache.has(ip)) return geoCache.get(ip);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1200);
+
+  try {
+    const response = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, {
+      signal: controller.signal,
+      headers: { "User-Agent": "ShardNote/1.0" }
+    });
+
+    if (!response.ok) return { country: null, city: null };
+
+    const data = await response.json();
+    const location = {
+      country: data.country_name || data.country || null,
+      city: data.city || null
+    };
+
+    geoCache.set(ip, location);
+    return location;
+  } catch {
+    return { country: null, city: null };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function recordLoginAudit({ req, user, success, eventType }) {
+  const ipAddress = "";
+  const userAgent = String(req.headers["user-agent"] || "").slice(0, 1000);
+  const location = await lookupIpLocation(ipAddress);
+
+  const item = {
+    id: Date.now() + Math.random(),
+    userId: user?.id || null,
+    userName: user?.name || null,
+    userEmail: user?.email || null,
+    eventType,
+    success: !!success,
+    ipAddress,
+    userAgent,
+    country: location.country,
+    city: location.city,
+    createdAt: new Date().toISOString()
+  };
+
+  if (db) {
+    await db.query(
+      `INSERT INTO public.login_audit
+       (user_id, user_name, user_email, event_type, success, ip_address, user_agent, country, city)
+       VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')::inet, $7, $8, $9)`,
+      [
+        item.userId,
+        item.userName,
+        item.userEmail,
+        item.eventType,
+        item.success,
+        "",
+        item.userAgent,
+        item.country,
+        item.city
+      ]
+    );
+  } else {
+    state.loginAudit.unshift(item);
+    state.loginAudit = state.loginAudit.slice(0, 500);
+  }
+}
+
+function hashPassword(password) {
+  return crypto.createHash("sha256").update(String(password)).digest("hex");
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  return Object.fromEntries(header.split(";").filter(Boolean).map(part => {
+    const i = part.indexOf("=");
+    return [part.slice(0, i).trim(), decodeURIComponent(part.slice(i + 1).trim())];
+  }));
+}
+
+async function ensureAdmin() {
+  const configuredEmail = String(process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+  const email = (configuredEmail || "admin@shardnote.local");
+  const hasBootstrapPassword = Object.prototype.hasOwnProperty.call(process.env, "ADMIN_PASSWORD");
+  const password = hasBootstrapPassword ? String(process.env.ADMIN_PASSWORD || "") : "change-me-now";
+
+  if (db) {
+    const byEmail = await db.query(
+      "SELECT id, role FROM users WHERE email = $1 LIMIT 1",
+      [email]
+    );
+
+    if (!byEmail.rowCount) {
+      await db.query(
+        "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, $3, $4)",
+        ["Administrator", email, "admin", hashPassword(password)]
+      );
+      log("security", `Admin account ${email} is ready in database`);
+      return;
+    }
+
+    // ADMIN_EMAIL can be used to bootstrap an existing account into an admin.
+    // ADMIN_PASSWORD is only used to replace that account's password when explicitly set.
+    if (configuredEmail) {
+      if (hasBootstrapPassword) {
+        await db.query(
+          "UPDATE users SET role = 'admin', password_hash = $1 WHERE email = $2",
+          [hashPassword(password), email]
+        );
+      } else {
+        await db.query(
+          "UPDATE users SET role = 'admin' WHERE email = $1",
+          [email]
+        );
+      }
+      log("security", `Bootstrap admin ensured for ${email}`);
+    }
+    return;
+  }
+
+  if (!state.users.length) {
+    state.users.push({
+      id: 1,
+      name: "Administrator",
+      email,
+      role: "admin",
+      passwordHash: hashPassword(password),
+      createdAt: new Date().toISOString()
+    });
+    log("security", "Initial admin account is ready in memory");
+    return;
+  }
+
+  if (configuredEmail) {
+    const existing = state.users.find(u => u.email.toLowerCase() === email);
+    if (existing) {
+      existing.role = "admin";
+      if (hasBootstrapPassword) existing.passwordHash = hashPassword(password);
+      log("security", `Bootstrap admin ensured for ${email}`);
+    }
+  }
+}
+function currentUser(req) {
+  const sid = parseCookies(req).shardnote_session;
+  return sid ? sessions.get(sid) : null;
+}
+
+async function updateUserSubscription({userId,status,customerId=null,subscriptionId=null,currentPeriodEnd=null}){
+  const normalizedStatus=String(status||"inactive");
+  const periodEnd=currentPeriodEnd?new Date(Number(currentPeriodEnd)*1000).toISOString():null;
+  if(db){
+    await db.query(`UPDATE public.users SET subscription_status=$1,stripe_customer_id=COALESCE($2,stripe_customer_id),stripe_subscription_id=COALESCE($3,stripe_subscription_id),subscription_current_period_end=COALESCE($4::timestamptz,subscription_current_period_end) WHERE id=$5`,[normalizedStatus,customerId,subscriptionId,periodEnd,userId]);
+    return;
+  }
+  const user=state.users.find(item=>String(item.id)===String(userId));
+  if(user){user.subscriptionStatus=normalizedStatus;if(customerId)user.stripeCustomerId=customerId;if(subscriptionId)user.stripeSubscriptionId=subscriptionId;if(periodEnd)user.subscriptionCurrentPeriodEnd=periodEnd;}
+}
+
+async function updateUserSubscriptionByStripeSubscription(subscriptionId,status){
+  if(!db||!subscriptionId)return;
+  await db.query("UPDATE public.users SET subscription_status=$1 WHERE stripe_subscription_id=$2",[status,subscriptionId]);
+}
+
+async function refreshSubscriptionFromStripe(user){
+  if(!stripe||!user?.stripeSubscriptionId)return user;
+  try{
+    const subscription=await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+    const customerId=typeof subscription.customer==="string"?subscription.customer:subscription.customer?.id||user.stripeCustomerId||null;
+    await updateUserSubscription({userId:user.id,status:subscription.status,customerId,subscriptionId:subscription.id,currentPeriodEnd:subscription.current_period_end});
+    user.subscriptionStatus=subscription.status;user.stripeCustomerId=customerId;user.stripeSubscriptionId=subscription.id;
+    user.subscriptionCurrentPeriodEnd=subscription.current_period_end?new Date(subscription.current_period_end*1000).toISOString():user.subscriptionCurrentPeriodEnd;
+  }catch(error){console.error("[ShardNote] Could not refresh Stripe subscription:",error.message);}
+  return user;
+}
+
+async function getSessionUser(req){
+  const sessionUser=currentUser(req);
+  if(!sessionUser)return null;
+  if(!db)return sessionUser;
+  const result=await db.query(`SELECT id,name,email,role,subscription_status AS "subscriptionStatus",stripe_customer_id AS "stripeCustomerId",stripe_subscription_id AS "stripeSubscriptionId",subscription_current_period_end AS "subscriptionCurrentPeriodEnd" FROM public.users WHERE id=$1 LIMIT 1`,[sessionUser.id]);
+  const row=result.rows[0];if(!row)return null;Object.assign(sessionUser,row);return sessionUser;
+}
+
+function hasPaidAccess(user){return user?.role==="admin"||["active","trialing"].includes(user?.subscriptionStatus);}
+
+async function requireAuth(req,res,next){
+  const user=await getSessionUser(req);
+  if(!user)return res.status(401).json({error:"Du skal logge ind."});
+  req.user=user;next();
+}
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== "admin") return res.status(403).json({ error: "Kun administratorer har adgang." });
+  next();
+}
+
+async function saveTicket({ title, user, status = "open", priority = "normal" }) {
+  const cleanTitle = String(title || "New ticket").slice(0, 120);
+  const cleanUser = String(user || "Dashboard user").slice(0, 80);
+  const cleanStatus = ["open", "pending", "closed"].includes(status) ? status : "open";
+  const cleanPriority = ["low", "normal", "high"].includes(priority) ? priority : "normal";
+
+  if (db) {
+    const result = await db.query(
+      `INSERT INTO public.tickets (title, user_name, status, priority)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, title, user_name AS "user", status, priority, created_at AS "createdAt"`,
+      [cleanTitle, cleanUser, cleanStatus, cleanPriority]
+    );
+    const ticket = result.rows[0];
+    state.tickets.unshift(ticket);
+    state.tickets = state.tickets.slice(0, 500);
+    return ticket;
+  }
+
+  const ticket = {
+    id: Date.now(),
+    title: cleanTitle,
+    user: cleanUser,
+    status: cleanStatus,
+    priority: cleanPriority,
+    createdAt: new Date().toISOString()
+  };
+  state.tickets.unshift(ticket);
+  state.tickets = state.tickets.slice(0, 500);
+  return ticket;
+}
+
+let discordReady = false;
+
+const client = createBot({
+  state,
+  db,
+  log,
+  createTicket: saveTicket,
+  setReady(ready) {
+    discordReady = ready;
+  }
+});
+
+app.post("/api/login", async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    const email = String(req.body.email || "").trim().toLowerCase();
+    const password = String(req.body.password || "");
+
+    let user;
+    if (db) {
+      const result = await db.query(
+        "SELECT id, name, email, role, password_hash, created_at, subscription_status AS "subscriptionStatus", stripe_customer_id AS "stripeCustomerId", stripe_subscription_id AS "stripeSubscriptionId", subscription_current_period_end AS "subscriptionCurrentPeriodEnd" FROM users WHERE email = $1 LIMIT 1",
+        [email]
+      );
+      const row = result.rows[0];
+      if (row && row.password_hash === hashPassword(password)) {
+        user = {
+          id: row.id,
+          name: row.name,
+          email: row.email,
+          role: row.role,
+          passwordHash: row.password_hash,
+          createdAt: row.created_at,
+          subscriptionStatus: row.subscriptionStatus || "inactive",
+          stripeCustomerId: row.stripeCustomerId,
+          stripeSubscriptionId: row.stripeSubscriptionId,
+          subscriptionCurrentPeriodEnd: row.subscriptionCurrentPeriodEnd
+        };
+      }
+    } else {
+      user = state.users.find(
+        u => u.email.toLowerCase() === email && u.passwordHash === hashPassword(password)
+      );
+    }
+
+    if (!user) {
+      await recordLoginAudit({
+        req,
+        user: { email },
+        success: false,
+        eventType: "login_failed"
+      });
+      log("security", `Failed login attempt for ${email || "unknown user"}`);
+      return res.status(401).json({ error: "Forkert email eller adgangskode." });
+    }
+
+    const sid = crypto.randomBytes(32).toString("hex");
+    sessions.set(sid, {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      subscriptionStatus: user.subscriptionStatus || "inactive",
+      stripeCustomerId: user.stripeCustomerId || null,
+      stripeSubscriptionId: user.stripeSubscriptionId || null,
+      subscriptionCurrentPeriodEnd: user.subscriptionCurrentPeriodEnd || null
+    });
+
+    res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    await recordLoginAudit({ req, user, success: true, eventType: "login" });
+    log("security", `User ${user.email} logged in`);
+    res.json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        subscriptionStatus: user.subscriptionStatus || "inactive",
+        hasPaidAccess: hasPaidAccess(user)
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Login kunne ikke gennemføres." });
+  }
+});
+
+app.post("/api/register", async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    const name = String(req.body.name || "").trim().slice(0, 80);
+    const email = String(req.body.email || "").trim().toLowerCase().slice(0, 160);
+    const password = String(req.body.password || "");
+
+    if (name.length < 2) {
+      return res.status(400).json({ error: "Navnet skal være mindst 2 tegn." });
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: "Skriv en gyldig emailadresse." });
+    }
+    if (password.length < 8) {
+      return res.status(400).json({ error: "Adgangskoden skal være mindst 8 tegn." });
+    }
+
+    let user;
+
+    if (db) {
+      const existing = await db.query("SELECT id FROM users WHERE email = $1 LIMIT 1", [email]);
+      if (existing.rowCount) {
+        return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+      }
+
+      try {
+        const result = await db.query(
+          "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, 'member', $3) RETURNING id, name, email, role, created_at, 'inactive'::varchar AS \"subscriptionStatus\"",
+          [name, email, hashPassword(password)]
+        );
+        user = result.rows[0];
+      } catch (error) {
+        if (error.code === "23505") {
+          return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+        }
+        throw error;
+      }
+    } else {
+      if (state.users.some(u => u.email === email)) {
+        return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+      }
+
+      user = {
+        id: Date.now(),
+        name,
+        email,
+        role: "member",
+        passwordHash: hashPassword(password),
+        createdAt: new Date().toISOString()
+      };
+      state.users.push(user);
+    }
+
+    const sid = crypto.randomBytes(32).toString("hex");
+    sessions.set(sid, {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role
+    });
+
+    res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    log("security", `New account registered: ${email}`);
+    res.status(201).json({
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kontoen kunne ikke oprettes." });
+  }
+});
+
+app.post("/api/logout", (req, res) => {
+  const sid = parseCookies(req).shardnote_session;
+  if (sid) sessions.delete(sid);
+  res.setHeader("Set-Cookie", "shardnote_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+  res.json({ ok: true });
+});
+
+app.get("/api/me", async (req,res)=>{
+  const user=await getSessionUser(req);
+  if(!user)return res.status(401).json({error:"Ikke logget ind."});
+  if(stripe&&user.stripeSubscriptionId)await refreshSubscriptionFromStripe(user);
+  res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role,subscriptionStatus:user.subscriptionStatus||"inactive",hasPaidAccess:hasPaidAccess(user)}});
+});
+
+app.get("/api/admin/login-history", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const requestedLimit = Number.parseInt(req.query.limit, 10);
+    const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 200, 1), 500);
+
+    if (db) {
+      const result = await db.query(
+        `SELECT
+           id,
+           user_id AS "userId",
+           user_name AS "userName",
+           user_email AS "userEmail",
+           event_type AS "eventType",
+           success,
+           NULL AS "ipAddress",
+           user_agent AS "userAgent",
+           country,
+           city,
+           created_at AS "createdAt"
+         FROM public.login_audit
+         ORDER BY created_at DESC
+         LIMIT $1`,
+        [limit]
+      );
+      return res.json(result.rows);
+    }
+
+    res.json(state.loginAudit.slice(0, limit));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente login-historikken." });
+  }
+});
+
+app.get("/api/admin/database-summary", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!db) {
+      return res.json({
+        connected: false,
+        tables: [
+          { name: "users", rows: state.users.length },
+          { name: "tickets", rows: state.tickets.length },
+          { name: "messages", rows: state.messages.length },
+          { name: "logs", rows: state.logs.length },
+          { name: "bot_settings", rows: 1 },
+          { name: "login_audit", rows: state.loginAudit.length }
+        ]
+      });
+    }
+
+    const tableNames = ["users", "tickets", "messages", "logs", "bot_settings", "login_audit"];
+    const tables = [];
+    for (const name of tableNames) {
+      const result = await db.query(`SELECT COUNT(*)::int AS count FROM public.${name}`);
+      tables.push({ name, rows: result.rows[0].count });
+    }
+
+    res.json({ connected: true, tables });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente database-status." });
+  }
+});
+
+app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    if (db) {
+      const result = await db.query(
+        "SELECT id, name, email, role, created_at AS \"createdAt\" FROM users ORDER BY id ASC"
+      );
+      return res.json(result.rows);
+    }
+
+    res.json(state.users.map(({ passwordHash, ...u }) => u));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente brugere." });
+  }
+});
+
+app.post("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    const name = String(req.body.name || "").trim().slice(0, 80);
+    const email = String(req.body.email || "").trim().toLowerCase().slice(0, 160);
+    const password = String(req.body.password || "");
+    const role = req.body.role === "admin" ? "admin" : "member";
+
+    if (!name || !email || password.length < 8) {
+      return res.status(400).json({ error: "Navn, email og adgangskode på mindst 8 tegn er påkrævet." });
+    }
+
+    let user;
+
+    if (db) {
+      try {
+        const result = await db.query(
+          "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, $3, $4) RETURNING id, name, email, role, created_at",
+          [name, email, role, hashPassword(password)]
+        );
+        user = result.rows[0];
+      } catch (error) {
+        if (error.code === "23505") {
+          return res.status(409).json({ error: "Email findes allerede." });
+        }
+        throw error;
+      }
+    } else {
+      if (state.users.some(u => u.email === email)) {
+        return res.status(409).json({ error: "Email findes allerede." });
+      }
+      user = {
+        id: Date.now(),
+        name,
+        email,
+        role,
+        passwordHash: hashPassword(password),
+        createdAt: new Date().toISOString()
+      };
+      state.users.push(user);
+    }
+
+    log("security", `Admin ${req.user.email} created user ${email}`);
+    res.status(201).json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.created_at || user.createdAt
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Brugeren kunne ikke oprettes." });
+  }
+});
+
+app.patch("/api/admin/users/:id/role", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    if (String(req.params.id) === String(req.user.id)) {
+      return res.status(400).json({ error: "Du kan ikke ændre din egen rolle." });
+    }
+
+    const role = req.body.role === "admin" ? "admin" : "member";
+
+    if (db) {
+      const result = await db.query(
+        "UPDATE users SET role = $1 WHERE id = $2 RETURNING id, name, email, role, created_at",
+        [role, req.params.id]
+      );
+      if (!result.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
+      const user = result.rows[0];
+      log("security", `Admin ${req.user.email} changed ${user.email} role to ${role}`);
+      return res.json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        createdAt: user.created_at
+      });
+    }
+
+    const id = Number(req.params.id);
+    const user = state.users.find(u => u.id === id);
+    if (!user) return res.status(404).json({ error: "Bruger ikke fundet." });
+
+    user.role = role;
+    log("security", `Admin ${req.user.email} changed ${user.email} role to ${role}`);
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Rollen kunne ikke ændres." });
+  }
+});
+
+app.delete("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    if (String(req.params.id) === String(req.user.id)) {
+      return res.status(400).json({ error: "Du kan ikke slette din egen konto." });
+    }
+
+    if (db) {
+      const result = await db.query("DELETE FROM users WHERE id = $1 RETURNING id", [req.params.id]);
+      if (!result.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
+    } else {
+      const id = Number(req.params.id);
+      const before = state.users.length;
+      state.users = state.users.filter(u => u.id !== id);
+      if (before === state.users.length) {
+        return res.status(404).json({ error: "Bruger ikke fundet." });
+      }
+    }
+
+    log("security", `Admin ${req.user.email} deleted user #${req.params.id}`);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Brugeren kunne ikke slettes." });
+  }
+});
+
+
+app.get("/api/bot/invite", requireAuth, (req, res) => {
+  if (!discordReady || !client?.user?.id) {
+    return res.status(503).json({ error: "The Discord bot is not online yet." });
+  }
+
+  const clientId = client.user.id;
+  const permissions = "274878221376";
+  const inviteUrl =
+    "https://discord.com/oauth2/authorize" +
+    `?client_id=${encodeURIComponent(clientId)}` +
+    "&scope=bot%20applications.commands" +
+    `&permissions=${permissions}`;
+
+  res.json({
+    url: inviteUrl,
+    clientId,
+    permissions
+  });
+});
+
+app.get("/health", (req, res) => {
+  res.json({
+    ok: true,
+    service: "ShardNote",
+    discord: discordReady,
+    uptime: Math.floor((Date.now() - startedAt) / 1000)
+  });
+});
+
+app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
+  try{
+    if(!stripe)return res.status(503).json({error:"Stripe er ikke konfigureret endnu."});
+    if(hasPaidAccess(req.user))return res.status(400).json({error:"Du har allerede adgang."});
+    let customerId=req.user.stripeCustomerId;
+    if(!customerId){
+      const customer=await stripe.customers.create({email:req.user.email,name:req.user.name,metadata:{user_id:String(req.user.id)}});
+      customerId=customer.id;await updateUserSubscription({userId:req.user.id,status:"inactive",customerId});
+    }
+    const session=await stripe.checkout.sessions.create({mode:"subscription",customer:customerId,line_items:[{price_data:{currency:"eur",unit_amount:200,recurring:{interval:"month"},product_data:{name:"ShardNote Premium"}},quantity:1}],metadata:{user_id:String(req.user.id)},subscription_data:{metadata:{user_id:String(req.user.id)}},success_url:PUBLIC_SITE_URL+"/?payment=success",cancel_url:PUBLIC_SITE_URL+"/?payment=cancel"});
+    res.json({url:session.url});
+  }catch(error){console.error("[ShardNote] Stripe checkout failed:",error);res.status(500).json({error:"Betalingssiden kunne ikke åbnes."});}
+});
+
+app.get("/api/billing/status",requireAuth,async(req,res)=>{
+  try{
+    if(stripe&&req.user.stripeSubscriptionId)await refreshSubscriptionFromStripe(req.user);
+    res.json({configured:!!stripe,status:req.user.subscriptionStatus||"inactive",hasPaidAccess:hasPaidAccess(req.user)});
+  }catch(error){console.error("[ShardNote] Stripe status check failed:",error);res.status(500).json({error:"Betalingsstatus kunne ikke hentes."});}
+});
+
+app.post("/api/billing/portal",requireAuth,async(req,res)=>{
+  try{
+    if(!stripe||!req.user.stripeCustomerId)return res.status(400).json({error:"Der er ikke noget Stripe-abonnement at administrere."});
+    const portal=await stripe.billingPortal.sessions.create({customer:req.user.stripeCustomerId,return_url:PUBLIC_SITE_URL});
+    res.json({url:portal.url});
+  }catch(error){console.error("[ShardNote] Stripe portal failed:",error);res.status(500).json({error:"Abonnementsadministration kunne ikke åbnes."});}
+});
+
+app.use("/api", (req, res, next) => {
+  if (["/login", "/register", "/logout", "/me"].includes(req.path) || req.path === "/health") return next();
+  requireAuth(req,res,async()=>{
+    try{
+      if(["/billing/create-checkout","/billing/status","/billing/portal"].some(path=>req.path.startsWith(path))) return next();
+      if(!hasPaidAccess(req.user)) return res.status(402).json({requiresSubscription:true,error:"Et aktivt ShardNote-abonnement på 2 € pr. måned kræves."});
+      next();
+    }catch(error){console.error(error);res.status(500).json({error:"Adgangskontrol kunne ikke gennemføres."});}
+  });
+});
+
+app.get("/api/stats", async (req, res) => {
+  try {
+    let openTickets = state.tickets.filter(t => t.status !== "closed").length;
+    if (db) {
+      const result = await db.query("SELECT COUNT(*)::int AS count FROM public.tickets WHERE status <> 'closed'");
+      openTickets = result.rows[0].count;
+    }
+
+    res.json({
+      botOnline: discordReady,
+      servers: discordReady ? client.guilds.cache.size : 0,
+      users: discordReady
+        ? client.guilds.cache.reduce((total, guild) => total + (guild.memberCount || 0), 0)
+        : 0,
+      tickets: openTickets,
+      commands: client.dashboardCommands?.length || 0,
+      uptime: Math.floor((Date.now() - startedAt) / 1000)
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente statistik." });
+  }
+});
+
+app.get("/api/tickets", async (req, res) => {
+  try {
+    if (db) {
+      const result = await db.query(`
+        SELECT id, title, user_name AS "user", status, priority, created_at AS "createdAt"
+        FROM public.tickets ORDER BY created_at DESC LIMIT 500
+      `);
+      state.tickets = result.rows;
+    }
+    res.json(state.tickets);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente tickets." });
+  }
+});
+
+app.post("/api/tickets", async (req, res) => {
+  try {
+    const ticket = await saveTicket({
+      title: req.body.title,
+      user: req.body.user,
+      status: "open",
+      priority: req.body.priority
+    });
+    log("ticket", `Ticket #${ticket.id} created from dashboard`);
+    res.status(201).json(ticket);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Ticket kunne ikke oprettes." });
+  }
+});
+
+app.patch("/api/tickets/:id", async (req, res) => {
+  try {
+    if (db) {
+      const result = await db.query(
+        `UPDATE public.tickets
+         SET status = COALESCE($1, status),
+             priority = COALESCE($2, priority)
+         WHERE id = $3
+         RETURNING id, title, user_name AS "user", status, priority, created_at AS "createdAt"`,
+        [
+          ["open", "pending", "closed"].includes(req.body.status) ? req.body.status : null,
+          ["low", "normal", "high"].includes(req.body.priority) ? req.body.priority : null,
+          req.params.id
+        ]
+      );
+      if (!result.rowCount) return res.status(404).json({ error: "Ticket not found" });
+      const ticket = result.rows[0];
+      const index = state.tickets.findIndex(t => String(t.id) === String(req.params.id));
+      if (index >= 0) state.tickets[index] = ticket;
+      log("ticket", `Ticket #${ticket.id} updated`);
+      return res.json(ticket);
+    }
+
+    const ticket = state.tickets.find(t => String(t.id) === String(req.params.id));
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+    if (["open", "pending", "closed"].includes(req.body.status)) ticket.status = req.body.status;
+    if (["low", "normal", "high"].includes(req.body.priority)) ticket.priority = req.body.priority;
+    log("ticket", `Ticket #${ticket.id} updated`);
+    res.json(ticket);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Ticket kunne ikke opdateres." });
+  }
+});
+
+app.delete("/api/tickets/:id", async (req, res) => {
+  try {
+    if (db) {
+      const result = await db.query("DELETE FROM public.tickets WHERE id = $1 RETURNING id", [req.params.id]);
+      if (!result.rowCount) return res.status(404).json({ error: "Ticket not found" });
+      state.tickets = state.tickets.filter(t => String(t.id) !== String(req.params.id));
+      log("ticket", `Ticket #${req.params.id} deleted`);
+      return res.json({ ok: true });
+    }
+
+    const before = state.tickets.length;
+    state.tickets = state.tickets.filter(t => String(t.id) !== String(req.params.id));
+    if (before === state.tickets.length) return res.status(404).json({ error: "Ticket not found" });
+    log("ticket", `Ticket #${req.params.id} deleted`);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Ticket kunne ikke slettes." });
+  }
+});
+
+app.get("/api/messages", async (req, res) => {
+  try {
+    if (db) {
+      const result = await db.query(`
+        SELECT id, channel, content, author, created_at AS "time"
+        FROM public.messages ORDER BY created_at DESC LIMIT 500
+      `);
+      state.messages = result.rows;
+    }
+    res.json(state.messages);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente beskeder." });
+  }
+});
+
+app.post("/api/messages", async (req, res) => {
+  try {
+    const content = String(req.body.content || "").trim();
+    if (!content) return res.status(400).json({ error: "Message is required" });
+
+    const channel = String(req.body.channel || "Dashboard").slice(0, 80);
+    const result = db
+      ? await db.query(
+          `INSERT INTO public.messages (channel, content, author)
+           VALUES ($1, $2, $3)
+           RETURNING id, channel, content, author, created_at AS "time"`,
+          [channel, content.slice(0, 2000), req.user?.email || "Dashboard"]
+        )
+      : null;
+
+    const item = result ? result.rows[0] : {
+      id: Date.now(),
+      channel,
+      content: content.slice(0, 2000),
+      author: req.user?.email || "Dashboard",
+      time: new Date().toISOString()
+    };
+
+    state.messages.unshift(item);
+    state.messages = state.messages.slice(0, 500);
+    log("message", "Message created from dashboard");
+    res.status(201).json(item);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Beskeden kunne ikke gemmes." });
+  }
+});
+
+app.get("/api/commands", (req, res) => {
+  const list = client.dashboardCommands || [];
+  res.json(list.map(command => ({
+    name: command.name,
+    description: command.description,
+    usage: "/" + command.name
+  })));
+});
+
+app.post("/api/commands", async (req, res) => {
+  const command = String(req.body.command || "").trim();
+  if (!command) return res.status(400).json({ error: "Command is required" });
+
+  log("command", `Dashboard command: ${command}`);
+  res.json({
+    ok: true,
+    message: discordReady
+      ? "Command received by the dashboard. Discord actions are available through the connected bot."
+      : "Command saved. Connect DISCORD_TOKEN in Render to enable live Discord actions."
+  });
+});
+
+app.get("/api/settings", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (db) {
+      const result = await db.query(
+        `SELECT prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages"
+         FROM public.bot_settings WHERE id = 1 LIMIT 1`
+      );
+      if (result.rows[0]) state.settings = result.rows[0];
+      const buttonLabelResult = await db.query("SELECT message FROM public.logs WHERE type = 'button_labels' ORDER BY created_at DESC LIMIT 1");
+      if (buttonLabelResult.rows[0]) {
+        try { state.settings.buttonLabels = JSON.parse(buttonLabelResult.rows[0].message) || {}; } catch (_) {}
+      }
+    }
+    res.json(state.settings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente indstillinger." });
+  }
+});
+
+app.patch("/api/settings", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (typeof req.body.prefix === "string" && req.body.prefix.length <= 5) {
+      state.settings.prefix = req.body.prefix || "!";
+    }
+    if (typeof req.body.maintenance === "boolean") state.settings.maintenance = req.body.maintenance;
+    if (typeof req.body.autoReply === "boolean") state.settings.autoReply = req.body.autoReply;
+    if (typeof req.body.welcomeMessages === "boolean") state.settings.welcomeMessages = req.body.welcomeMessages;
+    if (req.body.buttonLabels && typeof req.body.buttonLabels === "object") state.settings.buttonLabels = req.body.buttonLabels;
+
+    if (db) {
+      const result = await db.query(
+        `UPDATE public.bot_settings
+         SET prefix = $1,
+             maintenance = $2,
+             auto_reply = $3,
+             welcome_messages = $4,
+             updated_at = NOW()
+         WHERE id = 1
+         RETURNING prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages"`,
+        [
+          state.settings.prefix,
+          state.settings.maintenance,
+          state.settings.autoReply,
+          state.settings.welcomeMessages
+        ]
+      );
+      if (result.rows[0]) state.settings = result.rows[0];
+    }
+
+    if (db && req.body.buttonLabels) await db.query("INSERT INTO public.logs (type, message) VALUES ($1, $2)", ["button_labels", JSON.stringify(state.settings.buttonLabels || {})]);
+    log("settings", "Dashboard settings updated");
+    res.json(state.settings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Indstillingerne kunne ikke gemmes." });
+  }
+});
+
+app.post("/api/logs/unlock", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const password = String(req.body.password || "");
+    if (!password) return res.status(400).json({ error: "Adgangskode mangler." });
+
+    let valid = false;
+    if (db) {
+      const result = await db.query(
+        "SELECT password_hash FROM public.users WHERE id = $1 AND role = 'admin' LIMIT 1",
+        [req.user.id]
+      );
+      const row = result.rows[0];
+      valid = !!row && row.password_hash === hashPassword(password);
+    } else {
+      const user = state.users.find(u => String(u.id) === String(req.user.id));
+      valid = !!user && user.role === "admin" && user.passwordHash === hashPassword(password);
+    }
+
+    if (!valid) return res.status(401).json({ error: "Forkert adgangskode." });
+
+    const sid = getSessionId(req);
+    logsUnlocks.set(sid, Date.now() + 15 * 60 * 1000);
+    log("security", `Logs unlocked by ${req.user.email}`);
+    res.json({ ok: true, expiresInSeconds: 900 });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke låse logs op." });
+  }
+});
+
+app.post("/api/logs/lock", requireAuth, requireAdmin, (req, res) => {
+  const sid = getSessionId(req);
+  if (sid) logsUnlocks.delete(sid);
+  res.json({ ok: true });
+});
+
+function requireLogsAccess(req, res, next) {
+  if (!hasLogsAccess(req)) {
+    return res.status(423).json({
+      locked: true,
+      error: "Logs er låst. Indtast din admin-adgangskode for at åbne dem."
+    });
+  }
+  next();
+}
+
+const LOG_CATEGORIES = {
+  login: { label: "Login", source: "login_audit" },
+  security: { label: "Sikkerhed", type: "security" },
+  tickets: { label: "Tickets", type: "ticket" },
+  messages: { label: "Beskeder", type: "message" },
+  commands: { label: "Commands", type: "command" },
+  settings: { label: "Indstillinger", type: "settings" },
+  system: { label: "System", type: "success" },
+  warnings: { label: "Advarsler", type: "warning" },
+  errors: { label: "Fejl", type: "error" }
+};
+
+app.get("/api/logs/categories", requireAuth, requireAdmin, requireLogsAccess, async (req, res) => {
+  try {
+    const counts = {};
+    if (db) {
+      const logsResult = await db.query(
+        `SELECT type, COUNT(*)::int AS count
+         FROM public.logs
+         GROUP BY type`
+      );
+      for (const row of logsResult.rows) counts[row.type] = row.count;
+
+      const loginResult = await db.query(
+        "SELECT COUNT(*)::int AS count FROM public.login_audit"
+      );
+      counts.login = loginResult.rows[0].count;
+    } else {
+      counts.login = state.loginAudit.length;
+      for (const item of state.logs) counts[item.type] = (counts[item.type] || 0) + 1;
+    }
+
+    res.json(Object.entries(LOG_CATEGORIES).map(([key, config]) => ({
+      key,
+      label: config.label,
+      count: key === "login" ? (counts.login || 0) : (counts[config.type] || 0)
+    })));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente log-kategorier." });
+  }
+});
+
+app.get("/api/logs", requireAuth, requireAdmin, requireLogsAccess, async (req, res) => {
+  try {
+    const category = String(req.query.category || "").toLowerCase();
+    const config = LOG_CATEGORIES[category];
+    if (!config) return res.status(400).json({ error: "Ugyldig log-kategori." });
+
+    if (db) {
+      if (category === "login") {
+        const result = await db.query(
+          `SELECT
+             id,
+             user_id AS "userId",
+             user_name AS "userName",
+             user_email AS "userEmail",
+             event_type AS "eventType",
+             success,
+             host(ip_address) AS "ipAddress",
+             user_agent AS "userAgent",
+             country,
+             city,
+             created_at AS "createdAt"
+           FROM public.login_audit
+           ORDER BY created_at DESC
+           LIMIT 500`
+        );
+        return res.json(result.rows);
+      }
+
+      const result = await db.query(
+        `SELECT id, type, message, created_at AS "time"
+         FROM public.logs
+         WHERE type = $1
+         ORDER BY created_at DESC
+         LIMIT 500`,
+        [config.type]
+      );
+      return res.json(result.rows);
+    }
+
+    if (category === "login") return res.json(state.loginAudit.slice(0, 500));
+    return res.json(state.logs.filter(item => item.type === config.type).slice(0, 500));
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente logs." });
+  }
+});
+
+
+app.get("/api/bot/guilds", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!discordReady) return res.json([]);
+    const guilds = [...client.guilds.cache.values()]
+      .map(guild => ({
+        id: guild.id,
+        name: guild.name,
+        memberCount: guild.memberCount || 0,
+        channelCount: guild.channels.cache.size
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json(guilds);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente Discord-servere." });
+  }
+});
+
+app.get("/api/bot/guilds/:guildId/settings", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
+    const guild = client.guilds.cache.get(String(req.params.guildId));
+    if (!guild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
+
+    let settings;
+    if (client.dashboardGetGuildSettings) {
+      settings = await client.dashboardGetGuildSettings(guild.id);
+    } else if (db) {
+      await db.query("INSERT INTO public.guild_settings (guild_id) VALUES ($1) ON CONFLICT (guild_id) DO NOTHING", [guild.id]);
+      const result = await db.query("SELECT * FROM public.guild_settings WHERE guild_id = $1 LIMIT 1", [guild.id]);
+      settings = result.rows[0] || {};
+    } else {
+      settings = {};
+    }
+
+    const roles = [...guild.roles.cache.values()]
+      .filter(role => role.id !== guild.id && !role.managed)
+      .map(role => ({ id: role.id, name: role.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const channels = [...guild.channels.cache.values()]
+      .filter(channel => channel.isTextBased?.() && channel.type !== 4)
+      .map(channel => ({ id: channel.id, name: channel.name, type: channel.type }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const categories = [...guild.channels.cache.values()]
+      .filter(channel => channel.type === 4)
+      .map(channel => ({ id: channel.id, name: channel.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({
+      guild: { id: guild.id, name: guild.name, memberCount: guild.memberCount || 0 },
+      settings,
+      roles,
+      channels,
+      categories
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente serverindstillinger." });
+  }
+});
+
+app.patch("/api/bot/guilds/:guildId/settings", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
+    const guild = client.guilds.cache.get(String(req.params.guildId));
+    if (!guild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
+
+    const allowed = [
+      "log_channel_id", "welcome_channel_id", "welcome_message",
+      "leave_channel_id", "leave_message", "autorole_id", "support_role_id",
+      "ticket_category_id", "verification_role_id", "suggestion_channel_id",
+      "automod_enabled", "invite_filter", "levels_enabled", "economy_enabled",
+      "anti_raid_enabled", "lockdown"
+    ];
+
+    const updates = {};
+    for (const key of allowed) {
+      if (!Object.prototype.hasOwnProperty.call(req.body || {}, key)) continue;
+      const value = req.body[key];
+
+      if (key.endsWith("_enabled") || key === "invite_filter" || key === "lockdown") {
+        if (typeof value !== "boolean") return res.status(400).json({ error: "Ugyldig værdi for " + key + "." });
+        updates[key] = value;
+      } else if (key === "welcome_message" || key === "leave_message") {
+        updates[key] = String(value ?? "").slice(0, 1000);
+      } else {
+        updates[key] = value ? String(value).slice(0, 40) : null;
+      }
+    }
+
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ error: "Ingen indstillinger blev sendt." });
+    }
+
+    if (client.dashboardSetGuildSetting) {
+      for (const [key, value] of Object.entries(updates)) {
+        if (key === "lockdown" && client.dashboardSetLockdown) {
+          await client.dashboardSetLockdown(guild.id, value);
+        } else {
+          await client.dashboardSetGuildSetting(guild.id, key, value);
+        }
+      }
+    } else if (db) {
+      await db.query("INSERT INTO public.guild_settings (guild_id) VALUES ($1) ON CONFLICT (guild_id) DO NOTHING", [guild.id]);
+      const sets = Object.keys(updates).map((key, i) => key + " = $" + (i + 1));
+      const values = Object.values(updates);
+      values.push(guild.id);
+      await db.query(
+        "UPDATE public.guild_settings SET " + sets.join(", ") + ", updated_at = NOW() WHERE guild_id = $" + values.length,
+        values
+      );
+    }
+
+    const settings = client.dashboardGetGuildSettings
+      ? await client.dashboardGetGuildSettings(guild.id)
+      : updates;
+
+    log("settings", "Bot-funktioner opdateret for " + guild.name);
+    res.json(settings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message || "Serverindstillingerne kunne ikke gemmes." });
+  }
+});
+
+const html = `<!DOCTYPE html>
+<html lang="da">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ShardNote — Discord Control Center</title>
+<style>
+:root{
+  --bg:#07070b;--panel:#101018;--panel2:#151521;--border:#272735;
+  --text:#f7f7fb;--muted:#9292a5;--accent:#6d5dfc;--accent2:#8b7dff;
+  --green:#42d392;--yellow:#f4c95d;--red:#ff6678;--shadow:0 18px 55px rgba(0,0,0,.35)
+}
+*{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at 20% 0%,#19152e 0,#07070b 35%),var(--bg);color:var(--text);min-height:100vh}
+button,input,textarea,select{font:inherit}button{cursor:pointer}
+.app{display:flex;min-height:100vh}.sidebar{width:255px;position:fixed;inset:0 auto 0 0;background:rgba(10,10,16,.92);backdrop-filter:blur(18px);border-right:1px solid var(--border);padding:22px 15px;z-index:10}
+.brand{display:flex;align-items:center;gap:10px;padding:8px 10px 25px;font-size:23px;font-weight:800}.brand-mark{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),#a855f7);box-shadow:0 8px 24px rgba(109,93,252,.3)}
+.nav{display:grid;gap:7px}.nav button{border:1px solid transparent;background:transparent;color:#a5a5b5;text-align:left;padding:12px 13px;border-radius:11px;transition:.2s}.nav button:hover{background:#171722;color:#fff}.nav button.active{background:linear-gradient(90deg,rgba(109,93,252,.23),rgba(109,93,252,.07));border-color:rgba(109,93,252,.3);color:#fff}.nav .icon{display:inline-block;width:25px}
+.sidebar-footer{position:absolute;left:15px;right:15px;bottom:18px;padding:13px;border:1px solid var(--border);border-radius:12px;background:#0e0e16;color:var(--muted);font-size:12px}
+.main{margin-left:255px;width:calc(100% - 255px);padding:28px;max-width:1500px}.topbar{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:28px}.eyebrow{color:var(--accent2);font-size:12px;text-transform:uppercase;letter-spacing:.12em;font-weight:800}.topbar h1{margin:5px 0 0;font-size:30px}.status{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:12px}.dot{width:9px;height:9px;border-radius:50%;background:var(--yellow);box-shadow:0 0 15px currentColor}.dot.online{background:var(--green)}
+.page{display:none}.page.active{display:block}.grid{display:grid;gap:18px}.stats{grid-template-columns:repeat(4,minmax(0,1fr))}.card{background:linear-gradient(180deg,rgba(22,22,33,.96),rgba(13,13,20,.96));border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow)}.stat-title{color:var(--muted);font-size:13px}.stat-value{font-size:30px;font-weight:800;margin-top:8px}.stat-foot{font-size:12px;color:var(--green);margin-top:7px}
+.two{grid-template-columns:1.35fr 1fr}.section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.section-title h2{font-size:17px;margin:0}.section-title span{font-size:12px;color:var(--muted)}
+.btn{border:1px solid var(--border);background:#171722;color:#fff;border-radius:10px;padding:10px 13px}.btn:hover{border-color:#4a4962;background:#1d1d2a}.btn.primary{background:linear-gradient(135deg,var(--accent),#795cff);border-color:transparent}.btn.danger{color:#ff8a96}.btn.small{padding:7px 10px;font-size:12px}
+.table{width:100%;border-collapse:collapse}.table th,.table td{padding:12px 8px;border-bottom:1px solid #22222e;text-align:left;font-size:13px}.table th{color:var(--muted);font-weight:600}.badge{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:700}.badge.open{background:rgba(66,211,146,.12);color:var(--green)}.badge.pending{background:rgba(244,201,93,.12);color:var(--yellow)}.badge.closed{background:rgba(255,102,120,.12);color:var(--red)}.log-category{border:1px solid var(--border);border-radius:12px;background:#0e0e16;margin-bottom:10px;overflow:hidden}.log-category summary{cursor:pointer;list-style:none;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-weight:700}.log-category summary::-webkit-details-marker{display:none}.log-category summary b{background:#1c1b2b;padding:4px 8px;border-radius:999px;font-size:11px;color:var(--muted)}.log-category-body{padding:0 12px 12px}.log-category-intro{padding:10px 12px;margin-bottom:12px;border:1px dashed var(--border);border-radius:10px;color:var(--muted);font-size:12px}.log-category summary{user-select:none}.log-category-body{overflow:auto}
+.activity{display:grid;gap:11px}.activity-item{display:flex;gap:11px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #22222e}.activity-item:last-child{border:0}.activity-icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:#1c1b2b}.activity-item b{font-size:13px}.activity-item small{display:block;color:var(--muted);margin-top:3px}
+.form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:grid;gap:7px}.field label{font-size:12px;color:var(--muted)}.field input,.field textarea,.field select{width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none}.field textarea{min-height:120px;resize:vertical}.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:12px}
+.switch-row{display:flex;align-items:center;justify-content:space-between;padding:15px 0;border-bottom:1px solid #22222e}.switch{width:48px;height:26px;border-radius:99px;background:#292936;padding:3px;transition:.2s}.switch i{display:block;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}.switch.on{background:var(--accent)}.switch.on i{transform:translateX(22px)}.feature-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.feature-card{background:#0e0e16;border:1px solid var(--border);border-radius:14px;padding:16px}.feature-card h3{margin:0 0 7px;font-size:14px}.feature-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}.feature-status{display:inline-flex;margin-top:10px;padding:5px 8px;border-radius:999px;background:rgba(66,211,146,.12);color:var(--green);font-size:11px;font-weight:800}.feature-command{display:inline-block;margin-top:10px;font-size:11px;color:var(--accent2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.feature-select{min-height:42px}.feature-save{position:sticky;bottom:12px;z-index:3}@media(max-width:1050px){.feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.feature-grid{grid-template-columns:1fr}}
+
+body.locked > .app{display:none}
+#loginScreen{position:fixed;inset:0;z-index:100;background:radial-gradient(circle at 50% 0%,#19152e 0,#07070b 45%);display:grid;place-items:center;padding:20px}
+.login-card{width:min(430px,100%);background:rgba(16,16,24,.96);border:1px solid var(--border);border-radius:20px;padding:30px;box-shadow:var(--shadow)}
+.login-card h1{margin:0 0 8px}.login-card p{color:var(--muted);margin:0 0 22px}
+.toast{position:fixed;right:24px;bottom:24px;z-index:50;background:#171722;border:1px solid #3a394d;color:#fff;border-radius:12px;padding:12px 15px;box-shadow:var(--shadow);display:none}
+@media(max-width:1050px){.stats{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
+@media(max-width:760px){.sidebar{width:76px;padding:15px 10px}.brand{justify-content:center;padding-bottom:18px}.brand span,.nav button span:not(.icon),.sidebar-footer{display:none}.nav button{text-align:center;padding:12px}.main{margin-left:76px;width:calc(100% - 76px);padding:18px}.topbar{align-items:flex-start}.topbar h1{font-size:24px}.form-grid{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="app">
+<aside class="sidebar">
+  <div class="brand"><div class="brand-mark">S</div><span>ShardNote</span></div>
+  <nav class="nav">
+    <button class="active" data-page="dashboard"><span class="icon">⌂</span><span>Dashboard</span></button>
+    <button data-page="tickets"><span class="icon">🎫</span><span>Tickets</span></button>
+    <button data-page="messages"><span class="icon">✉</span><span>Beskeder</span></button>
+    <button data-page="commands"><span class="icon">⌘</span><span>Commands</span></button>
+    <button data-page="features"><span class="icon">🧩</span><span>Bot-funktioner</span></button>
+    <button data-page="music"><span class="icon">♫</span><span>Musik</span></button>
+    <button data-page="settings"><span class="icon">⚙</span><span>Indstillinger</span></button>
+    <button data-page="logs"><span class="icon">◷</span><span>Logs</span></button>
+    <button data-page="admin"><span class="icon">👑</span><span>Admin</span></button>
+  </nav>
+  <div class="sidebar-footer">ShardNote 2.0<br>Discord Control Center</div>
+</aside>
+
+<main class="main">
+<header class="topbar">
+  <div><div class="eyebrow">Discord Control Center</div><h1 id="pageTitle">Dashboard</h1></div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Connecting…</span></div>
+    <button class="btn primary small" onclick="addBotToDiscord()">+ Add Bot to Discord</button><button class="btn small" onclick="logout()">Log ud</button>
+  </div>
+</header>
+
+<section class="page active" id="page-dashboard">
+  <div class="grid stats">
+    <div class="card"><div class="stat-title">BOT STATUS</div><div class="stat-value" id="statBot">—</div><div class="stat-foot">Live connection</div></div>
+    <div class="card"><div class="stat-title">SERVERE</div><div class="stat-value" id="statServers">0</div><div class="stat-foot">Discord servers</div></div>
+    <div class="card"><div class="stat-title">BRUGERE</div><div class="stat-value" id="statUsers">0</div><div class="stat-foot">Members</div></div>
+    <div class="card"><div class="stat-title">ÅBNE TICKETS</div><div class="stat-value" id="statTickets">0</div><div class="stat-foot">Needs attention</div></div>
+  </div>
+  <div class="grid two" style="margin-top:18px">
+    <div class="card"><div class="section-title"><h2>Seneste tickets</h2><button class="btn small" data-button-label="dashboardSeeAll" onclick="navigate('tickets')">Se alle</button></div><div id="dashTickets"></div></div>
+    <div class="card"><div class="section-title"><h2>Aktivitet</h2><button class="btn small" onclick="navigate('logs')">Alle logs</button></div><div id="dashLogs" class="activity"></div></div>
+  </div>
+</section>
+
+<section class="page" id="page-features">
+  <div id="botFeaturesPage">
+    <div class="card"><div class="empty">Indlæser bot-funktioner…</div></div>
+  </div>
+</section>
+
+<section class="page" id="page-tickets">
+  <div class="card">
+    <div class="section-title"><h2>Ticket-system</h2><button class="btn primary" data-button-label="ticketNew" onclick="newTicket()">+ Ny ticket</button></div>
+    <div id="ticketList"></div>
+  </div>
+</section>
+
+<section class="page" id="page-messages">
+  <div class="grid two">
+    <div class="card">
+      <div class="section-title"><h2>Send besked</h2><span>Dashboard → Discord workflow</span></div>
+      <div class="form-grid">
+        <div class="field"><label>Kanal</label><input id="messageChannel" placeholder="#general"></div>
+        <div class="field"><label>Indhold</label><input id="messageContent" placeholder="Skriv din besked…"></div>
+      </div>
+      <div class="actions"><button class="btn primary" data-button-label="messageSend" onclick="sendMessage()">Send besked</button></div>
+      <p id="messageHint" style="color:var(--muted);font-size:12px;margin-top:12px">Live Discord-afsendelse kræver en gyldig DISCORD_TOKEN i Render.</p>
+    </div>
+    <div class="card"><div class="section-title"><h2>Seneste beskeder</h2></div><div id="messageList"></div></div>
+  </div>
+</section>
+
+<section class="page" id="page-commands">
+  <div class="grid two">
+    <div class="card">
+      <div class="section-title"><h2>Command Center</h2><span id="commandCount">0 commands</span></div>
+      <div class="field"><label>Command</label><input id="commandInput" placeholder="!ping"></div>
+      <div class="actions"><button class="btn primary" data-button-label="commandRun" onclick="runCommand()">Kør command</button></div>
+      <div id="commandResult" style="margin-top:14px;color:var(--green)"></div>
+    </div>
+    <div class="card"><div class="section-title"><h2>Tilgængelige commands</h2></div><div id="commandList"></div></div>
+  </div>
+</section>
+
+<section class="page" id="page-music">
+  <div class="card">
+    <div class="section-title"><h2>Musik</h2><span>Control Center</span></div>
+    <div class="empty">Musikmodulet er gjort klar i dashboardet. For rigtig afspilning skal en Discord voice-integration og en lydkilde konfigureres.</div>
+    <div class="form-grid" style="margin-top:16px">
+      <div class="field"><label>URL / søgning</label><input id="musicQuery" placeholder="YouTube URL eller søgning"></div>
+      <div class="field"><label>Handling</label><select id="musicAction"><option>Play</option><option>Pause</option><option>Resume</option><option>Skip</option><option>Stop</option></select></div>
+    </div>
+    <div class="actions"><button class="btn primary" data-button-label="musicExecute" onclick="musicAction()">Udfør</button></div>
+  </div>
+</section>
+
+<section class="page" id="page-settings">
+  <div class="card">
+    <div class="section-title"><h2>Indstillinger</h2><button class="btn primary" data-button-label="settingsSave" onclick="saveSettings()">Gem ændringer</button></div>
+    <div class="field" style="max-width:280px"><label>Bot prefix</label><input id="prefix" maxlength="5" placeholder="!"></div>
+    <div class="switch-row"><div><b>Maintenance mode</b><div style="color:var(--muted);font-size:12px">Vis dashboardet som vedligeholdelse</div></div><button id="maintenanceSwitch" class="switch" onclick="toggleSetting('maintenance')"><i></i></button></div>
+    <div class="switch-row"><div><b>Auto-reply</b><div style="color:var(--muted);font-size:12px">Tillad automatiske svar</div></div><button id="autoReplySwitch" class="switch" onclick="toggleSetting('autoReply')"><i></i></button></div>
+    <div class="switch-row"><div><b>Welcome messages</b><div style="color:var(--muted);font-size:12px">Velkomstbeskeder til nye medlemmer</div></div><button id="welcomeMessagesSwitch" class="switch" onclick="toggleSetting('welcomeMessages')"><i></i></button></div>
+    <div style="margin-top:22px;padding-top:20px;border-top:1px solid var(--border)">
+      <div class="section-title"><div><h2>Knapnavne</h2><span>Kun knapper inde på siderne. Menuen ændres ikke.</span></div></div>
+      <div class="form-grid">
+        <div class="field"><label>Se alle</label><input id="buttonLabel_dashboardSeeAll" maxlength="80"></div>
+        <div class="field"><label>+ Ny ticket</label><input id="buttonLabel_ticketNew" maxlength="80"></div>
+        <div class="field"><label>Send besked</label><input id="buttonLabel_messageSend" maxlength="80"></div>
+        <div class="field"><label>Kør command</label><input id="buttonLabel_commandRun" maxlength="80"></div>
+        <div class="field"><label>Udfør</label><input id="buttonLabel_musicExecute" maxlength="80"></div>
+        <div class="field"><label>Gem ændringer</label><input id="buttonLabel_settingsSave" maxlength="80"></div>
+        <div class="field"><label>Opdater logs</label><input id="buttonLabel_logsRefresh" maxlength="80"></div>
+        <div class="field"><label>Lås logs</label><input id="buttonLabel_logsLock" maxlength="80"></div>
+        <div class="field"><label>Åbn logcenter</label><input id="buttonLabel_logsUnlock" maxlength="80"></div>
+        <div class="field"><label>+ Tilføj bruger</label><input id="buttonLabel_adminAddUser" maxlength="80"></div>
+        <div class="field"><label>Opdater brugere</label><input id="buttonLabel_adminRefresh" maxlength="80"></div>
+      </div>
+      <div style="color:var(--muted);font-size:12px;margin-top:12px">Sidebar/menu-knapper, Log ud og Add Bot til Discord ændres ikke.</div>
+    </div>
+  </div>
+</section>
+
+<section class="page" id="page-logs">
+  <div class="card">
+    <div class="section-title">
+      <div><h2>Logcenter</h2><span>Kun administratorer · kræver adgangskode</span></div>
+      <div class="actions" style="margin:0">
+        <button class="btn small" data-button-label="logsRefresh" onclick="loadLogs()">Opdater</button>
+        <button class="btn small danger" data-button-label="logsLock" onclick="lockLogs()">🔒 Lås</button>
+      </div>
+    </div>
+    <div id="logLockPanel">
+      <div class="empty">
+        <div style="font-size:34px;margin-bottom:10px">🔐</div>
+        <b>Logcenter er låst</b>
+        <div style="color:var(--muted);font-size:12px;margin:8px 0 15px">Indtast din admin-adgangskode for at åbne logcenteret.</div>
+        <div style="max-width:360px;margin:0 auto">
+          <input id="logPassword" type="password" placeholder="Admin-adgangskode" style="width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none">
+          <button class="btn primary" data-button-label="logsUnlock" style="margin-top:10px;width:100%" onclick="unlockLogs()">🔓 Åbn logcenter</button>
+          <div id="logUnlockError" style="color:var(--red);font-size:12px;margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+    <div id="logContent" style="display:none">
+      <div class="log-category-intro">Hver logtype ligger separat. Åbn kun den kategori, du vil se.</div>
+      <div id="logCategoryList"></div>
+    </div>
+  </div>
+</section>
+
+<section class="page" id="page-admin">
+  <div class="card" style="margin-bottom:18px">
+    <div class="section-title"><h2>Database-overblik</h2><span id="databaseStatus" class="badge pending">Tjekker…</span></div>
+    <div id="databaseTables" class="activity"></div>
+  </div>
+
+  <div class="grid two">
+    <div class="card">
+      <div class="section-title"><h2>Admin-panel</h2><span>Brugere og adgang</span></div>
+      <div class="field"><label>Navn</label><input id="newUserName" placeholder="Fx Jonas"></div>
+      <div class="field" style="margin-top:12px"><label>Email</label><input id="newUserEmail" type="email" placeholder="jonas@example.com"></div>
+      <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="newUserPassword" type="password" placeholder="Mindst 8 tegn"></div>
+      <div class="field" style="margin-top:12px"><label>Rolle</label><select id="newUserRole"><option value="member">Member</option><option value="admin">Administrator</option></select></div>
+      <div class="actions"><button class="btn primary" data-button-label="adminAddUser" onclick="createUser()">+ Tilføj bruger</button></div>
+      <p style="color:var(--muted);font-size:12px;margin-top:12px">Kun administratorer kan åbne og ændre dette panel.</p>
+    </div>
+    <div class="card">
+      <div class="section-title"><h2>Brugere</h2><button class="btn small" data-button-label="adminRefresh" onclick="loadUsers()">Opdater</button></div>
+      <div id="userList"></div>
+    </div>
+  </div>
+
+</section>
+</main>
+</div>
+<div id="toast" class="toast"></div>
+
+<script src="/app.js" defer></script>
+<script src="/features.js" defer></script>
+</body>
+</html>`;
+
+app.get("/", (req, res) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  res.type("html").send(html);
+});
+
+async function startServer() {
+  try {
+    if (db) {
+      await initDatabase();
+      log("success", "PostgreSQL database connected");
+    } else {
+      await ensureAdmin();
+      log("warning", "DATABASE_URL is not configured. User data is temporary until a database is connected.");
+    }
+
+    app.listen(PORT, () => {
+      log("success", `ShardNote web server started on port ${PORT}`);
+      console.log(`ShardNote running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Database initialization failed:", error);
+    process.exit(1);
+  }
+}
+
+startServer();
