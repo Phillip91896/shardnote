@@ -801,12 +801,13 @@ app.post("/api/register", async (req, res) => {
       state.users.push(user);
     }
 
-    const sid = crypto.randomBytes(32).toString("hex");
+    const sid = createSessionToken(user.id);
     sessions.set(sid, {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      plan: user.plan || "member"
     });
 
     res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
