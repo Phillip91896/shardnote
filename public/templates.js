@@ -131,7 +131,6 @@
               '<div><label><input type="checkbox" data-prefix-role="support"> Support</label></div>'+
               '<div><label><input type="checkbox" data-prefix-role="vip"> VIP</label></div>'+
               '<div><label><input type="checkbox" data-prefix-role="member"> Medlem</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-role="muted"> Muted</label></div>'+
             '</div>'+
             '<div><b>Kanaler</b>'+
               '<div><label><input type="checkbox" data-prefix-channel="velkommen"> velkommen</label></div>'+
