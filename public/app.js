@@ -126,7 +126,15 @@ async function loadLogs(){
 async function loadUsers(){
   try{
     const users=await api("/api/admin/users");
-    document.getElementById("userList").innerHTML=users.map(u=>`<div class="activity-item"><div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div><div style="flex:1"><b>${escapeHtml(u.name)}</b><small>${escapeHtml(u.email)} · ${escapeHtml(u.role)}</small></div>${u.id!==currentUser?.id?`<button class="btn small danger" onclick="deleteUser(${u.id})">Slet</button>`:""}</div>`).join("")||'<div class="empty">Ingen brugere.</div>';
+    document.getElementById("userList").innerHTML=users.map(u=>{
+      const roleButton=u.id!==currentUser?.id
+        ? `<button class="btn small" onclick="toggleUserRole(${u.id},'${u.role}')">${u.role==="admin"?"Gør til member":"Gør til admin"}</button>`
+        : "";
+      const deleteButton=u.id!==currentUser?.id
+        ? `<button class="btn small danger" onclick="deleteUser(${u.id})">Slet</button>`
+        : "";
+      return `<div class="activity-item"><div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div><div style="flex:1"><b>${escapeHtml(u.name)}</b><small>${escapeHtml(u.email)} · ${escapeHtml(u.role)}</small></div>${roleButton} ${deleteButton}</div>`;
+    }).join("")||'<div class="empty">Ingen brugere.</div>';
   }catch(e){toast(e.message)}
 }
 let currentUser=null;
@@ -249,6 +257,21 @@ async function createUser(){
     await api("/api/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("newUserName").value,email:document.getElementById("newUserEmail").value,password:document.getElementById("newUserPassword").value,role:document.getElementById("newUserRole").value})});
     document.getElementById("newUserName").value="";document.getElementById("newUserEmail").value="";document.getElementById("newUserPassword").value="";
     toast("Bruger oprettet");loadUsers();loadLogs();
+  }catch(e){toast(e.message)}
+}
+async function toggleUserRole(id,currentRole){
+  const nextRole=currentRole==="admin"?"member":"admin";
+  const label=nextRole==="admin"?"give denne bruger admin-adgang":"fjerne admin-adgang fra denne bruger";
+  if(!confirm(`Vil du ${label}?`)) return;
+  try{
+    await api("/api/admin/users/"+id+"/role",{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({role:nextRole})
+    });
+    toast(nextRole==="admin"?"Admin-adgang givet":"Admin-adgang fjernet");
+    loadUsers();
+    loadLogs();
   }catch(e){toast(e.message)}
 }
 async function deleteUser(id){if(!confirm("Slet denne bruger?"))return;try{await api("/api/admin/users/"+id,{method:"DELETE"});toast("Bruger slettet");loadUsers();loadLogs()}catch(e){toast(e.message)}}
