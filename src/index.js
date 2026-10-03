@@ -1807,6 +1807,7 @@ body.locked > .app{display:none}
     <button data-page="messages"><span class="icon">✉</span><span>Beskeder</span></button>
     <button data-page="commands"><span class="icon">⌘</span><span>Commands</span></button>
     <button data-page="features"><span class="icon">🧩</span><span>Bot-funktioner</span></button>
+    <button data-page="templates"><span class="icon">🧱</span><span>Discord-skitser</span></button>
     <button data-page="music"><span class="icon">♫</span><span>Musik</span></button>
     <button data-page="settings"><span class="icon">⚙</span><span>Indstillinger</span></button>
     <button data-page="logs"><span class="icon">◷</span><span>Logs</span></button>
@@ -1840,6 +1841,12 @@ body.locked > .app{display:none}
 <section class="page" id="page-features">
   <div id="botFeaturesPage">
     <div class="card"><div class="empty">Indlæser bot-funktioner…</div></div>
+  </div>
+</section>
+
+<section class="page" id="page-templates">
+  <div id="discordTemplatesPage">
+    <div class="card"><div class="empty">Indlæser Discord-skitser…</div></div>
   </div>
 </section>
 
@@ -1973,6 +1980,7 @@ body.locked > .app{display:none}
 
 <script src="/app.js" defer></script>
 <script src="/features.js" defer></script>
+<script src="/templates.js" defer></script>
 </body>
 </html>`;
 
