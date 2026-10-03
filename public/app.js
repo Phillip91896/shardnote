@@ -316,6 +316,8 @@ function unlockDashboard(){
     if(currentUser?.plan!=="member_plus" && currentUser?.role!=="admin"){
       document.querySelector('[data-page="features"]')?.remove();
       document.getElementById("page-features")?.remove();
+      document.querySelector('[data-page="templates"]')?.remove();
+      document.getElementById("page-templates")?.remove();
     }
   }
   loadStats();
