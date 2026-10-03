@@ -84,8 +84,8 @@
             '👑 F5 Ejer · 🛡️ F5 Admin · 🔨 F5 Moderator · 🎫 F5 Support<br>'+
             '⭐ F5 VIP · ✅ F5 Medlem · 🔇 F5 Muted<br><br>'+
             '<b style="color:#fff">Områder</b><br>'+
-            '📌 Information · 💬 Community · 🎫 Support · 🎟️ Tickets<br>'+
-            '⭐ VIP · 🔒 Staff · 🔊 Voice'+
+            'F5 📌 Information · F5 💬 Community · F5 🎫 Support · F5 🎟️ Tickets<br>'+
+            'F5 ⭐ VIP · F5 🔒 Staff · F5 🔊 Voice'+
           '</div>'+
           '<div class="actions" style="margin-top:18px"><button type="button" class="btn primary" id="snTemplatePageApply">🚀 Opsæt F5 VIP på serveren</button></div>'+
           '<div id="snTemplatePageResult" style="margin-top:12px"></div>'+
