@@ -112,8 +112,10 @@ async function runCommand(){
 function musicAction(){toast("Musikmodulet er klar til Discord voice-integration.")}
 async function loadSettings(){
   settings=await api("/api/settings");
+  settings.buttonLabels=settings.buttonLabels||{};
   document.getElementById("prefix").value=settings.prefix;
   ["maintenance","autoReply","welcomeMessages"].forEach(k=>document.getElementById(k+"Switch").classList.toggle("on",!!settings[k]));
+  applyButtonLabels();
 }
 function toggleSetting(key){settings[key]=!settings[key];document.getElementById(key+"Switch").classList.toggle("on",settings[key])}
 async function saveSettings(){
