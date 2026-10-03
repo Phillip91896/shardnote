@@ -167,17 +167,41 @@ function parseCookies(req) {
 }
 
 async function ensureAdmin() {
-  const email = (process.env.ADMIN_EMAIL || "admin@shardnote.local").trim().toLowerCase();
-  const password = process.env.ADMIN_PASSWORD || "change-me-now";
+  const configuredEmail = String(process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+  const email = (configuredEmail || "admin@shardnote.local");
+  const hasBootstrapPassword = Object.prototype.hasOwnProperty.call(process.env, "ADMIN_PASSWORD");
+  const password = hasBootstrapPassword ? String(process.env.ADMIN_PASSWORD || "") : "change-me-now";
 
   if (db) {
-    const existing = await db.query("SELECT id FROM users LIMIT 1");
-    if (!existing.rowCount) {
+    const byEmail = await db.query(
+      "SELECT id, role FROM users WHERE email = $1 LIMIT 1",
+      [email]
+    );
+
+    if (!byEmail.rowCount) {
       await db.query(
         "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, $3, $4)",
         ["Administrator", email, "admin", hashPassword(password)]
       );
-      log("security", "Initial admin account is ready in database");
+      log("security", `Admin account ${email} is ready in database`);
+      return;
+    }
+
+    // ADMIN_EMAIL can be used to bootstrap an existing account into an admin.
+    // ADMIN_PASSWORD is only used to replace that account's password when explicitly set.
+    if (configuredEmail) {
+      if (hasBootstrapPassword) {
+        await db.query(
+          "UPDATE users SET role = 'admin', password_hash = $1 WHERE email = $2",
+          [hashPassword(password), email]
+        );
+      } else {
+        await db.query(
+          "UPDATE users SET role = 'admin' WHERE email = $1",
+          [email]
+        );
+      }
+      log("security", `Bootstrap admin ensured for ${email}`);
     }
     return;
   }
@@ -192,6 +216,16 @@ async function ensureAdmin() {
       createdAt: new Date().toISOString()
     });
     log("security", "Initial admin account is ready in memory");
+    return;
+  }
+
+  if (configuredEmail) {
+    const existing = state.users.find(u => u.email.toLowerCase() === email);
+    if (existing) {
+      existing.role = "admin";
+      if (hasBootstrapPassword) existing.passwordHash = hashPassword(password);
+      log("security", `Bootstrap admin ensured for ${email}`);
+    }
   }
 }
 function currentUser(req) {
@@ -482,6 +516,52 @@ app.post("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Brugeren kunne ikke oprettes." });
+  }
+});
+
+app.patch("/api/admin/users/:id/role", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    if (String(req.params.id) === String(req.user.id)) {
+      return res.status(400).json({ error: "Du kan ikke ændre din egen rolle." });
+    }
+
+    const role = req.body.role === "admin" ? "admin" : "member";
+
+    if (db) {
+      const result = await db.query(
+        "UPDATE users SET role = $1 WHERE id = $2 RETURNING id, name, email, role, created_at",
+        [role, req.params.id]
+      );
+      if (!result.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
+      const user = result.rows[0];
+      log("security", `Admin ${req.user.email} changed ${user.email} role to ${role}`);
+      return res.json({
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        createdAt: user.created_at
+      });
+    }
+
+    const id = Number(req.params.id);
+    const user = state.users.find(u => u.id === id);
+    if (!user) return res.status(404).json({ error: "Bruger ikke fundet." });
+
+    user.role = role;
+    log("security", `Admin ${req.user.email} changed ${user.email} role to ${role}`);
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      createdAt: user.createdAt
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Rollen kunne ikke ændres." });
   }
 });
 
