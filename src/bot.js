@@ -423,6 +423,110 @@ function createBot({ state, db, log, createTicket, setReady }) {
     );
   }
 
+  async function handleFeatureButton(interaction) {
+    if (!interaction.guild) return interaction.reply({ content: "Denne knap virker kun i en server.", ephemeral: true });
+
+    if (interaction.customId === "ticket_create") {
+      const channel = await createTicketChannel(interaction.guild, interaction.user, "support");
+      const ticket = createTicket
+        ? await createTicket({ title: "Support", user: interaction.user.tag, status: "open", priority: "normal" })
+        : { id: Date.now() };
+      if (db) {
+        await db.query(
+          "UPDATE public.tickets SET guild_id=$1, user_id=$2, channel_id=$3 WHERE id=$4",
+          [interaction.guild.id, interaction.user.id, channel.id, ticket.id]
+        ).catch(() => {});
+      }
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("ticket_claim:" + ticket.id).setLabel("Claim").setStyle(ButtonStyle.Secondary),
+        new ButtonBuilder().setCustomId("ticket_close:" + ticket.id).setLabel("Luk ticket").setStyle(ButtonStyle.Danger),
+        new ButtonBuilder().setCustomId("ticket_transcript:" + ticket.id).setLabel("Transcript").setStyle(ButtonStyle.Primary)
+      );
+      await channel.send({
+        embeds: [new EmbedBuilder().setTitle("🎫 Ticket #" + ticket.id).setDescription("Hej <@" + interaction.user.id + "> — skriv her, så hjælper supporten dig.").setColor(0x6d5dfc)],
+        components: [row]
+      });
+      return interaction.reply({ content: "✅ Ticket oprettet: " + channel, ephemeral: true });
+    }
+
+    if (interaction.customId.startsWith("ticket_close:")) {
+      if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageChannels)) return interaction.reply({ content: "Du mangler Manage Channels.", ephemeral: true });
+      const id = interaction.customId.split(":")[1];
+      if (db) await db.query("UPDATE public.tickets SET status='closed' WHERE id=$1", [id]).catch(() => {});
+      await interaction.channel.setName("closed-" + interaction.channel.name).catch(() => {});
+      return interaction.reply("🔒 Ticket lukket.");
+    }
+
+    if (interaction.customId.startsWith("ticket_claim:")) {
+      if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) return interaction.reply({ content: "Du mangler Manage Messages.", ephemeral: true });
+      const id = interaction.customId.split(":")[1];
+      if (db) await db.query("UPDATE public.tickets SET claimed_by=$1 WHERE id=$2", [interaction.user.id, id]).catch(() => {});
+      return interaction.reply("✅ Ticket claimed af " + interaction.user + ".");
+    }
+
+    if (interaction.customId.startsWith("ticket_transcript:")) {
+      if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageMessages)) return interaction.reply({ content: "Du mangler Manage Messages.", ephemeral: true });
+      await interaction.deferReply({ ephemeral: true });
+      const text = await transcript(interaction.channel);
+      return interaction.editReply({
+        content: "📄 Transcript klar.",
+        files: [new AttachmentBuilder(Buffer.from(text || "Ingen beskeder."), { name: "ticket-transcript.txt" })]
+      });
+    }
+
+    if (interaction.customId.startsWith("role:")) {
+      const role = interaction.guild.roles.cache.get(interaction.customId.split(":")[1]);
+      const member = await getMember(interaction.guild, interaction.user.id);
+      if (!role || !member || !role.editable) return interaction.reply({ content: "Rollen kan ikke ændres.", ephemeral: true });
+      if (member.roles.cache.has(role.id)) {
+        await member.roles.remove(role);
+        return interaction.reply({ content: "➖ Rolle fjernet.", ephemeral: true });
+      }
+      await member.roles.add(role);
+      return interaction.reply({ content: "➕ Rolle givet.", ephemeral: true });
+    }
+
+    if (interaction.customId === "verify") {
+      const settings = await getGuildSettings(interaction.guild.id);
+      const role = settings.verification_role_id ? interaction.guild.roles.cache.get(settings.verification_role_id) : null;
+      const member = await getMember(interaction.guild, interaction.user.id);
+      if (!role || !member || !role.editable) return interaction.reply({ content: "Verification-rollen er ikke korrekt sat op.", ephemeral: true });
+      await member.roles.add(role, "ShardNote verification");
+      return interaction.reply({ content: "✅ Du er verificeret.", ephemeral: true });
+    }
+
+    if (interaction.customId.startsWith("poll:")) {
+      const parts = interaction.customId.split(":");
+      const poll = polls.get(parts[1]);
+      const index = Number(parts[2]);
+      if (!poll || !poll.options[index]) return interaction.reply({ content: "Denne poll er udløbet.", ephemeral: true });
+      if (poll.voters.has(interaction.user.id)) return interaction.reply({ content: "Du har allerede stemt.", ephemeral: true });
+      poll.voters.set(interaction.user.id, index);
+      poll.options[index].votes += 1;
+      return interaction.update({ embeds: [pollEmbed(poll)], components: [pollButtons(parts[1], poll.options)] });
+    }
+
+    if (interaction.customId.startsWith("giveaway:")) {
+      const id = interaction.customId.split(":")[1];
+      const set = giveawayEntries.get(id) || new Set();
+      if (set.has(interaction.user.id)) return interaction.reply({ content: "Du er allerede med.", ephemeral: true });
+      set.add(interaction.user.id);
+      giveawayEntries.set(id, set);
+      if (db && /^\d+$/.test(id)) {
+        await db.query(
+          "CREATE TABLE IF NOT EXISTS public.giveaway_entries (giveaway_id BIGINT NOT NULL, user_id VARCHAR(32) NOT NULL, PRIMARY KEY (giveaway_id, user_id))"
+        ).catch(() => {});
+        await db.query(
+          "INSERT INTO public.giveaway_entries (giveaway_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
+          [id, interaction.user.id]
+        ).catch(() => {});
+      }
+      return interaction.reply({ content: "🎉 Du er med i giveawayen!", ephemeral: true });
+    }
+
+    return interaction.reply({ content: "Ukendt knap.", ephemeral: true });
+  }
+
   client.once("ready", async () => {
     setReady(true);
 
