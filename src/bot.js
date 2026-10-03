@@ -602,13 +602,14 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
       if (interaction.commandName === "ticket") {
         if (!interaction.guild) {
-          return interaction.reply({
-            content: "Tickets can only be created inside a Discord server.",
-            ephemeral: true
-          });
+          return interaction.reply({ content: "Tickets kan kun oprettes i en Discord-server.", ephemeral: true });
         }
-
         const title = interaction.options.getString("title", true).slice(0, 120);
+        const existing = interaction.guild.channels.cache.find(channel =>
+          channel.name.startsWith("ticket-") && channel.permissionOverwrites.cache.has(interaction.user.id)
+        );
+        if (existing) return interaction.reply({ content: "Du har allerede en ticket: " + existing, ephemeral: true });
+
         const ticket = createTicket
           ? await createTicket({
               title,
@@ -616,19 +617,34 @@ function createBot({ state, db, log, createTicket, setReady }) {
               status: "open",
               priority: "normal"
             })
-          : {
-              id: Date.now(),
-              title,
-              user: interaction.user.tag,
-              status: "open",
-              priority: "normal",
-              createdAt: new Date().toISOString()
-            };
+          : { id: Date.now(), title, status: "open" };
 
-        log("ticket", `Ticket #${ticket.id} created by ${interaction.user.tag}`);
-        return interaction.reply(
-          `Ticket #${ticket.id} created: **${title}**`
+        const channel = await createTicketChannel(interaction.guild, interaction.user, title);
+        if (db) {
+          await db.query(
+            "UPDATE public.tickets SET guild_id=$1,user_id=$2,channel_id=$3 WHERE id=$4",
+            [interaction.guild.id, interaction.user.id, channel.id, ticket.id]
+          ).catch(() => {});
+        }
+
+        const controls = new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId("ticket_claim:" + ticket.id).setLabel("Claim").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId("ticket_close:" + ticket.id).setLabel("Luk ticket").setStyle(ButtonStyle.Danger),
+          new ButtonBuilder().setCustomId("ticket_transcript:" + ticket.id).setLabel("Transcript").setStyle(ButtonStyle.Primary)
         );
+
+        await channel.send({
+          embeds: [
+            new EmbedBuilder()
+              .setTitle("🎫 Ticket #" + ticket.id)
+              .setDescription("Hej <@" + interaction.user.id + "> — skriv her, så hjælper supporten dig.")
+              .setColor(0x6d5dfc)
+          ],
+          components: [controls]
+        });
+
+        await sendGuildLog(interaction.guild, "Ny ticket", interaction.user.tag + " oprettede ticket #" + ticket.id, "system");
+        return interaction.reply({ content: "✅ Din ticket er oprettet: " + channel, ephemeral: true });
       }
 
       if (interaction.commandName === "serverinfo") {
