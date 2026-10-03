@@ -36,17 +36,106 @@ async function initDatabase() {
     )
   `);
 
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS tickets (
+      id BIGSERIAL PRIMARY KEY,
+      title VARCHAR(120) NOT NULL,
+      user_name VARCHAR(80) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'open',
+      priority VARCHAR(20) NOT NULL DEFAULT 'normal',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id BIGSERIAL PRIMARY KEY,
+      channel VARCHAR(80) NOT NULL,
+      content TEXT NOT NULL,
+      author VARCHAR(160) NOT NULL DEFAULT 'Dashboard',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS logs (
+      id BIGSERIAL PRIMARY KEY,
+      type VARCHAR(40) NOT NULL,
+      message TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS bot_settings (
+      id INTEGER PRIMARY KEY DEFAULT 1,
+      prefix VARCHAR(5) NOT NULL DEFAULT '!',
+      maintenance BOOLEAN NOT NULL DEFAULT FALSE,
+      auto_reply BOOLEAN NOT NULL DEFAULT TRUE,
+      welcome_messages BOOLEAN NOT NULL DEFAULT TRUE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS login_audit (
+      id BIGSERIAL PRIMARY KEY,
+      user_id BIGINT,
+      user_name VARCHAR(80),
+      user_email VARCHAR(160),
+      event_type VARCHAR(40) NOT NULL DEFAULT 'login',
+      success BOOLEAN NOT NULL DEFAULT FALSE,
+      ip_address INET,
+      user_agent TEXT,
+      country VARCHAR(120),
+      city VARCHAR(120),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
+    INSERT INTO bot_settings (id, prefix, maintenance, auto_reply, welcome_messages)
+    VALUES (1, '!', FALSE, TRUE, TRUE)
+    ON CONFLICT (id) DO NOTHING
+  `);
+
   await ensureAdmin();
+  await loadPersistentState();
+}
+
+async function loadPersistentState() {
+  if (!db) return;
+
+  const [tickets, messages, logs, settings] = await Promise.all([
+    db.query(`
+      SELECT id, title, user_name AS "user", status, priority, created_at AS "createdAt"
+      FROM public.tickets ORDER BY created_at DESC LIMIT 500
+    `),
+    db.query(`
+      SELECT id, channel, content, author, created_at AS "time"
+      FROM public.messages ORDER BY created_at DESC LIMIT 500
+    `),
+    db.query(`
+      SELECT id, type, message, created_at AS "time"
+      FROM public.logs ORDER BY created_at DESC LIMIT 100
+    `),
+    db.query(`
+      SELECT prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages"
+      FROM public.bot_settings WHERE id = 1 LIMIT 1
+    `)
+  ]);
+
+  state.tickets = tickets.rows;
+  state.messages = messages.rows;
+  state.logs = logs.rows;
+  if (settings.rows[0]) state.settings = settings.rows[0];
 }
 
 const startedAt = Date.now();
 
 const state = {
   users: [],
-  tickets: [
-    { id: 1001, title: "Website support", user: "DemoUser", status: "open", priority: "high", createdAt: new Date().toISOString() },
-    { id: 1002, title: "Bot command help", user: "Moderator", status: "pending", priority: "normal", createdAt: new Date(Date.now() - 3600000).toISOString() }
-  ],
+  tickets: [],
   messages: [],
   logs: [],
   loginAudit: [],
@@ -59,13 +148,21 @@ const state = {
 };
 
 function log(type, message) {
-  state.logs.unshift({
+  const item = {
     id: Date.now() + Math.random(),
     type,
     message,
     time: new Date().toISOString()
-  });
+  };
+  state.logs.unshift(item);
   state.logs = state.logs.slice(0, 100);
+
+  if (db) {
+    db.query(
+      "INSERT INTO public.logs (type, message) VALUES ($1, $2)",
+      [type, message]
+    ).catch(error => console.error("[ShardNote] Log persistence failed:", error.message));
+  }
 }
 
 
@@ -243,11 +340,44 @@ function requireAdmin(req, res, next) {
   next();
 }
 
+async function saveTicket({ title, user, status = "open", priority = "normal" }) {
+  const cleanTitle = String(title || "New ticket").slice(0, 120);
+  const cleanUser = String(user || "Dashboard user").slice(0, 80);
+  const cleanStatus = ["open", "pending", "closed"].includes(status) ? status : "open";
+  const cleanPriority = ["low", "normal", "high"].includes(priority) ? priority : "normal";
+
+  if (db) {
+    const result = await db.query(
+      `INSERT INTO public.tickets (title, user_name, status, priority)
+       VALUES ($1, $2, $3, $4)
+       RETURNING id, title, user_name AS "user", status, priority, created_at AS "createdAt"`,
+      [cleanTitle, cleanUser, cleanStatus, cleanPriority]
+    );
+    const ticket = result.rows[0];
+    state.tickets.unshift(ticket);
+    state.tickets = state.tickets.slice(0, 500);
+    return ticket;
+  }
+
+  const ticket = {
+    id: Date.now(),
+    title: cleanTitle,
+    user: cleanUser,
+    status: cleanStatus,
+    priority: cleanPriority,
+    createdAt: new Date().toISOString()
+  };
+  state.tickets.unshift(ticket);
+  state.tickets = state.tickets.slice(0, 500);
+  return ticket;
+}
+
 let discordReady = false;
 
 const client = createBot({
   state,
   log,
+  createTicket: saveTicket,
   setReady(ready) {
     discordReady = ready;
   }
@@ -628,71 +758,165 @@ app.use("/api", (req, res, next) => {
   requireAuth(req, res, next);
 });
 
-app.get("/api/stats", (req, res) => {
-  res.json({
-    botOnline: discordReady,
-    servers: discordReady ? client.guilds.cache.size : 0,
-    users: discordReady
-      ? client.guilds.cache.reduce((total, guild) => total + (guild.memberCount || 0), 0)
-      : 0,
-    tickets: state.tickets.filter(t => t.status !== "closed").length,
-    commands: 5,
-    uptime: Math.floor((Date.now() - startedAt) / 1000)
-  });
+app.get("/api/stats", async (req, res) => {
+  try {
+    let openTickets = state.tickets.filter(t => t.status !== "closed").length;
+    if (db) {
+      const result = await db.query("SELECT COUNT(*)::int AS count FROM public.tickets WHERE status <> 'closed'");
+      openTickets = result.rows[0].count;
+    }
+
+    res.json({
+      botOnline: discordReady,
+      servers: discordReady ? client.guilds.cache.size : 0,
+      users: discordReady
+        ? client.guilds.cache.reduce((total, guild) => total + (guild.memberCount || 0), 0)
+        : 0,
+      tickets: openTickets,
+      commands: 5,
+      uptime: Math.floor((Date.now() - startedAt) / 1000)
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente statistik." });
+  }
 });
 
-app.get("/api/tickets", (req, res) => res.json(state.tickets));
-
-app.post("/api/tickets", (req, res) => {
-  const ticket = {
-    id: Date.now(),
-    title: String(req.body.title || "New ticket").slice(0, 120),
-    user: String(req.body.user || "Dashboard user").slice(0, 80),
-    status: "open",
-    priority: ["low", "normal", "high"].includes(req.body.priority) ? req.body.priority : "normal",
-    createdAt: new Date().toISOString()
-  };
-  state.tickets.unshift(ticket);
-  log("ticket", `Ticket #${ticket.id} created from dashboard`);
-  res.status(201).json(ticket);
+app.get("/api/tickets", async (req, res) => {
+  try {
+    if (db) {
+      const result = await db.query(`
+        SELECT id, title, user_name AS "user", status, priority, created_at AS "createdAt"
+        FROM public.tickets ORDER BY created_at DESC LIMIT 500
+      `);
+      state.tickets = result.rows;
+    }
+    res.json(state.tickets);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente tickets." });
+  }
 });
 
-app.patch("/api/tickets/:id", (req, res) => {
-  const ticket = state.tickets.find(t => String(t.id) === String(req.params.id));
-  if (!ticket) return res.status(404).json({ error: "Ticket not found" });
-
-  if (["open", "pending", "closed"].includes(req.body.status)) ticket.status = req.body.status;
-  if (["low", "normal", "high"].includes(req.body.priority)) ticket.priority = req.body.priority;
-
-  log("ticket", `Ticket #${ticket.id} updated`);
-  res.json(ticket);
+app.post("/api/tickets", async (req, res) => {
+  try {
+    const ticket = await saveTicket({
+      title: req.body.title,
+      user: req.body.user,
+      status: "open",
+      priority: req.body.priority
+    });
+    log("ticket", `Ticket #${ticket.id} created from dashboard`);
+    res.status(201).json(ticket);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Ticket kunne ikke oprettes." });
+  }
 });
 
-app.delete("/api/tickets/:id", (req, res) => {
-  const before = state.tickets.length;
-  state.tickets = state.tickets.filter(t => String(t.id) !== String(req.params.id));
-  if (before === state.tickets.length) return res.status(404).json({ error: "Ticket not found" });
-  log("ticket", `Ticket #${req.params.id} deleted`);
-  res.json({ ok: true });
+app.patch("/api/tickets/:id", async (req, res) => {
+  try {
+    if (db) {
+      const result = await db.query(
+        `UPDATE public.tickets
+         SET status = COALESCE($1, status),
+             priority = COALESCE($2, priority)
+         WHERE id = $3
+         RETURNING id, title, user_name AS "user", status, priority, created_at AS "createdAt"`,
+        [
+          ["open", "pending", "closed"].includes(req.body.status) ? req.body.status : null,
+          ["low", "normal", "high"].includes(req.body.priority) ? req.body.priority : null,
+          req.params.id
+        ]
+      );
+      if (!result.rowCount) return res.status(404).json({ error: "Ticket not found" });
+      const ticket = result.rows[0];
+      const index = state.tickets.findIndex(t => String(t.id) === String(req.params.id));
+      if (index >= 0) state.tickets[index] = ticket;
+      log("ticket", `Ticket #${ticket.id} updated`);
+      return res.json(ticket);
+    }
+
+    const ticket = state.tickets.find(t => String(t.id) === String(req.params.id));
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+    if (["open", "pending", "closed"].includes(req.body.status)) ticket.status = req.body.status;
+    if (["low", "normal", "high"].includes(req.body.priority)) ticket.priority = req.body.priority;
+    log("ticket", `Ticket #${ticket.id} updated`);
+    res.json(ticket);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Ticket kunne ikke opdateres." });
+  }
 });
 
-app.get("/api/messages", (req, res) => res.json(state.messages));
+app.delete("/api/tickets/:id", async (req, res) => {
+  try {
+    if (db) {
+      const result = await db.query("DELETE FROM public.tickets WHERE id = $1 RETURNING id", [req.params.id]);
+      if (!result.rowCount) return res.status(404).json({ error: "Ticket not found" });
+      state.tickets = state.tickets.filter(t => String(t.id) !== String(req.params.id));
+      log("ticket", `Ticket #${req.params.id} deleted`);
+      return res.json({ ok: true });
+    }
+
+    const before = state.tickets.length;
+    state.tickets = state.tickets.filter(t => String(t.id) !== String(req.params.id));
+    if (before === state.tickets.length) return res.status(404).json({ error: "Ticket not found" });
+    log("ticket", `Ticket #${req.params.id} deleted`);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Ticket kunne ikke slettes." });
+  }
+});
+
+app.get("/api/messages", async (req, res) => {
+  try {
+    if (db) {
+      const result = await db.query(`
+        SELECT id, channel, content, author, created_at AS "time"
+        FROM public.messages ORDER BY created_at DESC LIMIT 500
+      `);
+      state.messages = result.rows;
+    }
+    res.json(state.messages);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente beskeder." });
+  }
+});
 
 app.post("/api/messages", async (req, res) => {
-  const content = String(req.body.content || "").trim();
-  if (!content) return res.status(400).json({ error: "Message is required" });
+  try {
+    const content = String(req.body.content || "").trim();
+    if (!content) return res.status(400).json({ error: "Message is required" });
 
-  const item = {
-    id: Date.now(),
-    channel: String(req.body.channel || "Dashboard").slice(0, 80),
-    content: content.slice(0, 2000),
-    author: "Dashboard",
-    time: new Date().toISOString()
-  };
-  state.messages.unshift(item);
-  state.messages = state.messages.slice(0, 50);
-  log("message", "Message created from dashboard");
-  res.status(201).json(item);
+    const channel = String(req.body.channel || "Dashboard").slice(0, 80);
+    const result = db
+      ? await db.query(
+          `INSERT INTO public.messages (channel, content, author)
+           VALUES ($1, $2, $3)
+           RETURNING id, channel, content, author, created_at AS "time"`,
+          [channel, content.slice(0, 2000), req.user?.email || "Dashboard"]
+        )
+      : null;
+
+    const item = result ? result.rows[0] : {
+      id: Date.now(),
+      channel,
+      content: content.slice(0, 2000),
+      author: req.user?.email || "Dashboard",
+      time: new Date().toISOString()
+    };
+
+    state.messages.unshift(item);
+    state.messages = state.messages.slice(0, 500);
+    log("message", "Message created from dashboard");
+    res.status(201).json(item);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Beskeden kunne ikke gemmes." });
+  }
 });
 
 app.get("/api/commands", (req, res) => {
@@ -715,21 +939,74 @@ app.post("/api/commands", async (req, res) => {
   });
 });
 
-app.get("/api/settings", (req, res) => res.json(state.settings));
-
-app.patch("/api/settings", (req, res) => {
-  if (typeof req.body.prefix === "string" && req.body.prefix.length <= 5) {
-    state.settings.prefix = req.body.prefix || "!";
+app.get("/api/settings", async (req, res) => {
+  try {
+    if (db) {
+      const result = await db.query(
+        `SELECT prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages"
+         FROM public.bot_settings WHERE id = 1 LIMIT 1`
+      );
+      if (result.rows[0]) state.settings = result.rows[0];
+    }
+    res.json(state.settings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente indstillinger." });
   }
-  if (typeof req.body.maintenance === "boolean") state.settings.maintenance = req.body.maintenance;
-  if (typeof req.body.autoReply === "boolean") state.settings.autoReply = req.body.autoReply;
-  if (typeof req.body.welcomeMessages === "boolean") state.settings.welcomeMessages = req.body.welcomeMessages;
-
-  log("settings", "Dashboard settings updated");
-  res.json(state.settings);
 });
 
-app.get("/api/logs", (req, res) => res.json(state.logs));
+app.patch("/api/settings", async (req, res) => {
+  try {
+    if (typeof req.body.prefix === "string" && req.body.prefix.length <= 5) {
+      state.settings.prefix = req.body.prefix || "!";
+    }
+    if (typeof req.body.maintenance === "boolean") state.settings.maintenance = req.body.maintenance;
+    if (typeof req.body.autoReply === "boolean") state.settings.autoReply = req.body.autoReply;
+    if (typeof req.body.welcomeMessages === "boolean") state.settings.welcomeMessages = req.body.welcomeMessages;
+
+    if (db) {
+      const result = await db.query(
+        `UPDATE public.bot_settings
+         SET prefix = $1,
+             maintenance = $2,
+             auto_reply = $3,
+             welcome_messages = $4,
+             updated_at = NOW()
+         WHERE id = 1
+         RETURNING prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages"`,
+        [
+          state.settings.prefix,
+          state.settings.maintenance,
+          state.settings.autoReply,
+          state.settings.welcomeMessages
+        ]
+      );
+      if (result.rows[0]) state.settings = result.rows[0];
+    }
+
+    log("settings", "Dashboard settings updated");
+    res.json(state.settings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Indstillingerne kunne ikke gemmes." });
+  }
+});
+
+app.get("/api/logs", async (req, res) => {
+  try {
+    if (db) {
+      const result = await db.query(
+        `SELECT id, type, message, created_at AS "time"
+         FROM public.logs ORDER BY created_at DESC LIMIT 100`
+      );
+      state.logs = result.rows;
+    }
+    res.json(state.logs);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente logs." });
+  }
+});
 
 const html = `<!DOCTYPE html>
 <html lang="da">
