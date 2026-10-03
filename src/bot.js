@@ -251,6 +251,178 @@ function createBot({ state, db, log, createTicket, setReady }) {
     }
   }
 
+  const guildSettingsCache = new Map();
+  const spamBuckets = new Map();
+  const raidBuckets = new Map();
+  const polls = new Map();
+  const giveaways = new Map();
+  const giveawayEntries = new Map();
+
+  function parseDuration(value) {
+    const match = String(value || "").trim().toLowerCase().match(/^(\\d+)\\s*(s|m|h|d)$/);
+    if (!match) return null;
+    const multiplier = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[match[2]];
+    const ms = Number(match[1]) * multiplier;
+    return Number.isFinite(ms) && ms >= 1000 && ms <= 28 * 86400000 ? ms : null;
+  }
+
+  function formatDuration(ms) {
+    const total = Math.floor(ms / 1000);
+    if (total >= 86400) return Math.floor(total / 86400) + "d";
+    if (total >= 3600) return Math.floor(total / 3600) + "h";
+    if (total >= 60) return Math.floor(total / 60) + "m";
+    return total + "s";
+  }
+
+  async function getGuildSettings(guildId) {
+    const cached = guildSettingsCache.get(guildId);
+    if (cached && cached.expiresAt > Date.now()) return cached.value;
+    const defaults = {
+      log_channel_id: null, welcome_channel_id: null,
+      welcome_message: "Velkommen {user} til {server}! 👋",
+      leave_channel_id: null, leave_message: "{user} har forladt {server}.",
+      autorole_id: null, support_role_id: null, ticket_category_id: null,
+      verification_role_id: null, suggestion_channel_id: null,
+      automod_enabled: true, invite_filter: false, levels_enabled: true,
+      economy_enabled: true, anti_raid_enabled: true, lockdown: false
+    };
+    if (!db) return defaults;
+    try {
+      await db.query("INSERT INTO public.guild_settings (guild_id) VALUES ($1) ON CONFLICT (guild_id) DO NOTHING", [guildId]);
+      const result = await db.query("SELECT * FROM public.guild_settings WHERE guild_id = $1 LIMIT 1", [guildId]);
+      const value = Object.assign(defaults, result.rows[0] || {});
+      guildSettingsCache.set(guildId, { value, expiresAt: Date.now() + 30000 });
+      return value;
+    } catch (error) {
+      log("error", "Guild settings error: " + error.message);
+      return defaults;
+    }
+  }
+
+  async function setGuildSetting(guildId, key, value) {
+    const allowed = ["log_channel_id","welcome_channel_id","welcome_message","leave_channel_id","leave_message","autorole_id","support_role_id","ticket_category_id","verification_role_id","suggestion_channel_id","automod_enabled","invite_filter","levels_enabled","economy_enabled","anti_raid_enabled","lockdown"];
+    if (!allowed.includes(key)) throw new Error("Invalid guild setting.");
+    if (db) await db.query("UPDATE public.guild_settings SET " + key + " = $1, updated_at = NOW() WHERE guild_id = $2", [value, guildId]);
+    guildSettingsCache.delete(guildId);
+    return getGuildSettings(guildId);
+  }
+
+  async function sendGuildLog(guild, title, message, type) {
+    log(type === "error" ? "error" : type === "security" ? "security" : type === "warning" ? "warning" : "system", guild.name + ": " + title + " — " + message);
+    const settings = await getGuildSettings(guild.id);
+    const channel = settings.log_channel_id ? guild.channels.cache.get(settings.log_channel_id) : null;
+    if (channel && channel.isTextBased()) {
+      await channel.send({ content: "**" + title + "**\n" + message }).catch(() => {});
+    }
+  }
+
+  async function getMember(guild, userId) {
+    return guild.members.fetch(userId).catch(() => null);
+  }
+
+  async function ensureStats(guildId, userId) {
+    if (!db) return;
+    await db.query("INSERT INTO public.user_stats (guild_id, user_id) VALUES ($1, $2) ON CONFLICT (guild_id, user_id) DO NOTHING", [guildId, userId]);
+  }
+
+  function levelForXp(xp) {
+    return Math.floor(Math.sqrt(Math.max(0, xp) / 100));
+  }
+
+  async function addXp(guild, user) {
+    if (!db) return;
+    const settings = await getGuildSettings(guild.id);
+    if (!settings.levels_enabled) return;
+    await ensureStats(guild.id, user.id);
+    const previous = await db.query("SELECT xp, level FROM public.user_stats WHERE guild_id = $1 AND user_id = $2", [guild.id, user.id]);
+    const old = previous.rows[0] || { xp: 0, level: 0 };
+    const xp = Number(old.xp || 0) + 8 + Math.floor(Math.random() * 9);
+    const level = levelForXp(xp);
+    await db.query("UPDATE public.user_stats SET xp = $1, level = $2 WHERE guild_id = $3 AND user_id = $4", [xp, level, guild.id, user.id]);
+    if (level > Number(old.level || 0)) {
+      const channel = guild.systemChannel || guild.channels.cache.find(c => c.isTextBased() && c.viewable);
+      if (channel) await channel.send("🎉 " + user + " er steget til **level " + level + "**!").catch(() => {});
+      await sendGuildLog(guild, "Level up", user.tag + " nåede level " + level + ".", "success");
+    }
+  }
+
+  async function createTicketChannel(guild, user, title) {
+    const settings = await getGuildSettings(guild.id);
+    const permissions = [
+      { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+      { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] },
+      { id: guild.client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages] }
+    ];
+    if (settings.support_role_id) {
+      permissions.push({ id: settings.support_role_id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] });
+    }
+    const safe = String(title || "support").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 32) || "support";
+    return guild.channels.create({
+      name: "ticket-" + safe,
+      type: ChannelType.GuildText,
+      parent: settings.ticket_category_id || undefined,
+      permissionOverwrites: permissions,
+      reason: "ShardNote ticket"
+    });
+  }
+
+  async function setLockdown(guild, locked) {
+    for (const channel of guild.channels.cache.filter(c => c.isTextBased() && !c.isThread()).values()) {
+      await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: locked ? false : null }, { reason: "ShardNote lockdown" }).catch(() => {});
+    }
+    if (db) await setGuildSetting(guild.id, "lockdown", locked);
+  }
+
+  async function transcript(channel) {
+    const messages = await channel.messages.fetch({ limit: 100 });
+    return Array.from(messages.values()).sort((a,b) => a.createdTimestamp - b.createdTimestamp)
+      .map(m => "[" + new Date(m.createdTimestamp).toISOString() + "] " + m.author.tag + ": " + String(m.content || "").replace(/\n/g, " "))
+      .join("\n");
+  }
+
+  async function runAutoMod(message) {
+    if (!message.guild || !message.member || message.author.bot) return false;
+    const settings = await getGuildSettings(message.guild.id);
+    if (!settings.automod_enabled) return false;
+
+    const now = Date.now();
+    const key = message.guild.id + ":" + message.author.id;
+    const times = (spamBuckets.get(key) || []).filter(ts => now - ts < 8000);
+    times.push(now);
+    spamBuckets.set(key, times);
+
+    const invite = /(?:discord\\.gg\\/|discord(?:app)?\\.com\\/invite\\/)/i.test(message.content || "");
+    const blockedWords = String(process.env.AUTOMOD_WORDS || "").split(",").map(v => v.trim().toLowerCase()).filter(Boolean);
+    const blockedWord = blockedWords.some(word => word && String(message.content || "").toLowerCase().includes(word));
+    const spam = times.length >= 6;
+
+    if (spam || (settings.invite_filter && invite) || blockedWord) {
+      await message.delete().catch(() => {});
+      if (spam && message.member.moderatable) await message.member.timeout(30000, "ShardNote AutoMod spam").catch(() => {});
+      await sendGuildLog(message.guild, "AutoMod", message.author.tag + " blev stoppet.", "security");
+      return true;
+    }
+    return false;
+  }
+
+  function pollEmbed(data) {
+    return new EmbedBuilder()
+      .setTitle("📊 " + data.question)
+      .setDescription(data.options.map((option, index) => "**" + (index + 1) + ". " + option.label + "** — " + option.votes).join("\n"))
+      .setColor(0x6d5dfc);
+  }
+
+  function pollButtons(id, options) {
+    return new ActionRowBuilder().addComponents(
+      options.map((option, index) =>
+        new ButtonBuilder()
+          .setCustomId("poll:" + id + ":" + index)
+          .setLabel((index + 1) + ". " + option.label)
+          .setStyle(index === 0 ? ButtonStyle.Primary : index === 1 ? ButtonStyle.Success : ButtonStyle.Secondary)
+      )
+    );
+  }
+
   client.once("ready", async () => {
     setReady(true);
 
