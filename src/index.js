@@ -1018,6 +1018,7 @@ app.patch("/api/settings", async (req, res) => {
     if (typeof req.body.maintenance === "boolean") state.settings.maintenance = req.body.maintenance;
     if (typeof req.body.autoReply === "boolean") state.settings.autoReply = req.body.autoReply;
     if (typeof req.body.welcomeMessages === "boolean") state.settings.welcomeMessages = req.body.welcomeMessages;
+    if (req.body.buttonLabels && typeof req.body.buttonLabels === "object") state.settings.buttonLabels = req.body.buttonLabels;
 
     if (db) {
       const result = await db.query(
