@@ -318,86 +318,86 @@ function createBot({ state, db, log, createTicket, setReady }) {
     const templates = {
       "f5-vip": {
         name: "F5 VIP",
-        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem"],
         categories: ["📌 INFORMATION","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","⭐ VIP","🔒 STAFF","🔊 VOICE"],
         channels: ["velkommen","regler","verification","annonceringer","chat","forslag","support","ticket-panel","vip-chat","staff-chat","logs","Fælles","VIP Lounge"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false },
-        prefixRoles:["owner","admin","moderator","support","vip","member","muted"],
+        prefixRoles:["owner","admin","moderator","support","vip","member"],
         prefixChannels:["velkommen","regler","verification","annonceringer","chat","forslag","support","ticketpanel","vipchat","staffchat","logs","faelles","viplounge"]
       },
       "fivem-vip": {
         name: "FiveM VIP",
-        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem"],
         categories: ["📌 INFORMATION","🚓 FIVEM","🎫 SUPPORT","🎟️ TICKETS","⭐ VIP","🔒 STAFF","🔊 VOICE"],
         channels: ["velkommen","regler","server-info","jobs","support","ticket-panel","vip-chat","staff-chat","logs","clips","Fælles","VIP Lounge"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
       },
       "fivem-esx": {
         name: "FiveM ESX",
-        roles: ["Ejer","Admin","Developer","Moderator","Support","Politi","EMS","Medlem","Muted"],
+        roles: ["Ejer","Admin","Developer","Moderator","Support","Politi","EMS","Medlem"],
         categories: ["📌 INFORMATION","🚓 FIVEM","👮 JOBS","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
         channels: ["velkommen","regler","server-info","whitelist","job-info","politi","ems","support","ticket-panel","forslag","logs","Fælles","Staff"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:false, economy_enabled:false, anti_raid_enabled:true, lockdown:false }
       },
       "fivem-rp": {
         name: "FiveM RP",
-        roles: ["Ejer","Admin","Moderator","Support","Kriminel","Civil","Medlem","Muted"],
+        roles: ["Ejer","Admin","Moderator","Support","Kriminel","Civil","Medlem"],
         categories: ["📌 INFORMATION","🚓 RP","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
         channels: ["velkommen","regler","server-info","rp-info","fraktioner","chat","support","ticket-panel","forslag","logs","Fælles","RP Voice"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:false, anti_raid_enabled:true, lockdown:false }
       },
       "rust": {
         name: "Rust",
-        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem"],
         categories: ["📌 INFORMATION","⛏️ RUST","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
         channels: ["velkommen","regler","server-info","wipe-info","raid-info","team-finder","chat","support","ticket-panel","trade","logs","Fælles","Rust Voice"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
       },
       "vennegruppe": {
         name: "Vennegruppe",
-        roles: ["Ejer","Admin","Moderator","Ven","Muted"],
+        roles: ["Ejer","Admin","Moderator","Ven"],
         categories: ["👋 INFORMATION","💬 CHAT","🎮 SPIL","🔊 VOICE"],
         channels: ["velkommen","regler","chat","memes","clips","game-chat","find-et-game","bot-commands","Fælles","Gaming","Chill"],
         features: { automod_enabled:true, invite_filter:false, levels_enabled:true, economy_enabled:true, anti_raid_enabled:false, lockdown:false }
       },
       "gaming": {
         name: "Gaming Community",
-        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem"],
         categories: ["📌 INFORMATION","💬 COMMUNITY","🎮 GAMING","🎫 SUPPORT","🔒 STAFF","🔊 VOICE"],
         channels: ["velkommen","regler","chat","game-chat","find-spillere","clips","events","support","logs","Fælles","Gaming","Chill"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:false, lockdown:false }
       },
       "clan": {
         name: "Clan / E-sport",
-        roles: ["Ejer","Admin","Coach","Moderator","Spiller","Trial","Muted"],
+        roles: ["Ejer","Admin","Coach","Moderator","Spiller","Trial"],
         categories: ["📌 INFORMATION","🏆 CLAN","🎮 GAMING","🔒 STAFF","🔊 VOICE"],
         channels: ["velkommen","regler","announcements","team-chat","scrims","results","tryouts","clips","staff-chat","logs","Team VC","Scrim VC"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:false, anti_raid_enabled:true, lockdown:false }
       },
       "streamer": {
         name: "Streamer / Creator",
-        roles: ["Ejer","Admin","Moderator","Subscriber","VIP","Medlem","Muted"],
+        roles: ["Ejer","Admin","Moderator","Subscriber","VIP","Medlem"],
         categories: ["📌 INFORMATION","📺 STREAM","💬 COMMUNITY","🎫 SUPPORT","🔊 VOICE"],
         channels: ["velkommen","regler","stream-live","stream-info","chat","clips","fan-art","support","suggestions","Fælles","Chill","Gaming"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:false, lockdown:false }
       },
       "community": {
         name: "Community",
-        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem"],
         categories: ["📌 INFORMATION","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
         channels: ["velkommen","regler","annonceringer","chat","suggestions","events","support","ticket-panel","logs","Fælles","Chill"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
       },
       "support": {
         name: "Support Server",
-        roles: ["Ejer","Admin","Support","Moderator","Medlem","Muted"],
+        roles: ["Ejer","Admin","Support","Moderator","Medlem"],
         categories: ["📌 INFORMATION","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
         channels: ["velkommen","regler","support","ticket-panel","faq","status","logs","Fælles","Support VC"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:false, economy_enabled:false, anti_raid_enabled:true, lockdown:false }
       },
       "shop": {
         name: "Shop / Marketplace",
-        roles: ["Ejer","Admin","Moderator","Support","Kunde","VIP","Muted"],
+        roles: ["Ejer","Admin","Moderator","Support","Kunde","VIP"],
         categories: ["📌 INFORMATION","🛒 SHOP","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
         channels: ["velkommen","regler","shop-info","produkter","tilbud","bestillinger","support","ticket-panel","anmeldelser","logs","Fælles","Support VC"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:false, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
@@ -415,7 +415,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
     if (templateKey === "custom") {
       config = {
         name: "Min egen skitse",
-        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem","Muted"],
+        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem"],
         categories: ["📌 INFORMATION","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
         channels: ["velkommen","regler","annonceringer","chat","support","ticket-panel","logs","Fælles","Chill"],
         features: {
@@ -438,11 +438,11 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     const prefixRoles = new Set(Array.isArray(options.prefixRoles) ? options.prefixRoles.map(String) : (config.prefixRoles || []));
     const prefixChannels = new Set(Array.isArray(options.prefixChannels) ? options.prefixChannels.map(String) : (config.prefixChannels || []));
-    const roleKeys = ["owner","admin","moderator","support","vip","member","muted","developer","police","ems","criminal","civil","friend","coach","player","trial","subscriber","customer","creator"];
+    const roleKeys = ["owner","admin","moderator","support","vip","member","developer","police","ems","criminal","civil","friend","coach","player","trial","subscriber","customer","creator"];
     const roleKey = base => {
       const norm = String(base).toLowerCase();
       const map = {
-        "ejer":"owner","admin":"admin","moderator":"moderator","support":"support","vip":"vip","medlem":"member","muted":"muted",
+        "ejer":"owner","admin":"admin","moderator":"moderator","support":"support","vip":"vip","medlem":"member",
         "developer":"developer","politi":"police","ems":"ems","kriminel":"criminal","civil":"civil","ven":"friend","coach":"coach",
         "spiller":"player","trial":"trial","subscriber":"subscriber","kunde":"customer","creator":"creator"
       };
@@ -499,10 +499,6 @@ function createBot({ state, db, log, createTicket, setReady }) {
         PermissionFlagsBits.Connect,
         PermissionFlagsBits.Speak
       ];
-      if (key === "muted") return [
-        PermissionFlagsBits.ViewChannel,
-        PermissionFlagsBits.ReadMessageHistory
-      ];
       return basic;
     }
 
@@ -542,7 +538,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
       .filter(r => ["owner","admin","developer","moderator","support","coach"].includes(r.key))
       .map(r => roles[r.key]?.id)
       .filter(Boolean);
-    const mutedRoleIds = roleSpecs
+    constRoleIds = roleSpecs
       .filter(r => r.key === "muted")
       .map(r => roles[r.key]?.id)
       .filter(Boolean);
@@ -562,13 +558,11 @@ function createBot({ state, db, log, createTicket, setReady }) {
     const communityOverwrites = [
       overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel]),
       ...memberRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages])),
-      ...mutedRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory],[PermissionFlagsBits.SendMessages])),
       overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
     const voiceOverwrites = [
       overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.Connect]),
       ...memberRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.Connect])),
-      ...mutedRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory],[PermissionFlagsBits.Connect,PermissionFlagsBits.Speak,PermissionFlagsBits.SendMessages])),
       overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.Connect,PermissionFlagsBits.Speak,PermissionFlagsBits.ManageChannels])
     ];
 
