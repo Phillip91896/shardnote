@@ -100,10 +100,68 @@ async function sendMessage(){
   try{await api("/api/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel,content})});document.getElementById("messageContent").value="";toast("Besked gemt");loadMessages()}catch(e){toast(e.message)}
 }
 
+const DANISH_COMMAND_DESCRIPTIONS={
+  ping:"Tjekker om ShardNote er online.",
+  help:"Viser alle tilgængelige ShardNote-commands.",
+  ticket:"Opretter en support-ticket.",
+  serverinfo:"Viser oplysninger om denne Discord-server.",
+  userinfo:"Viser oplysninger om et Discord-medlem.",
+  "ticket-panel":"Sender et panel, hvor brugere kan oprette tickets.",
+  "ticket-close":"Lukker den aktuelle ticket.",
+  "ticket-claim":"Tager den aktuelle ticket.",
+  "ticket-transcript":"Opretter en transcript af den aktuelle ticket.",
+  warn:"Giver et medlem en advarsel.",
+  warnings:"Viser advarsler for et medlem.",
+  clearwarnings:"Sletter alle advarsler for et medlem.",
+  kick:"Kicker et medlem fra serveren.",
+  ban:"Banner et medlem fra serveren.",
+  unban:"Fjerner et ban ved hjælp af Discord-brugerens ID.",
+  timeout:"Sætter timeout på et medlem.",
+  untimeout:"Fjerner timeout fra et medlem.",
+  purge:"Sletter mellem 1 og 100 beskeder.",
+  slowmode:"Indstiller slowmode i den aktuelle kanal.",
+  lockdown:"Låser tekstkanaler.",
+  unlockdown:"Låser tekstkanaler op igen.",
+  announce:"Sender en announcement som embed.",
+  poll:"Opretter en afstemning.",
+  suggest:"Sender et forslag.",
+  giveaway:"Starter en giveaway.",
+  "role-panel":"Sender en knap til en selvvalgt rolle.",
+  "verify-panel":"Sender et verification-panel.",
+  "set-log-channel":"Vælger log-kanalen.",
+  "set-welcome":"Indstiller velkomstbeskeder.",
+  "set-leave":"Indstiller farvelbeskeder.",
+  "set-autorole":"Vælger den rolle, nye medlemmer får automatisk.",
+  "set-support-role":"Vælger support-rollen til tickets.",
+  "set-ticket-category":"Vælger kategorien til tickets.",
+  "set-verification-role":"Vælger verification-rollen.",
+  "set-suggestion-channel":"Vælger kanalen til forslag.",
+  "set-features":"Slår botfunktioner til eller fra.",
+  balance:"Viser dine coins og dit level.",
+  daily:"Henter din daglige belønning.",
+  work:"Tjen coins ved at arbejde.",
+  leaderboard:"Viser serverens leaderboard.",
+  level:"Viser XP og level.",
+  backup:"Opretter en server-backup som JSON.",
+  restore:"Gendanner en ShardNote-backup.",
+  "music-join":"Får botten til at gå ind i din voice-kanal.",
+  "music-leave":"Får botten til at forlade voice-kanalen."
+};
+
 async function loadCommands(){
   const commands=await api("/api/commands");
-  document.getElementById("commandCount").textContent=commands.length+" commands";
-  document.getElementById("commandList").innerHTML=commands.map(c=>`<div class="activity-item"><div class="activity-icon">⌘</div><div><b>${escapeHtml(c.usage)}</b><small>${escapeHtml(c.description)}</small></div></div>`).join("");
+  const danish=localStorage.getItem("shardnote_language")==="da";
+  const title=document.querySelector("#page-commands .section-title h2");
+  const label=document.querySelector("#page-commands .field label");
+  const available=document.querySelector("#page-commands .card:nth-child(2) .section-title h2");
+  if(title) title.textContent=danish?"Kommandocenter":"Command Center";
+  if(label) label.textContent=danish?"Kommando":"Command";
+  if(available) available.textContent=danish?"Tilgængelige commands":"Tilgængelige commands";
+  document.getElementById("commandCount").textContent=(danish?commands.length+" commands":commands.length+" commands");
+  document.getElementById("commandList").innerHTML=commands.map(c=>{
+    const description=danish?(DANISH_COMMAND_DESCRIPTIONS[c.name]||c.description):c.description;
+    return `<div class="activity-item"><div class="activity-icon">⌘</div><div><b>${escapeHtml(c.usage)}</b><small>${escapeHtml(description)}</small></div></div>`;
+  }).join("");
 }
 async function runCommand(){
   const command=document.getElementById("commandInput").value;
@@ -545,6 +603,7 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
       current=select.value;
       localStorage.setItem("shardnote_language",current);
       translatePage();
+      if(typeof loadCommands==="function") setTimeout(()=>{try{loadCommands()}catch(e){}},0);
       if(typeof loadSettings==="function") setTimeout(()=>{try{applyButtonLabels();translatePage()}catch(e){}},0);
     });
     wrap.appendChild(select);
