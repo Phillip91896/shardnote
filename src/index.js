@@ -501,15 +501,15 @@ async function loadStats(){
     document.getElementById("statusText").textContent=s.botOnline?"Discord connected":"Web mode";
     document.getElementById("statusDot").className="dot "+(s.botOnline?"online":"");
     const tickets=await api("/api/tickets");
-    document.getElementById("dashTickets").innerHTML=tickets.slice(0,5).map(t=>`<div class="activity-item"><div class="activity-icon">🎫</div><div><b>#${t.id} — ${escapeHtml(t.title)}</b><small>${escapeHtml(t.user)} · <span class="badge ${t.status}">${t.status}</span></small></div></div>`).join("")||'<div class="empty">Ingen tickets endnu.</div>';
+    document.getElementById("dashTickets").innerHTML=tickets.slice(0,5).map(t=>\`<div class="activity-item"><div class="activity-icon">🎫</div><div><b>#${t.id} — ${escapeHtml(t.title)}</b><small>${escapeHtml(t.user)} · <span class="badge ${t.status}">${t.status}</span></small></div></div>\`).join("")||'<div class="empty">Ingen tickets endnu.</div>';
     const logs=await api("/api/logs");
-    document.getElementById("dashLogs").innerHTML=logs.slice(0,5).map(l=>`<div class="activity-item"><div class="activity-icon">•</div><div><b>${escapeHtml(l.message)}</b><small>${new Date(l.time).toLocaleString("da-DK")}</small></div></div>`).join("")||'<div class="empty">Ingen aktivitet endnu.</div>';
+    document.getElementById("dashLogs").innerHTML=logs.slice(0,5).map(l=>\`<div class="activity-item"><div class="activity-icon">•</div><div><b>${escapeHtml(l.message)}</b><small>${new Date(l.time).toLocaleString("da-DK")}</small></div></div>\`).join("")||'<div class="empty">Ingen aktivitet endnu.</div>';
   }catch(e){toast(e.message)}
 }
 
 async function loadTickets(){
   const tickets=await api("/api/tickets");
-  document.getElementById("ticketList").innerHTML=tickets.length?`<table class="table"><thead><tr><th>ID</th><th>Titel</th><th>Bruger</th><th>Status</th><th>Prioritet</th><th>Handlinger</th></tr></thead><tbody>${tickets.map(t=>`<tr><td>#${t.id}</td><td>${escapeHtml(t.title)}</td><td>${escapeHtml(t.user)}</td><td><span class="badge ${t.status}">${t.status}</span></td><td>${t.priority}</td><td><button class="btn small" onclick="cycleTicket('${t.id}','${t.status}')">Skift status</button> <button class="btn small danger" onclick="deleteTicket('${t.id}')">Slet</button></td></tr>`).join("")}</tbody></table>`:'<div class="empty">Ingen tickets endnu.</div>';
+  document.getElementById("ticketList").innerHTML=tickets.length?\`<table class="table"><thead><tr><th>ID</th><th>Titel</th><th>Bruger</th><th>Status</th><th>Prioritet</th><th>Handlinger</th></tr></thead><tbody>${tickets.map(t=>\`<tr><td>#${t.id}</td><td>${escapeHtml(t.title)}</td><td>${escapeHtml(t.user)}</td><td><span class="badge ${t.status}">${t.status}</span></td><td>${t.priority}</td><td><button class="btn small" onclick="cycleTicket('${t.id}','${t.status}')">Skift status</button> <button class="btn small danger" onclick="deleteTicket('${t.id}')">Slet</button></td></tr>\`).join("")}</tbody></table>\`:'<div class="empty">Ingen tickets endnu.</div>';
 }
 async function newTicket(){
   const title=prompt("Ticket titel:");
@@ -529,7 +529,7 @@ async function deleteTicket(id){
 
 async function loadMessages(){
   const items=await api("/api/messages");
-  document.getElementById("messageList").innerHTML=items.length?items.map(m=>`<div class="activity-item"><div class="activity-icon">✉</div><div><b>${escapeHtml(m.channel)}</b><small>${escapeHtml(m.content)} · ${new Date(m.time).toLocaleString("da-DK")}</small></div></div>`).join(""):'<div class="empty">Ingen beskeder endnu.</div>';
+  document.getElementById("messageList").innerHTML=items.length?items.map(m=>\`<div class="activity-item"><div class="activity-icon">✉</div><div><b>${escapeHtml(m.channel)}</b><small>${escapeHtml(m.content)} · ${new Date(m.time).toLocaleString("da-DK")}</small></div></div>\`).join(""):'<div class="empty">Ingen beskeder endnu.</div>';
 }
 async function sendMessage(){
   const channel=document.getElementById("messageChannel").value;
@@ -540,7 +540,7 @@ async function sendMessage(){
 async function loadCommands(){
   const commands=await api("/api/commands");
   document.getElementById("commandCount").textContent=commands.length+" commands";
-  document.getElementById("commandList").innerHTML=commands.map(c=>`<div class="activity-item"><div class="activity-icon">⌘</div><div><b>${escapeHtml(c.usage)}</b><small>${escapeHtml(c.description)}</small></div></div>`).join("");
+  document.getElementById("commandList").innerHTML=commands.map(c=>\`<div class="activity-item"><div class="activity-icon">⌘</div><div><b>${escapeHtml(c.usage)}</b><small>${escapeHtml(c.description)}</small></div></div>\`).join("");
 }
 async function runCommand(){
   const command=document.getElementById("commandInput").value;
@@ -560,13 +560,13 @@ async function saveSettings(){
 }
 async function loadLogs(){
   const logs=await api("/api/logs");
-  document.getElementById("logList").innerHTML=logs.length?`<table class="table"><thead><tr><th>Type</th><th>Hændelse</th><th>Tid</th></tr></thead><tbody>${logs.map(l=>`<tr><td><span class="badge ${l.type==="error"?"closed":l.type==="warning"?"pending":"open"}">${escapeHtml(l.type)}</span></td><td>${escapeHtml(l.message)}</td><td>${new Date(l.time).toLocaleString("da-DK")}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Ingen logs endnu.</div>';
+  document.getElementById("logList").innerHTML=logs.length?\`<table class="table"><thead><tr><th>Type</th><th>Hændelse</th><th>Tid</th></tr></thead><tbody>${logs.map(l=>\`<tr><td><span class="badge ${l.type==="error"?"closed":l.type==="warning"?"pending":"open"}">${escapeHtml(l.type)}</span></td><td>${escapeHtml(l.message)}</td><td>${new Date(l.time).toLocaleString("da-DK")}</td></tr>\`).join("")}</tbody></table>\`:'<div class="empty">Ingen logs endnu.</div>';
 }
 
 async function loadUsers(){
   try{
     const users=await api("/api/admin/users");
-    document.getElementById("userList").innerHTML=users.map(u=>`<div class="activity-item"><div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div><div style="flex:1"><b>${escapeHtml(u.name)}</b><small>${escapeHtml(u.email)} · ${escapeHtml(u.role)}</small></div>${u.id!==currentUser?.id?`<button class="btn small danger" onclick="deleteUser(${u.id})">Slet</button>`:""}</div>`).join("")||'<div class="empty">Ingen brugere.</div>';
+    document.getElementById("userList").innerHTML=users.map(u=>\`<div class="activity-item"><div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div><div style="flex:1"><b>${escapeHtml(u.name)}</b><small>${escapeHtml(u.email)} · ${escapeHtml(u.role)}</small></div>${u.id!==currentUser?.id?\`<button class="btn small danger" onclick="deleteUser(${u.id})">Slet</button>\`:""}</div>\`).join("")||'<div class="empty">Ingen brugere.</div>';
   }catch(e){toast(e.message)}
 }
 let currentUser=null;
@@ -582,7 +582,7 @@ function showLogin(){
   document.body.classList.add("locked");
   if(document.getElementById("loginScreen")) return;
   const box=document.createElement("div"); box.id="loginScreen";
-  box.innerHTML=`<div class="login-card"><div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div><h1>Log ind</h1><p>Log ind på dit ShardNote-kontrolpanel.</p><form onsubmit="login(event)"><div class="field"><label>Email</label><input id="loginEmail" type="email" required autocomplete="username"></div><div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="loginPassword" type="password" required autocomplete="current-password"></div><button class="btn primary" style="width:100%;margin-top:16px">Log ind</button><div id="loginError" style="color:var(--red);font-size:12px;margin-top:10px"></div></form></div>`;
+  box.innerHTML=\`<div class="login-card"><div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div><h1>Log ind</h1><p>Log ind på dit ShardNote-kontrolpanel.</p><form onsubmit="login(event)"><div class="field"><label>Email</label><input id="loginEmail" type="email" required autocomplete="username"></div><div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="loginPassword" type="password" required autocomplete="current-password"></div><button class="btn primary" style="width:100%;margin-top:16px">Log ind</button><div id="loginError" style="color:var(--red);font-size:12px;margin-top:10px"></div></form></div>\`;
   document.body.appendChild(box);
 }
 async function login(e){
