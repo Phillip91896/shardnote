@@ -33,7 +33,13 @@
     return String(value==null?"":value).replace(/[&<>"']/g,function(m){return {"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m];});
   }
   function apiCall(url,options){
-    return fetch(url,options||{}).then(function(r){return r.json().then(function(d){if(!r.ok)throw new Error(d.error||"Request failed");return d;});});
+    const request=Object.assign({credentials:"include",cache:"no-store"},options||{});
+    return fetch(url,request).then(function(r){
+      return r.json().then(function(d){
+        if(!r.ok) throw new Error(d.error||"Request failed");
+        return d;
+      });
+    });
   }
   function showPage(){
     document.querySelectorAll(".page").forEach(function(p){p.classList.toggle("active",p.id==="page-"+TEMPLATE_PAGE);});
@@ -43,15 +49,27 @@
   function selectTemplate(key){
     selectedTemplate=key;
     localStorage.setItem("shardnote_selected_template",key);
-    document.querySelectorAll("[data-template-key]").forEach(function(card){card.style.borderColor=card.dataset.templateKey===key?"rgba(109,93,252,.85)":"";});
-    const cfg=TEMPLATES.find(x=>x.key===key);
+    document.querySelectorAll("[data-template-key]").forEach(function(card){
+      const active=card.dataset.templateKey===key;
+      card.style.borderColor=active?"rgba(109,93,252,.9)":"";
+      card.style.boxShadow=active?"0 0 0 2px rgba(109,93,252,.18)":"";
+      card.setAttribute("aria-pressed",active?"true":"false");
+    });
+    const cfg=TEMPLATES.find(function(x){return x.key===key;});
     const title=document.getElementById("selectedTemplateTitle");
     const desc=document.getElementById("selectedTemplateDesc");
-    if(title)title.textContent=(cfg?cfg.icon+" ":"")+((cfg&&cfg.name)||key);
-    if(desc)desc.textContent=cfg?.desc||"";
+    const apply=document.getElementById("snTemplatePageApply");
+    const f5=document.getElementById("f5Options");
+    if(title) title.textContent=(cfg?cfg.icon+" ":"")+((cfg&&cfg.name)||key);
+    if(desc) desc.textContent=(cfg&&cfg.desc)||"";
+    if(apply) apply.textContent="🚀 Opsæt "+((cfg&&cfg.name)||"denne skitse");
     const custom=document.getElementById("customFeatures");
-    if(custom)custom.style.display=key==="custom"?"block":"none";
+    if(custom) custom.style.display=key==="custom"?"block":"none";
+    if(f5) f5.style.display=key==="f5-vip"?"block":"none";
+    const result=document.getElementById("snTemplatePageResult");
+    if(result) result.innerHTML="";
   }
+  window.selectDiscordTemplate=selectTemplate;
   async function applyTemplate(){
     const guildId=document.getElementById("snTemplatePageGuild")?.value;
     const result=document.getElementById("snTemplatePageResult");
@@ -81,11 +99,11 @@
     showPage();
     const host=document.getElementById("discordTemplatesPage");if(!host)return;
     const cards=TEMPLATES.map(function(t){
-      return '<button type="button" class="card template-card" data-template-key="'+esc(t.key)+'" style="text-align:left;cursor:pointer;border:1px solid var(--border);padding:16px">'+
+      return '<div role="button" tabindex="0" aria-pressed="false" class="card template-card" data-template-key="'+esc(t.key)+'" style="text-align:left;cursor:pointer;border:1px solid var(--border);padding:16px;transition:.15s">'+
         '<div style="font-size:25px">'+t.icon+'</div><h3 style="margin:8px 0 5px">'+esc(t.name)+'</h3>'+
         '<p style="margin:0;color:var(--muted);font-size:12px;line-height:1.5">'+esc(t.desc)+'</p>'+
         '<div style="margin-top:10px;color:var(--accent2);font-size:11px;font-weight:700">'+esc(t.features.join(" · "))+'</div>'+
-      '</button>';
+      '</div>';
     }).join("");
     const customChecks=FEATURE_KEYS.map(function(item){
       return '<label class="field" style="display:block;margin-top:9px"><input type="checkbox" id="tpl_'+item[0]+'" checked> <b>'+esc(item[1])+'</b><br><span style="color:var(--muted);font-size:11px">'+esc(item[2])+'</span></label>';
@@ -97,11 +115,11 @@
       '</div>'+
       '<div class="feature-grid">'+cards+'</div>'+
       '<div class="card" style="margin-top:18px">'+
-        '<div class="section-title"><div><h2 id="selectedTemplateTitle">⭐ F5 VIP</h2><span id="selectedTemplateDesc">Vælg en skitse ovenfor.</span></div></div>'+
+        '<div class="section-title"><div><h2 id="selectedTemplateTitle">⭐ F5 VIP</h2><span id="selectedTemplateDesc">Vælg en skitse ovenfor.</span></div><div class="badge open">Valgt skitse</div></div>'+
         '<div class="field"><label>Discord-server</label><select id="snTemplatePageGuild"></select></div>'+
         '<div id="customFeatures" style="display:none;margin-top:16px"><h3 style="margin-bottom:4px">🧰 Vælg funktioner</h3>'+customChecks+'</div>'+
         '<div id="f5Options" style="margin-top:16px">'+
-          '<div style="color:var(--muted);font-size:12px;margin-bottom:8px">F5 VIP: vælg selv hvilke roller og kanaler der skal have <b>F5</b> foran navnet.</div>'+
+          '<div style="color:var(--muted);font-size:12px;margin-bottom:8px"><b>F5 VIP:</b> vælg selv hvilke roller og kanaler der skal have <b>F5</b> foran navnet.</div>'+
           '<div class="grid two">'+
             '<div><b>Roller</b>'+
               '<div><label><input type="checkbox" data-prefix-role="owner"> Ejer</label></div>'+
@@ -129,7 +147,17 @@
       '</div>';
 
     document.querySelectorAll("[data-template-key]").forEach(function(card){
-      card.addEventListener("click",function(){selectTemplate(card.dataset.templateKey);});
+      card.addEventListener("click",function(){
+        selectTemplate(card.dataset.templateKey);
+        document.getElementById("selectedTemplateTitle")?.scrollIntoView({behavior:"smooth",block:"center"});
+      });
+      card.addEventListener("keydown",function(event){
+        if(event.key==="Enter"||event.key===" "){
+          event.preventDefault();
+          selectTemplate(card.dataset.templateKey);
+          document.getElementById("selectedTemplateTitle")?.scrollIntoView({behavior:"smooth",block:"center"});
+        }
+      });
     });
     selectTemplate(selectedTemplate);
 
