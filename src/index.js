@@ -710,7 +710,7 @@ body.locked > .app{display:none}
   <div><div class="eyebrow">Discord Control Center</div><h1 id="pageTitle">Dashboard</h1></div>
   <div style="display:flex;align-items:center;gap:10px">
     <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Connecting…</span></div>
-    <button class="btn small" onclick="logout()">Log ud</button>
+    <button class="btn primary small" onclick="addBotToDiscord()">+ Add Bot to Discord</button><button class="btn small" onclick="logout()">Log ud</button>
   </div>
 </header>
 
