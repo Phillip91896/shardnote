@@ -514,6 +514,26 @@ app.delete("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) =
 });
 
 
+app.get("/api/bot/invite", requireAuth, (req, res) => {
+  if (!discordReady || !client?.user?.id) {
+    return res.status(503).json({ error: "The Discord bot is not online yet." });
+  }
+
+  const clientId = client.user.id;
+  const permissions = "274878221376";
+  const inviteUrl =
+    "https://discord.com/oauth2/authorize" +
+    `?client_id=${encodeURIComponent(clientId)}` +
+    "&scope=bot%20applications.commands" +
+    `&permissions=${permissions}`;
+
+  res.json({
+    url: inviteUrl,
+    clientId,
+    permissions
+  });
+});
+
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
