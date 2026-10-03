@@ -321,9 +321,13 @@ function unlockDashboard(){
   loadStats();
 }
 
-async function startSubscription(){
+async function startSubscription(plan="member"){
   try{
-    const r=await fetch("/api/billing/create-checkout",{method:"POST"});
+    const r=await fetch("/api/billing/create-checkout",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({plan})
+    });
     const data=await r.json();
     if(!r.ok) throw new Error(data.error||"Betalingssiden kunne ikke åbnes.");
     window.location.href=data.url;
@@ -374,13 +378,23 @@ function showLanding(){
     <div style="font-size:12px;color:var(--accent2);font-weight:800;text-transform:uppercase;letter-spacing:.12em">Discord Control Center</div>
     <h1 style="font-size:38px;margin:12px 0 10px">Få adgang til hele ShardNote</h1>
     <p style="max-width:560px;margin:0 auto;color:var(--muted);font-size:15px;line-height:1.6">Styr din Discord-bot fra ét samlet kontrolpanel med moderation, tickets, AutoMod, levels, economy, giveaways, logs og meget mere.</p>
-    <div class="card" style="margin:26px auto 18px;max-width:390px;text-align:left">
-      <div style="font-size:13px;color:var(--muted)">ShardNote Premium</div>
-      <div style="font-size:42px;font-weight:900;margin:5px 0">2,67 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
-      <div style="color:var(--accent2);font-size:12px;font-weight:800">10 dage gratis</div>
-      <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Fuld adgang til dashboardet</div>
-      <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Adgang til alle bot-funktioner</div>
-      <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Løbende adgang så længe abonnementet er aktivt</div>
+    <div style="max-width:760px;margin:26px auto 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;text-align:left">
+      <div class="card" style="border-color:rgba(109,93,252,.45)">
+        <div style="font-size:13px;color:var(--muted)">ShardNote Member</div>
+        <div style="font-size:38px;font-weight:900;margin:5px 0">2,67 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
+        <div style="color:var(--accent2);font-size:12px;font-weight:800">10 dage gratis</div>
+        <div style="color:var(--green);font-size:12px;margin-top:8px">✓ Standardfunktioner</div>
+        <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Eget dashboard og egne data</div>
+        <button class="btn primary" style="width:100%;margin-top:14px" onclick="showRegister('member')">Vælg Member</button>
+      </div>
+      <div class="card" style="border-color:rgba(66,211,146,.35)">
+        <div style="font-size:13px;color:var(--muted)">ShardNote Member Plus</div>
+        <div style="font-size:38px;font-weight:900;margin:5px 0">4,68 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
+        <div style="color:var(--accent2);font-size:12px;font-weight:800">10 dage gratis</div>
+        <div style="color:var(--green);font-size:12px;margin-top:8px">✓ Alt fra Member</div>
+        <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Flere bot- og serverfunktioner</div>
+        <button class="btn primary" style="width:100%;margin-top:14px" onclick="showRegister('member_plus')">Vælg Member Plus</button>
+      </div>
     </div>
     <div style="max-width:680px;margin:22px auto 24px;text-align:left">
       <div style="font-size:18px;font-weight:800;margin-bottom:12px">Alt dette får du i ShardNote</div>
@@ -421,10 +435,13 @@ function showPaywall(){
   box.id="loginScreen";
   box.innerHTML=`<div class="login-card" style="text-align:center">
     <div class="brand" style="justify-content:center;padding:0 0 16px"><div class="brand-mark">S</div><span>ShardNote</span></div>
-    <h1>Abonnement kræves</h1>
-    <p>Du får <b>10 dage gratis</b>. Derefter koster ShardNote <b>2,67 € pr. måned</b>.</p>
-    <button class="btn primary" style="width:100%;margin-top:8px" onclick="startSubscription()">Start 10 dage gratis</button>
-    <div style="font-size:12px;color:var(--muted);margin-top:12px">Når betalingen er godkendt, gemmes dit abonnement automatisk på kontoen. Næste gang du logger ind, går du direkte ind på dashboardet.</div>
+    <h1>Vælg din ShardNote-pakke</h1>
+    <p>Du får <b>10 dage gratis</b>. Vælg Member til <b>2,67 €</b> eller Member Plus til <b>4,68 € pr. måned</b>.</p>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+      <button class="btn primary" onclick="startSubscription('member')">Member · 2,67 €</button>
+      <button class="btn primary" onclick="startSubscription('member_plus')">Member Plus · 4,68 €</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:12px">Når betalingen er godkendt, gemmes din pakke automatisk på kontoen. Næste gang du logger ind, går du direkte ind på dashboardet.</div>
     <button class="btn small" style="margin-top:18px" onclick="logout()">Log ud</button>
     <div id="paymentError" style="color:var(--red);font-size:12px;margin-top:12px"></div>
   </div>`;
@@ -454,8 +471,9 @@ function showLogin(){
   document.body.appendChild(box);
 }
 
-function showRegister(){
+function showRegister(preferredPlan="member"){
   document.body.classList.add("locked");
+  window.shardnotePreferredPlan=preferredPlan;
 
   const box=document.getElementById("loginScreen") || document.createElement("div");
   box.id="loginScreen";
