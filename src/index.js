@@ -916,7 +916,7 @@ app.get("/api/stats", async (req, res) => {
         ? client.guilds.cache.reduce((total, guild) => total + (guild.memberCount || 0), 0)
         : 0,
       tickets: openTickets,
-      commands: 5,
+      commands: client.dashboardCommands?.length || 0,
       uptime: Math.floor((Date.now() - startedAt) / 1000)
     });
   } catch (error) {
@@ -1063,10 +1063,12 @@ app.post("/api/messages", async (req, res) => {
 });
 
 app.get("/api/commands", (req, res) => {
-  res.json([
-    { name: "ping", description: "Checks whether ShardNote is responding.", usage: "!ping" },
-    { name: "ticket", description: "Creates a support ticket.", usage: "!ticket <title>" }
-  ]);
+  const list = client.dashboardCommands || [];
+  res.json(list.map(command => ({
+    name: command.name,
+    description: command.description,
+    usage: "/" + command.name
+  })));
 });
 
 app.post("/api/commands", async (req, res) => {
@@ -1277,6 +1279,134 @@ app.get("/api/logs", requireAuth, requireAdmin, requireLogsAccess, async (req, r
   }
 });
 
+
+app.get("/api/bot/guilds", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!discordReady) return res.json([]);
+    const guilds = [...client.guilds.cache.values()]
+      .map(guild => ({
+        id: guild.id,
+        name: guild.name,
+        memberCount: guild.memberCount || 0,
+        channelCount: guild.channels.cache.size
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json(guilds);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente Discord-servere." });
+  }
+});
+
+app.get("/api/bot/guilds/:guildId/settings", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
+    const guild = client.guilds.cache.get(String(req.params.guildId));
+    if (!guild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
+
+    let settings;
+    if (client.dashboardGetGuildSettings) {
+      settings = await client.dashboardGetGuildSettings(guild.id);
+    } else if (db) {
+      await db.query("INSERT INTO public.guild_settings (guild_id) VALUES ($1) ON CONFLICT (guild_id) DO NOTHING", [guild.id]);
+      const result = await db.query("SELECT * FROM public.guild_settings WHERE guild_id = $1 LIMIT 1", [guild.id]);
+      settings = result.rows[0] || {};
+    } else {
+      settings = {};
+    }
+
+    const roles = [...guild.roles.cache.values()]
+      .filter(role => role.id !== guild.id && !role.managed)
+      .map(role => ({ id: role.id, name: role.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const channels = [...guild.channels.cache.values()]
+      .filter(channel => channel.isTextBased?.() && channel.type !== 4)
+      .map(channel => ({ id: channel.id, name: channel.name, type: channel.type }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    const categories = [...guild.channels.cache.values()]
+      .filter(channel => channel.type === 4)
+      .map(channel => ({ id: channel.id, name: channel.name }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    res.json({
+      guild: { id: guild.id, name: guild.name, memberCount: guild.memberCount || 0 },
+      settings,
+      roles,
+      channels,
+      categories
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente serverindstillinger." });
+  }
+});
+
+app.patch("/api/bot/guilds/:guildId/settings", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
+    const guild = client.guilds.cache.get(String(req.params.guildId));
+    if (!guild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
+
+    const allowed = [
+      "log_channel_id", "welcome_channel_id", "welcome_message",
+      "leave_channel_id", "leave_message", "autorole_id", "support_role_id",
+      "ticket_category_id", "verification_role_id", "suggestion_channel_id",
+      "automod_enabled", "invite_filter", "levels_enabled", "economy_enabled",
+      "anti_raid_enabled", "lockdown"
+    ];
+
+    const updates = {};
+    for (const key of allowed) {
+      if (!Object.prototype.hasOwnProperty.call(req.body || {}, key)) continue;
+      const value = req.body[key];
+
+      if (key.endsWith("_enabled") || key === "invite_filter" || key === "lockdown") {
+        if (typeof value !== "boolean") return res.status(400).json({ error: "Ugyldig værdi for " + key + "." });
+        updates[key] = value;
+      } else if (key === "welcome_message" || key === "leave_message") {
+        updates[key] = String(value ?? "").slice(0, 1000);
+      } else {
+        updates[key] = value ? String(value).slice(0, 40) : null;
+      }
+    }
+
+    if (!Object.keys(updates).length) {
+      return res.status(400).json({ error: "Ingen indstillinger blev sendt." });
+    }
+
+    if (client.dashboardSetGuildSetting) {
+      for (const [key, value] of Object.entries(updates)) {
+        if (key === "lockdown" && client.dashboardSetLockdown) {
+          await client.dashboardSetLockdown(guild.id, value);
+        } else {
+          await client.dashboardSetGuildSetting(guild.id, key, value);
+        }
+      }
+    } else if (db) {
+      await db.query("INSERT INTO public.guild_settings (guild_id) VALUES ($1) ON CONFLICT (guild_id) DO NOTHING", [guild.id]);
+      const sets = Object.keys(updates).map((key, i) => key + " = $" + (i + 1));
+      const values = Object.values(updates);
+      values.push(guild.id);
+      await db.query(
+        "UPDATE public.guild_settings SET " + sets.join(", ") + ", updated_at = NOW() WHERE guild_id = $" + values.length,
+        values
+      );
+    }
+
+    const settings = client.dashboardGetGuildSettings
+      ? await client.dashboardGetGuildSettings(guild.id)
+      : updates;
+
+    log("settings", "Bot-funktioner opdateret for " + guild.name);
+    res.json(settings);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message || "Serverindstillingerne kunne ikke gemmes." });
+  }
+});
+
 const html = `<!DOCTYPE html>
 <html lang="da">
 <head>
@@ -1303,7 +1433,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 .activity{display:grid;gap:11px}.activity-item{display:flex;gap:11px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #22222e}.activity-item:last-child{border:0}.activity-icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:#1c1b2b}.activity-item b{font-size:13px}.activity-item small{display:block;color:var(--muted);margin-top:3px}
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:grid;gap:7px}.field label{font-size:12px;color:var(--muted)}.field input,.field textarea,.field select{width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none}.field textarea{min-height:120px;resize:vertical}.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent)}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:12px}
-.switch-row{display:flex;align-items:center;justify-content:space-between;padding:15px 0;border-bottom:1px solid #22222e}.switch{width:48px;height:26px;border-radius:99px;background:#292936;padding:3px;transition:.2s}.switch i{display:block;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}.switch.on{background:var(--accent)}.switch.on i{transform:translateX(22px)}
+.switch-row{display:flex;align-items:center;justify-content:space-between;padding:15px 0;border-bottom:1px solid #22222e}.switch{width:48px;height:26px;border-radius:99px;background:#292936;padding:3px;transition:.2s}.switch i{display:block;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}.switch.on{background:var(--accent)}.switch.on i{transform:translateX(22px)}.feature-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.feature-card{background:#0e0e16;border:1px solid var(--border);border-radius:14px;padding:16px}.feature-card h3{margin:0 0 7px;font-size:14px}.feature-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}.feature-status{display:inline-flex;margin-top:10px;padding:5px 8px;border-radius:999px;background:rgba(66,211,146,.12);color:var(--green);font-size:11px;font-weight:800}.feature-command{display:inline-block;margin-top:10px;font-size:11px;color:var(--accent2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.feature-select{min-height:42px}.feature-save{position:sticky;bottom:12px;z-index:3}@media(max-width:1050px){.feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.feature-grid{grid-template-columns:1fr}}
 
 body.locked > .app{display:none}
 #loginScreen{position:fixed;inset:0;z-index:100;background:radial-gradient(circle at 50% 0%,#19152e 0,#07070b 45%);display:grid;place-items:center;padding:20px}
@@ -1323,6 +1453,7 @@ body.locked > .app{display:none}
     <button data-page="tickets"><span class="icon">🎫</span><span>Tickets</span></button>
     <button data-page="messages"><span class="icon">✉</span><span>Beskeder</span></button>
     <button data-page="commands"><span class="icon">⌘</span><span>Commands</span></button>
+    <button data-page="features"><span class="icon">🧩</span><span>Bot-funktioner</span></button>
     <button data-page="music"><span class="icon">♫</span><span>Musik</span></button>
     <button data-page="settings"><span class="icon">⚙</span><span>Indstillinger</span></button>
     <button data-page="logs"><span class="icon">◷</span><span>Logs</span></button>
@@ -1350,6 +1481,12 @@ body.locked > .app{display:none}
   <div class="grid two" style="margin-top:18px">
     <div class="card"><div class="section-title"><h2>Seneste tickets</h2><button class="btn small" data-button-label="dashboardSeeAll" onclick="navigate('tickets')">Se alle</button></div><div id="dashTickets"></div></div>
     <div class="card"><div class="section-title"><h2>Aktivitet</h2><button class="btn small" onclick="navigate('logs')">Alle logs</button></div><div id="dashLogs" class="activity"></div></div>
+  </div>
+</section>
+
+<section class="page" id="page-features">
+  <div id="botFeaturesPage">
+    <div class="card"><div class="empty">Indlæser bot-funktioner…</div></div>
   </div>
 </section>
 
