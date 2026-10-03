@@ -142,6 +142,36 @@ async function initDatabase() {
 
   await db.query(`
     ALTER TABLE public.tickets
+      ADD COLUMN IF NOT EXISTS owner_user_id BIGINT;
+    ALTER TABLE public.messages
+      ADD COLUMN IF NOT EXISTS owner_user_id BIGINT;
+    ALTER TABLE public.logs
+      ADD COLUMN IF NOT EXISTS owner_user_id BIGINT;
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.account_settings (
+      user_id BIGINT PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
+      prefix VARCHAR(5) NOT NULL DEFAULT '!',
+      maintenance BOOLEAN NOT NULL DEFAULT FALSE,
+      auto_reply BOOLEAN NOT NULL DEFAULT TRUE,
+      welcome_messages BOOLEAN NOT NULL DEFAULT TRUE,
+      button_labels JSONB NOT NULL DEFAULT '{}'::jsonb,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.account_guilds (
+      user_id BIGINT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+      guild_id VARCHAR(32) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, guild_id)
+    )
+  `);
+
+  await db.query(`
+    ALTER TABLE public.tickets
       ADD COLUMN IF NOT EXISTS guild_id VARCHAR(32),
       ADD COLUMN IF NOT EXISTS user_id VARCHAR(32),
       ADD COLUMN IF NOT EXISTS channel_id VARCHAR(32),
@@ -290,11 +320,12 @@ const state = {
   }
 };
 
-function log(type, message) {
+function log(type, message, ownerUserId = null) {
   const item = {
     id: Date.now() + Math.random(),
     type,
     message,
+    ownerUserId: ownerUserId || null,
     time: new Date().toISOString()
   };
   state.logs.unshift(item);
@@ -302,8 +333,8 @@ function log(type, message) {
 
   if (db) {
     db.query(
-      "INSERT INTO public.logs (type, message) VALUES ($1, $2)",
-      [type, message]
+      "INSERT INTO public.logs (type, message, owner_user_id) VALUES ($1, $2, $3)",
+      [type, message, ownerUserId || null]
     ).catch(error => console.error("[ShardNote] Log persistence failed:", error.message));
   }
 }
@@ -497,21 +528,43 @@ function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") return res.status(403).json({ error: "Kun administratorer har adgang." });
   next();
 }
+function requirePaid(req, res, next) {
+  if (!hasPaidAccess(req.user)) return res.status(402).json({ requiresSubscription: true, error: "Et aktivt ShardNote-abonnement kræves." });
+  next();
+}
+async function isGuildLinkedToUser(userId, guildId) {
+  if (!db) return false;
+  const result = await db.query(
+    "SELECT 1 FROM public.account_guilds WHERE user_id = $1 AND guild_id = $2 LIMIT 1",
+    [userId, String(guildId)]
+  );
+  return result.rowCount > 0;
+}
 
-async function saveTicket({ title, user, status = "open", priority = "normal" }) {
+async function saveTicket({ title, user, status = "open", priority = "normal", ownerUserId = null, guildId = null }) {
   const cleanTitle = String(title || "New ticket").slice(0, 120);
   const cleanUser = String(user || "Dashboard user").slice(0, 80);
   const cleanStatus = ["open", "pending", "closed"].includes(status) ? status : "open";
   const cleanPriority = ["low", "normal", "high"].includes(priority) ? priority : "normal";
+  let resolvedOwnerUserId = ownerUserId || null;
+
+  if (!resolvedOwnerUserId && db && guildId) {
+    const owner = await db.query(
+      "SELECT user_id FROM public.account_guilds WHERE guild_id = $1 ORDER BY created_at ASC LIMIT 1",
+      [String(guildId)]
+    );
+    resolvedOwnerUserId = owner.rows[0]?.user_id || null;
+  }
 
   if (db) {
     const result = await db.query(
-      `INSERT INTO public.tickets (title, user_name, status, priority)
-       VALUES ($1, $2, $3, $4)
+      `INSERT INTO public.tickets (title, user_name, status, priority, owner_user_id)
+       VALUES ($1, $2, $3, $4, $5)
        RETURNING id, title, user_name AS "user", status, priority, created_at AS "createdAt"`,
-      [cleanTitle, cleanUser, cleanStatus, cleanPriority]
+      [cleanTitle, cleanUser, cleanStatus, cleanPriority, resolvedOwnerUserId]
     );
     const ticket = result.rows[0];
+    ticket.ownerUserId = resolvedOwnerUserId;
     state.tickets.unshift(ticket);
     state.tickets = state.tickets.slice(0, 500);
     return ticket;
@@ -523,6 +576,7 @@ async function saveTicket({ title, user, status = "open", priority = "normal" })
     user: cleanUser,
     status: cleanStatus,
     priority: cleanPriority,
+    ownerUserId: resolvedOwnerUserId,
     createdAt: new Date().toISOString()
   };
   state.tickets.unshift(ticket);
@@ -1031,37 +1085,33 @@ app.use("/api", (req, res, next) => {
 
 app.get("/api/stats", async (req, res) => {
   try {
-    // Discord server/member statistics are global to the bot connection.
-    // Never expose them to a normal ShardNote account until its Discord server
-    // has been explicitly linked to that account.
-    if (req.user?.role !== "admin") {
-      return res.json({
-        botOnline: false,
-        servers: 0,
-        users: 0,
-        tickets: 0,
-        commands: client.dashboardCommands?.length || 0,
-        uptime: Math.floor((Date.now() - startedAt) / 1000),
-        linked: false
-      });
+    let linkedGuildIds = [];
+    if (db) {
+      const linked = await db.query("SELECT guild_id FROM public.account_guilds WHERE user_id = $1", [req.user.id]);
+      linkedGuildIds = linked.rows.map(row => String(row.guild_id));
     }
 
-    let openTickets = state.tickets.filter(t => t.status !== "closed").length;
+    const linkedGuilds = discordReady
+      ? [...client.guilds.cache.values()].filter(guild => linkedGuildIds.includes(String(guild.id)))
+      : [];
+
+    let openTickets = state.tickets.filter(t => t.ownerUserId === req.user.id && t.status !== "closed").length;
     if (db) {
-      const result = await db.query("SELECT COUNT(*)::int AS count FROM public.tickets WHERE status <> 'closed'");
+      const result = await db.query(
+        "SELECT COUNT(*)::int AS count FROM public.tickets WHERE owner_user_id = $1 AND status <> 'closed'",
+        [req.user.id]
+      );
       openTickets = result.rows[0].count;
     }
 
     res.json({
-      botOnline: discordReady,
-      servers: discordReady ? client.guilds.cache.size : 0,
-      users: discordReady
-        ? client.guilds.cache.reduce((total, guild) => total + (guild.memberCount || 0), 0)
-        : 0,
+      botOnline: linkedGuilds.length > 0,
+      servers: linkedGuilds.length,
+      users: linkedGuilds.reduce((total, guild) => total + (guild.memberCount || 0), 0),
       tickets: openTickets,
       commands: client.dashboardCommands?.length || 0,
       uptime: Math.floor((Date.now() - startedAt) / 1000),
-      linked: true
+      linked: linkedGuilds.length > 0
     });
   } catch (error) {
     console.error(error);
@@ -1074,11 +1124,13 @@ app.get("/api/tickets", async (req, res) => {
     if (db) {
       const result = await db.query(`
         SELECT id, title, user_name AS "user", status, priority, created_at AS "createdAt"
-        FROM public.tickets ORDER BY created_at DESC LIMIT 500
-      `);
-      state.tickets = result.rows;
+        FROM public.tickets
+        WHERE owner_user_id = $1
+        ORDER BY created_at DESC LIMIT 500
+      `, [req.user.id]);
+      state.tickets = result.rows.map(row => ({ ...row, ownerUserId: req.user.id }));
     }
-    res.json(state.tickets);
+    res.json(state.tickets.filter(item => String(item.ownerUserId || "") === String(req.user.id)));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Kunne ikke hente tickets." });
@@ -1091,9 +1143,10 @@ app.post("/api/tickets", async (req, res) => {
       title: req.body.title,
       user: req.body.user,
       status: "open",
-      priority: req.body.priority
+      priority: req.body.priority,
+      ownerUserId: req.user.id
     });
-    log("ticket", `Ticket #${ticket.id} created from dashboard`);
+    log("ticket", `Ticket #${ticket.id} created from dashboard`, req.user.id);
     res.status(201).json(ticket);
   } catch (error) {
     console.error(error);
@@ -1108,23 +1161,24 @@ app.patch("/api/tickets/:id", async (req, res) => {
         `UPDATE public.tickets
          SET status = COALESCE($1, status),
              priority = COALESCE($2, priority)
-         WHERE id = $3
+         WHERE id = $3 AND owner_user_id = $4
          RETURNING id, title, user_name AS "user", status, priority, created_at AS "createdAt"`,
         [
           ["open", "pending", "closed"].includes(req.body.status) ? req.body.status : null,
           ["low", "normal", "high"].includes(req.body.priority) ? req.body.priority : null,
-          req.params.id
+          req.params.id,
+          req.user.id
         ]
       );
       if (!result.rowCount) return res.status(404).json({ error: "Ticket not found" });
       const ticket = result.rows[0];
       const index = state.tickets.findIndex(t => String(t.id) === String(req.params.id));
       if (index >= 0) state.tickets[index] = ticket;
-      log("ticket", `Ticket #${ticket.id} updated`);
+      log("ticket", `Ticket #${ticket.id} updated`, req.user.id);
       return res.json(ticket);
     }
 
-    const ticket = state.tickets.find(t => String(t.id) === String(req.params.id));
+    const ticket = state.tickets.find(t => String(t.id) === String(req.params.id) && String(t.ownerUserId || "") === String(req.user.id));
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
     if (["open", "pending", "closed"].includes(req.body.status)) ticket.status = req.body.status;
     if (["low", "normal", "high"].includes(req.body.priority)) ticket.priority = req.body.priority;
@@ -1139,15 +1193,15 @@ app.patch("/api/tickets/:id", async (req, res) => {
 app.delete("/api/tickets/:id", async (req, res) => {
   try {
     if (db) {
-      const result = await db.query("DELETE FROM public.tickets WHERE id = $1 RETURNING id", [req.params.id]);
+      const result = await db.query("DELETE FROM public.tickets WHERE id = $1 AND owner_user_id = $2 RETURNING id", [req.params.id, req.user.id]);
       if (!result.rowCount) return res.status(404).json({ error: "Ticket not found" });
       state.tickets = state.tickets.filter(t => String(t.id) !== String(req.params.id));
-      log("ticket", `Ticket #${req.params.id} deleted`);
+      log("ticket", `Ticket #${req.params.id} deleted`, req.user.id);
       return res.json({ ok: true });
     }
 
     const before = state.tickets.length;
-    state.tickets = state.tickets.filter(t => String(t.id) !== String(req.params.id));
+    state.tickets = state.tickets.filter(t => !(String(t.id) === String(req.params.id) && String(t.ownerUserId || "") === String(req.user.id)));
     if (before === state.tickets.length) return res.status(404).json({ error: "Ticket not found" });
     log("ticket", `Ticket #${req.params.id} deleted`);
     res.json({ ok: true });
@@ -1162,11 +1216,13 @@ app.get("/api/messages", async (req, res) => {
     if (db) {
       const result = await db.query(`
         SELECT id, channel, content, author, created_at AS "time"
-        FROM public.messages ORDER BY created_at DESC LIMIT 500
-      `);
-      state.messages = result.rows;
+        FROM public.messages
+        WHERE owner_user_id = $1
+        ORDER BY created_at DESC LIMIT 500
+      `, [req.user.id]);
+      state.messages = result.rows.map(row => ({ ...row, ownerUserId: req.user.id }));
     }
-    res.json(state.messages);
+    res.json(state.messages.filter(item => String(item.ownerUserId || "") === String(req.user.id)));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Kunne ikke hente beskeder." });
@@ -1184,7 +1240,7 @@ app.post("/api/messages", async (req, res) => {
           `INSERT INTO public.messages (channel, content, author)
            VALUES ($1, $2, $3)
            RETURNING id, channel, content, author, created_at AS "time"`,
-          [channel, content.slice(0, 2000), req.user?.email || "Dashboard"]
+          [channel, content.slice(0, 2000), req.user?.email || "Dashboard", req.user.id]
         )
       : null;
 
@@ -1219,7 +1275,7 @@ app.post("/api/commands", async (req, res) => {
   const command = String(req.body.command || "").trim();
   if (!command) return res.status(400).json({ error: "Command is required" });
 
-  log("command", `Dashboard command: ${command}`);
+  log("command", `Dashboard command: ${command}`, req.user.id);
   res.json({
     ok: true,
     message: discordReady
@@ -1231,15 +1287,13 @@ app.post("/api/commands", async (req, res) => {
 app.get("/api/settings", requireAuth, requireAdmin, async (req, res) => {
   try {
     if (db) {
+      await db.query("INSERT INTO public.account_settings (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", [req.user.id]);
       const result = await db.query(
-        `SELECT prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages"
-         FROM public.bot_settings WHERE id = 1 LIMIT 1`
+        `SELECT prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages", button_labels AS "buttonLabels"
+         FROM public.account_settings WHERE user_id = $1 LIMIT 1`,
+        [req.user.id]
       );
       if (result.rows[0]) state.settings = result.rows[0];
-      const buttonLabelResult = await db.query("SELECT message FROM public.logs WHERE type = 'button_labels' ORDER BY created_at DESC LIMIT 1");
-      if (buttonLabelResult.rows[0]) {
-        try { state.settings.buttonLabels = JSON.parse(buttonLabelResult.rows[0].message) || {}; } catch (_) {}
-      }
     }
     res.json(state.settings);
   } catch (error) {
@@ -1259,27 +1313,30 @@ app.patch("/api/settings", requireAuth, requireAdmin, async (req, res) => {
     if (req.body.buttonLabels && typeof req.body.buttonLabels === "object") state.settings.buttonLabels = req.body.buttonLabels;
 
     if (db) {
+      await db.query("INSERT INTO public.account_settings (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", [req.user.id]);
       const result = await db.query(
-        `UPDATE public.bot_settings
+        `UPDATE public.account_settings
          SET prefix = $1,
              maintenance = $2,
              auto_reply = $3,
              welcome_messages = $4,
+             button_labels = $5,
              updated_at = NOW()
-         WHERE id = 1
-         RETURNING prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages"`,
+         WHERE user_id = $6
+         RETURNING prefix, maintenance, auto_reply AS "autoReply", welcome_messages AS "welcomeMessages", button_labels AS "buttonLabels"`,
         [
           state.settings.prefix,
           state.settings.maintenance,
           state.settings.autoReply,
-          state.settings.welcomeMessages
+          state.settings.welcomeMessages,
+          JSON.stringify(state.settings.buttonLabels || {}),
+          req.user.id
         ]
       );
       if (result.rows[0]) state.settings = result.rows[0];
     }
 
-    if (db && req.body.buttonLabels) await db.query("INSERT INTO public.logs (type, message) VALUES ($1, $2)", ["button_labels", JSON.stringify(state.settings.buttonLabels || {})]);
-    log("settings", "Dashboard settings updated");
+    log("settings", "Dashboard settings updated", req.user.id);
     res.json(state.settings);
   } catch (error) {
     console.error(error);
@@ -1407,10 +1464,10 @@ app.get("/api/logs", requireAuth, requireAdmin, requireLogsAccess, async (req, r
       const result = await db.query(
         `SELECT id, type, message, created_at AS "time"
          FROM public.logs
-         WHERE type = $1
+         WHERE type = $1 AND owner_user_id = $2
          ORDER BY created_at DESC
          LIMIT 500`,
-        [config.type]
+        [config.type, req.user.id]
       );
       return res.json(result.rows);
     }
@@ -1424,10 +1481,13 @@ app.get("/api/logs", requireAuth, requireAdmin, requireLogsAccess, async (req, r
 });
 
 
-app.get("/api/bot/guilds", requireAuth, requireAdmin, async (req, res) => {
+app.get("/api/bot/guilds", requireAuth, requirePaid, async (req, res) => {
   try {
-    if (!discordReady) return res.json([]);
+    if (!discordReady || !db) return res.json([]);
+    const linked = await db.query("SELECT guild_id FROM public.account_guilds WHERE user_id = $1", [req.user.id]);
+    const linkedIds = new Set(linked.rows.map(row => String(row.guild_id)));
     const guilds = [...client.guilds.cache.values()]
+      .filter(guild => linkedIds.has(String(guild.id)))
       .map(guild => ({
         id: guild.id,
         name: guild.name,
@@ -1442,11 +1502,12 @@ app.get("/api/bot/guilds", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-app.get("/api/bot/guilds/:guildId/settings", requireAuth, requireAdmin, async (req, res) => {
+app.get("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, async (req, res) => {
   try {
     if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
     const guild = client.guilds.cache.get(String(req.params.guildId));
     if (!guild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
+    if (!(await isGuildLinkedToUser(req.user.id, guild.id))) return res.status(403).json({ error: "Denne Discord-server er ikke koblet til din ShardNote-konto." });
 
     let settings;
     if (client.dashboardGetGuildSettings) {
@@ -1487,7 +1548,7 @@ app.get("/api/bot/guilds/:guildId/settings", requireAuth, requireAdmin, async (r
   }
 });
 
-app.patch("/api/bot/guilds/:guildId/settings", requireAuth, requireAdmin, async (req, res) => {
+app.patch("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, async (req, res) => {
   try {
     if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
     const guild = client.guilds.cache.get(String(req.params.guildId));
