@@ -35,7 +35,7 @@ function navigate(page){
   if(page==="commands") loadCommands();
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
-  if(page==="admin") loadUsers();
+  if(page==="admin"){ loadUsers(); loadLoginHistory(); loadDatabaseSummary(); }
 }
 
 async function api(url, options){
@@ -137,6 +137,27 @@ async function loadUsers(){
     }).join("")||'<div class="empty">Ingen brugere.</div>';
   }catch(e){toast(e.message)}
 }
+async function loadLoginHistory(){
+  try{
+    const items=await api("/api/admin/login-history?limit=200");
+    document.getElementById("loginHistoryList").innerHTML=items.length
+      ? `<div class="table-wrap"><table class="table"><thead><tr><th>Tid</th><th>Bruger</th><th>Resultat</th><th>IP</th><th>Sted</th><th>Browser/enhed</th></tr></thead><tbody>${items.map(item=>{
+          const place=[item.city,item.country].filter(Boolean).join(", ")||"Ukendt";
+          return `<tr><td>${new Date(item.createdAt).toLocaleString("da-DK")}</td><td>${escapeHtml(item.userName||item.userEmail||"Ukendt")}</td><td><span class="badge ${item.success?"open":"closed"}">${item.success?"Succes":"Fejlet"}</span></td><td>${escapeHtml(item.ipAddress||"Ukendt")}</td><td>${escapeHtml(place)}</td><td title="${escapeHtml(item.userAgent||"")}">${escapeHtml(item.userAgent||"Ukendt")}</td></tr>`;
+        }).join("")}</tbody></table></div>`
+      : '<div class="empty">Ingen login-historik endnu.</div>';
+  }catch(e){toast(e.message)}
+}
+
+async function loadDatabaseSummary(){
+  try{
+    const data=await api("/api/admin/database-summary");
+    document.getElementById("databaseStatus").textContent=data.connected?"Supabase forbundet":"Midlertidig hukommelse";
+    document.getElementById("databaseStatus").className="badge "+(data.connected?"open":"pending");
+    document.getElementById("databaseTables").innerHTML=data.tables.map(t=>`<div class="activity-item"><div class="activity-icon">▦</div><div><b>${escapeHtml(t.name)}</b><small>${t.rows} rækker</small></div></div>`).join("");
+  }catch(e){toast(e.message)}
+}
+
 let currentUser=null;
 async function checkLogin(){
   try{
