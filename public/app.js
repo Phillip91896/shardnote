@@ -2,6 +2,17 @@ const pages = ["dashboard","tickets","messages","commands","music","settings","l
 const titles = {dashboard:"Dashboard",tickets:"Tickets",messages:"Beskeder",commands:"Commands",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true};
 
+async function addBotToDiscord(){
+  try{
+    const r=await fetch("/api/bot/invite");
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error || "The Discord bot is not online yet.");
+    window.open(data.url, "_blank", "noopener,noreferrer");
+  }catch(e){
+    toast(e.message);
+  }
+}
+
 document.querySelectorAll(".nav button").forEach(btn=>{
   btn.onclick = function(event){
     event.preventDefault();
@@ -35,6 +46,10 @@ async function api(url, options){
 }
 function toast(msg){const el=document.getElementById("toast");el.textContent=msg;el.style.display="block";setTimeout(()=>el.style.display="none",2500)}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
+
+function botInstallButton(){
+  return '<button class="btn primary small" onclick="addBotToDiscord()">+ Add Bot to Discord</button>';
+}
 
 async function loadStats(){
   try{
@@ -228,6 +243,7 @@ window.showLogin=showLogin;
 window.showRegister=showRegister;
 window.login=login;
 window.register=register;
+window.addBotToDiscord=addBotToDiscord;
 async function createUser(){
   try{
     await api("/api/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("newUserName").value,email:document.getElementById("newUserEmail").value,password:document.getElementById("newUserPassword").value,role:document.getElementById("newUserRole").value})});
