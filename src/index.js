@@ -467,13 +467,22 @@ const titles = {dashboard:"Dashboard",tickets:"Tickets",messages:"Beskeder",comm
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true};
 
 document.querySelectorAll(".nav button").forEach(btn=>{
-  btn.addEventListener("click",()=>navigate(btn.dataset.page));
+  btn.onclick = function(event){
+    event.preventDefault();
+    navigate(this.dataset.page);
+    return false;
+  };
 });
 
 function navigate(page){
-  pages.forEach(p=>document.getElementById("page-"+p).classList.toggle("active",p===page));
+  if(!pages.includes(page)) return;
+  pages.forEach(p=>{
+    const el=document.getElementById("page-"+p);
+    if(el) el.classList.toggle("active",p===page);
+  });
   document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
-  document.getElementById("pageTitle").textContent=titles[page];
+  const title=document.getElementById("pageTitle");
+  if(title) title.textContent=titles[page] || page;
   if(page==="tickets") loadTickets();
   if(page==="messages") loadMessages();
   if(page==="commands") loadCommands();
@@ -596,7 +605,15 @@ async function login(e){
     loadStats();
   }catch(err){error.textContent=err.message}
 }
-async function logout(){await fetch("/api/logout",{method:"POST"});location.reload()}
+async function logout(){
+  try{
+    await fetch("/api/logout",{method:"POST",credentials:"same-origin"});
+  }finally{
+    window.location.href="/";
+  }
+}
+window.navigate=navigate;
+window.logout=logout;
 async function createUser(){
   try{
     await api("/api/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("newUserName").value,email:document.getElementById("newUserEmail").value,password:document.getElementById("newUserPassword").value,role:document.getElementById("newUserRole").value})});
