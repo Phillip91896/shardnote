@@ -95,6 +95,89 @@ async function initDatabase() {
   `);
 
   await db.query(`
+    ALTER TABLE public.tickets
+      ADD COLUMN IF NOT EXISTS guild_id VARCHAR(32),
+      ADD COLUMN IF NOT EXISTS user_id VARCHAR(32),
+      ADD COLUMN IF NOT EXISTS channel_id VARCHAR(32),
+      ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(32)
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS guild_settings (
+      guild_id VARCHAR(32) PRIMARY KEY,
+      log_channel_id VARCHAR(32),
+      welcome_channel_id VARCHAR(32),
+      welcome_message TEXT DEFAULT 'Velkommen {user} til {server}! 👋',
+      leave_channel_id VARCHAR(32),
+      leave_message TEXT DEFAULT '{user} har forladt {server}.',
+      autorole_id VARCHAR(32),
+      support_role_id VARCHAR(32),
+      ticket_category_id VARCHAR(32),
+      verification_role_id VARCHAR(32),
+      suggestion_channel_id VARCHAR(32),
+      automod_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      invite_filter BOOLEAN NOT NULL DEFAULT FALSE,
+      levels_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      economy_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      anti_raid_enabled BOOLEAN NOT NULL DEFAULT TRUE,
+      lockdown BOOLEAN NOT NULL DEFAULT FALSE,
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS warnings (
+      id BIGSERIAL PRIMARY KEY,
+      guild_id VARCHAR(32) NOT NULL,
+      user_id VARCHAR(32) NOT NULL,
+      moderator_id VARCHAR(32) NOT NULL,
+      reason TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS user_stats (
+      guild_id VARCHAR(32) NOT NULL,
+      user_id VARCHAR(32) NOT NULL,
+      xp INTEGER NOT NULL DEFAULT 0,
+      level INTEGER NOT NULL DEFAULT 0,
+      coins INTEGER NOT NULL DEFAULT 0,
+      last_daily TIMESTAMPTZ,
+      last_work TIMESTAMPTZ,
+      PRIMARY KEY (guild_id, user_id)
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS suggestions (
+      id BIGSERIAL PRIMARY KEY,
+      guild_id VARCHAR(32) NOT NULL,
+      user_id VARCHAR(32) NOT NULL,
+      content TEXT NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'pending',
+      channel_id VARCHAR(32),
+      message_id VARCHAR(32),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS giveaways (
+      id BIGSERIAL PRIMARY KEY,
+      guild_id VARCHAR(32) NOT NULL,
+      channel_id VARCHAR(32) NOT NULL,
+      message_id VARCHAR(32) NOT NULL,
+      prize VARCHAR(200) NOT NULL,
+      winners INTEGER NOT NULL DEFAULT 1,
+      ends_at TIMESTAMPTZ NOT NULL,
+      host_id VARCHAR(32) NOT NULL,
+      status VARCHAR(20) NOT NULL DEFAULT 'running',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
     INSERT INTO bot_settings (id, prefix, maintenance, auto_reply, welcome_messages)
     VALUES (1, '!', FALSE, TRUE, TRUE)
     ON CONFLICT (id) DO NOTHING
@@ -397,6 +480,7 @@ let discordReady = false;
 
 const client = createBot({
   state,
+  db,
   log,
   createTicket: saveTicket,
   setReady(ready) {
