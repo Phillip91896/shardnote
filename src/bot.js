@@ -44,19 +44,51 @@ function createBot({ state, log, createTicket, setReady }) {
     ]
   });
 
+  async function registerGuildCommands(guild) {
+    try {
+      await guild.commands.set(commands);
+      console.log(`[ShardNote] Commands registered in ${guild.name} (${guild.id}).`);
+      log("success", `Slash commands registered in Discord server ${guild.name}`);
+      return true;
+    } catch (error) {
+      console.error(`[ShardNote] Command registration failed in ${guild.name}:`, error);
+      log("error", `Command registration failed in ${guild.name}: ${error.message}`);
+      return false;
+    }
+  }
+
   client.once("ready", async () => {
     setReady(true);
 
     try {
+      // Keep global commands in sync and also register them directly in each
+      // server so they appear immediately after the bot is added.
       await client.application.commands.set(commands);
+
+      for (const guild of client.guilds.cache.values()) {
+        await registerGuildCommands(guild);
+      }
+
       console.log(
-        `[ShardNote] Discord bot connected as ${client.user.tag}. Slash commands registered.`
+        `[ShardNote] Discord bot connected as ${client.user.tag}. Commands registered in ${client.guilds.cache.size} server(s).`
       );
       log("success", "Discord bot connected as " + client.user.tag);
     } catch (error) {
       console.error("[ShardNote] Slash command registration failed:", error);
       log("error", "Slash command registration failed: " + error.message);
     }
+  });
+
+  client.on("guildCreate", async (guild) => {
+    setReady(true);
+    console.log(`[ShardNote] Joined Discord server: ${guild.name} (${guild.id}).`);
+    log("success", `Bot joined Discord server ${guild.name}`);
+    await registerGuildCommands(guild);
+  });
+
+  client.on("guildDelete", (guild) => {
+    console.log(`[ShardNote] Removed from Discord server: ${guild.name} (${guild.id}).`);
+    log("warning", `Bot removed from Discord server ${guild.name}`);
   });
 
   client.on("error", (error) => {
