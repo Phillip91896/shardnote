@@ -1416,6 +1416,20 @@ function createBot({ state, db, log, createTicket, setReady }) {
     return getGuildSettings(guild.id);
   };
 
+  client.dashboardCommands = commands.map(command => ({
+    name: command.name,
+    description: command.description,
+    options: command.options || []
+  }));
+  client.dashboardGetGuildSettings = getGuildSettings;
+  client.dashboardSetGuildSetting = setGuildSetting;
+  client.dashboardSetLockdown = async (guildId, locked) => {
+    const guild = client.guilds.cache.get(String(guildId));
+    if (!guild) throw new Error("Discord serveren blev ikke fundet.");
+    await setLockdown(guild, Boolean(locked));
+    return getGuildSettings(guild.id);
+  };
+
   const token = process.env.DISCORD_TOKEN;
 
   if (!token) {
