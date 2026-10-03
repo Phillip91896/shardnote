@@ -36,6 +36,9 @@
     const request=Object.assign({credentials:"include",cache:"no-store"},options||{});
     return fetch(url,request).then(function(r){
       return r.json().then(function(d){
+        if(r.status===401 && typeof window.showLogin==="function"){
+          window.showLogin();
+        }
         if(!r.ok) throw new Error(d.error||"Request failed");
         return d;
       });
