@@ -323,7 +323,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
         channels: ["velkommen","regler","verification","annonceringer","chat","forslag","support","ticket-panel","vip-chat","staff-chat","logs","Fælles","VIP Lounge"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false },
         prefixRoles:["owner","admin","moderator","support","vip","member","muted"],
-        prefixChannels:["welcome","rules","verification","announcements","chat","suggestions","support","ticketPanel","vipChat","staffChat","logs","generalVoice","vipVoice"]
+        prefixChannels:["velkommen","regler","verification","annonceringer","chat","forslag","support","ticketpanel","vipchat","staffchat","logs","faelles","viplounge"]
       },
       "fivem-vip": {
         name: "FiveM VIP",
