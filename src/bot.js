@@ -9,6 +9,7 @@ const {
   ButtonStyle,
   AttachmentBuilder
 } = require("discord.js");
+const { joinVoiceChannel, getVoiceConnection } = require("@discordjs/voice");
 
 const commands = [
   {
