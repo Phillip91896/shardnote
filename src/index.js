@@ -1031,6 +1031,21 @@ app.use("/api", (req, res, next) => {
 
 app.get("/api/stats", async (req, res) => {
   try {
+    // Discord server/member statistics are global to the bot connection.
+    // Never expose them to a normal ShardNote account until its Discord server
+    // has been explicitly linked to that account.
+    if (req.user?.role !== "admin") {
+      return res.json({
+        botOnline: false,
+        servers: 0,
+        users: 0,
+        tickets: 0,
+        commands: client.dashboardCommands?.length || 0,
+        uptime: Math.floor((Date.now() - startedAt) / 1000),
+        linked: false
+      });
+    }
+
     let openTickets = state.tickets.filter(t => t.status !== "closed").length;
     if (db) {
       const result = await db.query("SELECT COUNT(*)::int AS count FROM public.tickets WHERE status <> 'closed'");
@@ -1045,7 +1060,8 @@ app.get("/api/stats", async (req, res) => {
         : 0,
       tickets: openTickets,
       commands: client.dashboardCommands?.length || 0,
-      uptime: Math.floor((Date.now() - startedAt) / 1000)
+      uptime: Math.floor((Date.now() - startedAt) / 1000),
+      linked: true
     });
   } catch (error) {
     console.error(error);
