@@ -1,6 +1,6 @@
 const pages = ["dashboard","tickets","messages","commands","music","settings","logs","admin"];
 const titles = {dashboard:"Dashboard",tickets:"Tickets",messages:"Beskeder",commands:"Commands",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
-let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true};
+let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true,buttonLabels:{}};
 
 async function addBotToDiscord(){
   try{
