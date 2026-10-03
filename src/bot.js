@@ -432,7 +432,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
     if (interaction.customId === "ticket_create") {
       const channel = await createTicketChannel(interaction.guild, interaction.user, "support");
       const ticket = createTicket
-        ? await createTicket({ title: "Support", user: interaction.user.tag, status: "open", priority: "normal" })
+        ? await createTicket({ title: "Support", user: interaction.user.tag, status: "open", priority: "normal", guildId: interaction.guild.id })
         : { id: Date.now() };
       if (db) {
         await db.query(
@@ -1179,7 +1179,8 @@ function createBot({ state, db, log, createTicket, setReady }) {
               title,
               user: interaction.user.tag,
               status: "open",
-              priority: "normal"
+              priority: "normal",
+              guildId: interaction.guild.id
             })
           : { id: Date.now(), title, status: "open" };
 
