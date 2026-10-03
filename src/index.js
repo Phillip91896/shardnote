@@ -1,4 +1,5 @@
 const express = require("express");
+const crypto = require("crypto");
 const { Client, GatewayIntentBits } = require("discord.js");
 
 const app = express();
@@ -10,6 +11,7 @@ app.use(express.urlencoded({ extended: true }));
 const startedAt = Date.now();
 
 const state = {
+  users: [],
   tickets: [
     { id: 1001, title: "Website support", user: "DemoUser", status: "open", priority: "high", createdAt: new Date().toISOString() },
     { id: 1002, title: "Bot command help", user: "Moderator", status: "pending", priority: "normal", createdAt: new Date(Date.now() - 3600000).toISOString() }
@@ -32,6 +34,44 @@ function log(type, message) {
     time: new Date().toISOString()
   });
   state.logs = state.logs.slice(0, 100);
+}
+
+
+const sessions = new Map();
+
+function hashPassword(password) {
+  return crypto.createHash("sha256").update(String(password)).digest("hex");
+}
+
+function parseCookies(req) {
+  const header = req.headers.cookie || "";
+  return Object.fromEntries(header.split(";").filter(Boolean).map(part => {
+    const i = part.indexOf("=");
+    return [part.slice(0, i).trim(), decodeURIComponent(part.slice(i + 1).trim())];
+  }));
+}
+
+function ensureAdmin() {
+  if (!state.users.length) {
+    const email = process.env.ADMIN_EMAIL || "admin@shardnote.local";
+    const password = process.env.ADMIN_PASSWORD || "change-me-now";
+    state.users.push({ id: 1, name: "Administrator", email, role: "admin", passwordHash: hashPassword(password), createdAt: new Date().toISOString() });
+    log("security", "Initial admin account is ready");
+  }
+}
+function currentUser(req) {
+  const sid = parseCookies(req).shardnote_session;
+  return sid ? sessions.get(sid) : null;
+}
+function requireAuth(req, res, next) {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: "Du skal logge ind." });
+  req.user = user;
+  next();
+}
+function requireAdmin(req, res, next) {
+  if (req.user?.role !== "admin") return res.status(403).json({ error: "Kun administratorer har adgang." });
+  next();
 }
 
 const client = new Client({
@@ -86,6 +126,67 @@ if (process.env.DISCORD_TOKEN) {
   log("warning", "DISCORD_TOKEN is not configured. Dashboard runs in web-only mode.");
 }
 
+
+app.post("/api/login", (req, res) => {
+  ensureAdmin();
+  const email = String(req.body.email || "").trim().toLowerCase();
+  const password = String(req.body.password || "");
+  const user = state.users.find(u => u.email.toLowerCase() === email && u.passwordHash === hashPassword(password));
+  if (!user) {
+    log("security", `Failed login attempt for ${email || "unknown user"}`);
+    return res.status(401).json({ error: "Forkert email eller adgangskode." });
+  }
+  const sid = crypto.randomBytes(32).toString("hex");
+  sessions.set(sid, { id: user.id, name: user.name, email: user.email, role: user.role });
+  res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+  log("security", `User ${user.email} logged in`);
+  res.json({ user: { id: user.id, name: user.name, email: user.email, role: user.role } });
+});
+
+app.post("/api/logout", (req, res) => {
+  const sid = parseCookies(req).shardnote_session;
+  if (sid) sessions.delete(sid);
+  res.setHeader("Set-Cookie", "shardnote_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+  res.json({ ok: true });
+});
+
+app.get("/api/me", (req, res) => {
+  const user = currentUser(req);
+  if (!user) return res.status(401).json({ error: "Ikke logget ind." });
+  res.json({ user });
+});
+
+app.get("/api/admin/users", requireAuth, requireAdmin, (req, res) => {
+  ensureAdmin();
+  res.json(state.users.map(({ passwordHash, ...u }) => u));
+});
+
+app.post("/api/admin/users", requireAuth, requireAdmin, (req, res) => {
+  ensureAdmin();
+  const name = String(req.body.name || "").trim().slice(0, 80);
+  const email = String(req.body.email || "").trim().toLowerCase().slice(0, 160);
+  const password = String(req.body.password || "");
+  const role = req.body.role === "admin" ? "admin" : "staff";
+  if (!name || !email || password.length < 8) return res.status(400).json({ error: "Navn, email og adgangskode på mindst 8 tegn er påkrævet." });
+  if (state.users.some(u => u.email === email)) return res.status(409).json({ error: "Email findes allerede." });
+  const user = { id: Date.now(), name, email, role, passwordHash: hashPassword(password), createdAt: new Date().toISOString() };
+  state.users.push(user);
+  log("security", `Admin ${req.user.email} created user ${email}`);
+  res.status(201).json({ id: user.id, name, email, role, createdAt: user.createdAt });
+});
+
+app.delete("/api/admin/users/:id", requireAuth, requireAdmin, (req, res) => {
+  ensureAdmin();
+  const id = Number(req.params.id);
+  if (id === req.user.id) return res.status(400).json({ error: "Du kan ikke slette din egen konto." });
+  const before = state.users.length;
+  state.users = state.users.filter(u => u.id !== id);
+  if (before === state.users.length) return res.status(404).json({ error: "Bruger ikke fundet." });
+  log("security", `Admin ${req.user.email} deleted user #${id}`);
+  res.json({ ok: true });
+});
+
+
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
@@ -93,6 +194,11 @@ app.get("/health", (req, res) => {
     discord: discordReady,
     uptime: Math.floor((Date.now() - startedAt) / 1000)
   });
+});
+
+app.use("/api", (req, res, next) => {
+  if (["/login", "/logout", "/me"].includes(req.path) || req.path === "/health") return next();
+  requireAuth(req, res, next);
 });
 
 app.get("/api/stats", (req, res) => {
@@ -225,6 +331,11 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:grid;gap:7px}.field label{font-size:12px;color:var(--muted)}.field input,.field textarea,.field select{width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none}.field textarea{min-height:120px;resize:vertical}.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent)}
 .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:12px}
 .switch-row{display:flex;align-items:center;justify-content:space-between;padding:15px 0;border-bottom:1px solid #22222e}.switch{width:48px;height:26px;border-radius:99px;background:#292936;padding:3px;transition:.2s}.switch i{display:block;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}.switch.on{background:var(--accent)}.switch.on i{transform:translateX(22px)}
+
+body.locked > .app{display:none}
+#loginScreen{position:fixed;inset:0;z-index:100;background:radial-gradient(circle at 50% 0%,#19152e 0,#07070b 45%);display:grid;place-items:center;padding:20px}
+.login-card{width:min(430px,100%);background:rgba(16,16,24,.96);border:1px solid var(--border);border-radius:20px;padding:30px;box-shadow:var(--shadow)}
+.login-card h1{margin:0 0 8px}.login-card p{color:var(--muted);margin:0 0 22px}
 .toast{position:fixed;right:24px;bottom:24px;z-index:50;background:#171722;border:1px solid #3a394d;color:#fff;border-radius:12px;padding:12px 15px;box-shadow:var(--shadow);display:none}
 @media(max-width:1050px){.stats{grid-template-columns:repeat(2,1fr)}.two{grid-template-columns:1fr}}
 @media(max-width:760px){.sidebar{width:76px;padding:15px 10px}.brand{justify-content:center;padding-bottom:18px}.brand span,.nav button span:not(.icon),.sidebar-footer{display:none}.nav button{text-align:center;padding:12px}.main{margin-left:76px;width:calc(100% - 76px);padding:18px}.topbar{align-items:flex-start}.topbar h1{font-size:24px}.form-grid{grid-template-columns:1fr}}
@@ -242,6 +353,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
     <button data-page="music"><span class="icon">♫</span><span>Musik</span></button>
     <button data-page="settings"><span class="icon">⚙</span><span>Indstillinger</span></button>
     <button data-page="logs"><span class="icon">◷</span><span>Logs</span></button>
+    <button data-page="admin"><span class="icon">👑</span><span>Admin</span></button>
   </nav>
   <div class="sidebar-footer">ShardNote 2.0<br>Discord Control Center</div>
 </aside>
@@ -249,7 +361,10 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 <main class="main">
 <header class="topbar">
   <div><div class="eyebrow">Discord Control Center</div><h1 id="pageTitle">Dashboard</h1></div>
-  <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Connecting…</span></div>
+  <div style="display:flex;align-items:center;gap:10px">
+    <div class="status"><span id="statusDot" class="dot"></span><span id="statusText">Connecting…</span></div>
+    <button class="btn small" onclick="logout()">Log ud</button>
+  </div>
 </header>
 
 <section class="page active" id="page-dashboard">
@@ -324,13 +439,31 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 <section class="page" id="page-logs">
   <div class="card"><div class="section-title"><h2>System logs</h2><button class="btn small" onclick="loadLogs()">Opdater</button></div><div id="logList"></div></div>
 </section>
+
+<section class="page" id="page-admin">
+  <div class="grid two">
+    <div class="card">
+      <div class="section-title"><h2>Admin-panel</h2><span>Brugere og adgang</span></div>
+      <div class="field"><label>Navn</label><input id="newUserName" placeholder="Fx Jonas"></div>
+      <div class="field" style="margin-top:12px"><label>Email</label><input id="newUserEmail" type="email" placeholder="jonas@example.com"></div>
+      <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="newUserPassword" type="password" placeholder="Mindst 8 tegn"></div>
+      <div class="field" style="margin-top:12px"><label>Rolle</label><select id="newUserRole"><option value="staff">Staff</option><option value="admin">Administrator</option></select></div>
+      <div class="actions"><button class="btn primary" onclick="createUser()">+ Tilføj bruger</button></div>
+      <p style="color:var(--muted);font-size:12px;margin-top:12px">Kun administratorer kan åbne og ændre dette panel.</p>
+    </div>
+    <div class="card">
+      <div class="section-title"><h2>Brugere</h2><button class="btn small" onclick="loadUsers()">Opdater</button></div>
+      <div id="userList"></div>
+    </div>
+  </div>
+</section>
 </main>
 </div>
 <div id="toast" class="toast"></div>
 
 <script>
-const pages = ["dashboard","tickets","messages","commands","music","settings","logs"];
-const titles = {dashboard:"Dashboard",tickets:"Tickets",messages:"Beskeder",commands:"Commands",music:"Musik",settings:"Indstillinger",logs:"Logs"};
+const pages = ["dashboard","tickets","messages","commands","music","settings","logs","admin"];
+const titles = {dashboard:"Dashboard",tickets:"Tickets",messages:"Beskeder",commands:"Commands",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true};
 
 document.querySelectorAll(".nav button").forEach(btn=>{
@@ -346,6 +479,7 @@ function navigate(page){
   if(page==="commands") loadCommands();
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
+  if(page==="admin") loadUsers();
 }
 
 async function api(url, options){
@@ -428,8 +562,52 @@ async function loadLogs(){
   const logs=await api("/api/logs");
   document.getElementById("logList").innerHTML=logs.length?`<table class="table"><thead><tr><th>Type</th><th>Hændelse</th><th>Tid</th></tr></thead><tbody>${logs.map(l=>`<tr><td><span class="badge ${l.type==="error"?"closed":l.type==="warning"?"pending":"open"}">${escapeHtml(l.type)}</span></td><td>${escapeHtml(l.message)}</td><td>${new Date(l.time).toLocaleString("da-DK")}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Ingen logs endnu.</div>';
 }
-loadStats();
-setInterval(loadStats,15000);
+
+async function loadUsers(){
+  try{
+    const users=await api("/api/admin/users");
+    document.getElementById("userList").innerHTML=users.map(u=>`<div class="activity-item"><div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div><div style="flex:1"><b>${escapeHtml(u.name)}</b><small>${escapeHtml(u.email)} · ${escapeHtml(u.role)}</small></div>${u.id!==currentUser?.id?`<button class="btn small danger" onclick="deleteUser(${u.id})">Slet</button>`:""}</div>`).join("")||'<div class="empty">Ingen brugere.</div>';
+  }catch(e){toast(e.message)}
+}
+let currentUser=null;
+async function checkLogin(){
+  try{
+    const r=await fetch("/api/me"); if(!r.ok) throw new Error();
+    const data=await r.json(); currentUser=data.user; document.body.classList.remove("locked");
+    if(currentUser.role!=="admin") document.querySelector('[data-page="admin"]')?.remove();
+    loadStats();
+  }catch(e){showLogin();}
+}
+function showLogin(){
+  document.body.classList.add("locked");
+  if(document.getElementById("loginScreen")) return;
+  const box=document.createElement("div"); box.id="loginScreen";
+  box.innerHTML=`<div class="login-card"><div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div><h1>Log ind</h1><p>Log ind på dit ShardNote-kontrolpanel.</p><form onsubmit="login(event)"><div class="field"><label>Email</label><input id="loginEmail" type="email" required autocomplete="username"></div><div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="loginPassword" type="password" required autocomplete="current-password"></div><button class="btn primary" style="width:100%;margin-top:16px">Log ind</button><div id="loginError" style="color:var(--red);font-size:12px;margin-top:10px"></div></form></div>`;
+  document.body.appendChild(box);
+}
+async function login(e){
+  e.preventDefault();
+  const error=document.getElementById("loginError");
+  try{
+    const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:document.getElementById("loginEmail").value,password:document.getElementById("loginPassword").value})});
+    const data=await r.json(); if(!r.ok) throw new Error(data.error||"Login fejlede");
+    currentUser=data.user; document.getElementById("loginScreen").remove(); document.body.classList.remove("locked");
+    if(currentUser.role!=="admin") document.querySelector('[data-page="admin"]')?.remove();
+    loadStats();
+  }catch(err){error.textContent=err.message}
+}
+async function logout(){await fetch("/api/logout",{method:"POST"});location.reload()}
+async function createUser(){
+  try{
+    await api("/api/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("newUserName").value,email:document.getElementById("newUserEmail").value,password:document.getElementById("newUserPassword").value,role:document.getElementById("newUserRole").value})});
+    document.getElementById("newUserName").value="";document.getElementById("newUserEmail").value="";document.getElementById("newUserPassword").value="";
+    toast("Bruger oprettet");loadUsers();loadLogs();
+  }catch(e){toast(e.message)}
+}
+async function deleteUser(id){if(!confirm("Slet denne bruger?"))return;try{await api("/api/admin/users/"+id,{method:"DELETE"});toast("Bruger slettet");loadUsers();loadLogs()}catch(e){toast(e.message)}}
+
+checkLogin();
+setInterval(()=>{if(currentUser)loadStats()},15000);
 </script>
 </body>
 </html>`;
