@@ -583,16 +583,28 @@ function createBot({ state, db, log, createTicket, setReady }) {
     const suggestions = byBase("forslag") || byBase("suggestions");
     const verification = byBase("verification");
 
-    if(welcome) await welcome.send({embeds:[new EmbedBuilder().setTitle("👋 "+config.name+" server").setDescription("Serveren er sat op af ShardNote.").setColor(0x6d5dfc)]}).catch(()=>{});
-    if(config.features?.automod_enabled && logs) await logs.send({content:"✅ ShardNote AutoMod er aktiveret via "+config.name+"-skitsen."}).catch(()=>{});
-    if(suggestions && config.features?.levels_enabled) await suggestions.send({content:"💡 Forslag og community-funktioner er klar."}).catch(()=>{});
+    async function hasPanel(channel, needle) {
+      if(!channel?.isTextBased?.()) return false;
+      const messages = await channel.messages.fetch({limit:20}).catch(()=>null);
+      return Boolean(messages?.some(m => String(m.content||"").includes(needle) || m.embeds?.some(e => String(e.title||"").includes(needle))));
+    }
+
+    if(welcome && !await hasPanel(welcome, config.name+" server")) {
+      await welcome.send({embeds:[new EmbedBuilder().setTitle("👋 "+config.name+" server").setDescription("Serveren er sat op af ShardNote.").setColor(0x6d5dfc)]}).catch(()=>{});
+    }
+    if(config.features?.automod_enabled && logs && !await hasPanel(logs, "AutoMod er aktiveret")) {
+      await logs.send({content:"✅ ShardNote AutoMod er aktiveret via "+config.name+"-skitsen."}).catch(()=>{});
+    }
+    if(suggestions && config.features?.levels_enabled && !await hasPanel(suggestions, "Forslag og community")) {
+      await suggestions.send({content:"💡 Forslag og community-funktioner er klar."}).catch(()=>{});
+    }
     if(verification){
       const memberRole=roles.member || roleList[roleList.length-1];
-      if(memberRole && !String(verification.name).startsWith("F5 ")) {
-        await verification.send({embeds:[new EmbedBuilder().setTitle("✅ Verification").setDescription("Tryk for at få "+memberRole+"-rollen." ).setColor(0x42d392),components:[new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("verify").setLabel("✅ Verificer mig").setStyle(ButtonStyle.Success))]}).catch(()=>{});
+      if(memberRole && !await hasPanel(verification, "Verification")) {
+        await verification.send({embeds:[new EmbedBuilder().setTitle("✅ Verification").setDescription("Tryk for at få "+memberRole+"-rollen.").setColor(0x42d392)],components:[new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("verify").setLabel("✅ Verificer mig").setStyle(ButtonStyle.Success))]}).catch(()=>{});
       }
     }
-    if(ticketPanel && config.features?.automod_enabled){
+    if(ticketPanel && !await hasPanel(ticketPanel, "ShardNote Ticket")){
       await ticketPanel.send({embeds:[new EmbedBuilder().setTitle("🎫 ShardNote Ticket").setDescription("Tryk på knappen for at oprette en privat support-ticket.").setColor(0x6d5dfc)],components:[new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("ticket_create").setLabel("🎫 Opret ticket").setStyle(ButtonStyle.Primary))]}).catch(()=>{});
     }
 
