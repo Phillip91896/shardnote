@@ -367,8 +367,9 @@ function showLanding(){
     <p style="max-width:560px;margin:0 auto;color:var(--muted);font-size:15px;line-height:1.6">Styr din Discord-bot fra ét samlet kontrolpanel med moderation, tickets, AutoMod, levels, economy, giveaways, logs og meget mere.</p>
     <div class="card" style="margin:26px auto 18px;max-width:390px;text-align:left">
       <div style="font-size:13px;color:var(--muted)">ShardNote Premium</div>
-      <div style="font-size:42px;font-weight:900;margin:5px 0">2 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
-      <div style="color:var(--green);font-size:12px">✓ Fuld adgang til dashboardet</div>
+      <div style="font-size:42px;font-weight:900;margin:5px 0">2,67 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
+      <div style="color:var(--accent2);font-size:12px;font-weight:800">10 dage gratis</div>
+      <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Fuld adgang til dashboardet</div>
       <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Adgang til alle bot-funktioner</div>
       <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Løbende adgang så længe abonnementet er aktivt</div>
     </div>
@@ -412,8 +413,8 @@ function showPaywall(){
   box.innerHTML=`<div class="login-card" style="text-align:center">
     <div class="brand" style="justify-content:center;padding:0 0 16px"><div class="brand-mark">S</div><span>ShardNote</span></div>
     <h1>Abonnement kræves</h1>
-    <p>Din konto er oprettet, men du skal have et aktivt abonnement på <b>2 € pr. måned</b> for at få adgang til kontrolpanelet.</p>
-    <button class="btn primary" style="width:100%;margin-top:8px" onclick="startSubscription()">Betal 2 € / måned</button>
+    <p>Du får <b>10 dage gratis</b>. Derefter koster ShardNote <b>2,67 € pr. måned</b>.</p>
+    <button class="btn primary" style="width:100%;margin-top:8px" onclick="startSubscription()">Start 10 dage gratis</button>
     <div style="font-size:12px;color:var(--muted);margin-top:12px">Når betalingen er godkendt, gemmes dit abonnement automatisk på kontoen. Næste gang du logger ind, går du direkte ind på dashboardet.</div>
     <button class="btn small" style="margin-top:18px" onclick="logout()">Log ud</button>
     <div id="paymentError" style="color:var(--red);font-size:12px;margin-top:12px"></div>
