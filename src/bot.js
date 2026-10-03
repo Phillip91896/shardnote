@@ -310,6 +310,295 @@ function createBot({ state, db, log, createTicket, setReady }) {
     return getGuildSettings(guildId);
   }
 
+
+  async function applyDiscordTemplate(guildId, templateKey) {
+    const guild = client.guilds.cache.get(String(guildId));
+    if (!guild) throw new Error("Discord serveren blev ikke fundet.");
+    if (templateKey !== "f5-vip") throw new Error("Ukendt Discord-skitse.");
+
+    const me = guild.members.me || await guild.members.fetchMe().catch(() => null);
+    const required = [PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages];
+    if (!me || !me.permissions.has(required)) {
+      throw new Error("ShardNote mangler rettighederne Manage Roles, Manage Channels eller Send Messages på serveren.");
+    }
+
+    const roleSpecs = [
+      { key: "owner", name: "👑 F5 Ejer", color: 0xf1c40f, hoist: true, permissions: [PermissionFlagsBits.Administrator] },
+      { key: "admin", name: "🛡️ F5 Admin", color: 0xe74c3c, hoist: true, permissions: [
+        PermissionFlagsBits.ManageGuild, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles,
+        PermissionFlagsBits.ManageMessages, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers,
+        PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ViewAuditLog
+      ] },
+      { key: "moderator", name: "🔨 F5 Moderator", color: 0xe67e22, hoist: true, permissions: [
+        PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers,
+        PermissionFlagsBits.KickMembers, PermissionFlagsBits.ViewAuditLog
+      ] },
+      { key: "support", name: "🎫 F5 Support", color: 0x3498db, hoist: true, permissions: [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks
+      ] },
+      { key: "vip", name: "⭐ F5 VIP", color: 0x9b59b6, hoist: true, permissions: [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak
+      ] },
+      { key: "member", name: "✅ F5 Medlem", color: 0x2ecc71, hoist: false, permissions: [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.Connect, PermissionFlagsBits.Speak
+      ] },
+      { key: "muted", name: "🔇 F5 Muted", color: 0x7f8c8d, hoist: false, permissions: [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory
+      ] }
+    ];
+
+    const roles = {};
+    let createdRoles = 0;
+    let existingRoles = 0;
+
+    for (const spec of roleSpecs) {
+      let role = guild.roles.cache.find(r => r.name === spec.name);
+      if (!role) {
+        role = await guild.roles.create({
+          name: spec.name,
+          color: spec.color,
+          hoist: spec.hoist,
+          mentionable: false,
+          permissions: spec.permissions,
+          reason: "ShardNote Discord-skitse: F5 VIP"
+        });
+        createdRoles++;
+      } else {
+        existingRoles++;
+      }
+      roles[spec.key] = role;
+    }
+
+    const staffRoles = [roles.owner.id, roles.admin.id, roles.moderator.id, roles.support.id];
+    const communityRoles = [roles.owner.id, roles.admin.id, roles.moderator.id, roles.support.id, roles.vip.id, roles.member.id];
+    const botMemberId = guild.client.user.id;
+    const overwrite = (id, allow = [], deny = []) => ({ id, allow, deny });
+
+    const publicOverwrites = [
+      overwrite(guild.roles.everyone.id, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages
+      ]),
+      overwrite(botMemberId, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages
+      ])
+    ];
+
+    const privateOverwrites = [
+      overwrite(guild.roles.everyone.id, [], [PermissionFlagsBits.ViewChannel]),
+      ...staffRoles.map(id => overwrite(id, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages
+      ])),
+      overwrite(botMemberId, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages
+      ])
+    ];
+
+    const communityOverwrites = [
+      overwrite(guild.roles.everyone.id, [], [PermissionFlagsBits.ViewChannel]),
+      ...communityRoles.map(id => overwrite(id, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages
+      ])),
+      overwrite(botMemberId, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages
+      ])
+    ];
+
+    const vipOverwrites = [
+      overwrite(guild.roles.everyone.id, [], [PermissionFlagsBits.ViewChannel]),
+      ...[roles.owner.id, roles.admin.id, roles.moderator.id, roles.support.id, roles.vip.id].map(id => overwrite(id, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages
+      ])),
+      overwrite(botMemberId, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages
+      ])
+    ];
+
+    const voiceOverwrites = [
+      overwrite(guild.roles.everyone.id, [], [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect]),
+      ...[roles.owner.id, roles.admin.id, roles.moderator.id, roles.support.id, roles.vip.id, roles.member.id].map(id => overwrite(id, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect
+      ])),
+      overwrite(botMemberId, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak,
+        PermissionFlagsBits.ManageChannels
+      ])
+    ];
+
+    const staffCategoryOverwrites = [
+      overwrite(guild.roles.everyone.id, [], [PermissionFlagsBits.ViewChannel]),
+      ...staffRoles.map(id => overwrite(id, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages
+      ])),
+      overwrite(botMemberId, [
+        PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages
+      ])
+    ];
+
+    async function ensureCategory(name, permissionOverwrites) {
+      let category = guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name === name);
+      if (!category) {
+        category = await guild.channels.create({
+          name,
+          type: ChannelType.GuildCategory,
+          permissionOverwrites,
+          reason: "ShardNote Discord-skitse: F5 VIP"
+        });
+      }
+      return category;
+    }
+
+    async function ensureText(name, parent, permissionOverwrites = null) {
+      let channel = guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === name && c.parentId === parent.id);
+      if (!channel) {
+        channel = await guild.channels.create({
+          name,
+          type: ChannelType.GuildText,
+          parent: parent.id,
+          ...(permissionOverwrites ? { permissionOverwrites } : {}),
+          reason: "ShardNote Discord-skitse: F5 VIP"
+        });
+      }
+      return channel;
+    }
+
+    async function ensureVoice(name, parent, permissionOverwrites) {
+      let channel = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name === name && c.parentId === parent.id);
+      if (!channel) {
+        channel = await guild.channels.create({
+          name,
+          type: ChannelType.GuildVoice,
+          parent: parent.id,
+          permissionOverwrites,
+          reason: "ShardNote Discord-skitse: F5 VIP"
+        });
+      }
+      return channel;
+    }
+
+    const info = await ensureCategory("📌 INFORMATION", publicOverwrites);
+    const community = await ensureCategory("💬 COMMUNITY", communityOverwrites);
+    const support = await ensureCategory("🎫 SUPPORT", publicOverwrites);
+    const tickets = await ensureCategory("🎟️ TICKETS", privateOverwrites);
+    const vip = await ensureCategory("⭐ VIP", vipOverwrites);
+    const staff = await ensureCategory("🔒 STAFF", staffCategoryOverwrites);
+    const voice = await ensureCategory("🔊 VOICE", voiceOverwrites);
+
+    const welcome = await ensureText("velkommen", info);
+    const rules = await ensureText("regler", info);
+    const verification = await ensureText("verification", info);
+    const announcements = await ensureText("annonceringer", info);
+    const chat = await ensureText("chat", community);
+    const suggestions = await ensureText("forslag", community);
+    const supportChannel = await ensureText("support", support);
+    const ticketPanel = await ensureText("ticket-panel", support);
+    const vipChat = await ensureText("vip-chat", vip);
+    const staffChat = await ensureText("staff-chat", staff);
+    const logs = await ensureText("logs", staff);
+    const generalVoice = await ensureVoice("Fælles", voice, voiceOverwrites);
+    const vipVoice = await ensureVoice("VIP Lounge", voice, vipOverwrites);
+
+    for (const channel of [welcome, rules, verification, announcements]) {
+      await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false }, { reason: "ShardNote F5 VIP template" }).catch(() => {});
+    }
+
+    const settings = await getGuildSettings(guild.id);
+    const templateSettings = {
+      welcome_channel_id: welcome.id,
+      welcome_message: "Velkommen {user} til {server}! 👋",
+      leave_channel_id: welcome.id,
+      leave_message: "{user} har forladt {server}.",
+      log_channel_id: logs.id,
+      suggestion_channel_id: suggestions.id,
+      support_role_id: roles.support.id,
+      ticket_category_id: tickets.id,
+      verification_role_id: roles.member.id,
+      automod_enabled: true,
+      invite_filter: true,
+      levels_enabled: true,
+      economy_enabled: true,
+      anti_raid_enabled: true,
+      lockdown: false
+    };
+
+    for (const [key, value] of Object.entries(templateSettings)) {
+      if (settings[key] !== value) await setGuildSetting(guild.id, key, value);
+    }
+
+    async function hasPanel(channel, needle) {
+      const messages = await channel.messages.fetch({ limit: 20 }).catch(() => null);
+      return Boolean(messages?.some(message =>
+        String(message.content || "").includes(needle) ||
+        message.embeds?.some(embed => String(embed.title || "").includes(needle))
+      ));
+    }
+
+    if (!await hasPanel(ticketPanel, "ShardNote Ticket")) {
+      await ticketPanel.send({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("🎫 ShardNote Ticket")
+            .setDescription("Tryk på knappen for at oprette en privat support-ticket.")
+            .setColor(0x6d5dfc)
+        ],
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId("ticket_create").setLabel("🎫 Opret ticket").setStyle(ButtonStyle.Primary)
+          )
+        ]
+      });
+    }
+
+    if (!await hasPanel(verification, "ShardNote Verification")) {
+      await verification.send({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("✅ ShardNote Verification")
+            .setDescription("Tryk på knappen for at få **F5 Medlem**-rollen og adgang til community-kanalerne.")
+            .setColor(0x42d392)
+        ],
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId("verify").setLabel("✅ Verificer mig").setStyle(ButtonStyle.Success)
+          )
+        ]
+      });
+    }
+
+    if (!await hasPanel(welcome, "F5 VIP server")) {
+      await welcome.send({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("👋 F5 VIP server")
+            .setDescription("Serveren er sat op af ShardNote. Læs reglerne og gennemfør verification for at få adgang til community-kanalerne.")
+            .setColor(0x9b59b6)
+        ]
+      });
+    }
+
+    return {
+      template: "f5-vip",
+      name: "F5 VIP",
+      createdRoles,
+      existingRoles,
+      categories: 7,
+      roleNames: roleSpecs.map(role => role.name),
+      channels: [
+        welcome.name, rules.name, verification.name, announcements.name,
+        chat.name, suggestions.name, supportChannel.name, ticketPanel.name,
+        vipChat.name, staffChat.name, logs.name, generalVoice.name, vipVoice.name
+      ],
+      configured: templateSettings
+    };
+  }
+
   async function sendGuildLog(guild, title, message, type) {
     log(type === "error" ? "error" : type === "security" ? "security" : type === "warning" ? "warning" : "system", guild.name + ": " + title + " — " + message);
     const settings = await getGuildSettings(guild.id);
@@ -1402,6 +1691,8 @@ function createBot({ state, db, log, createTicket, setReady }) {
       log("error", "Prefix command error: " + error.message);
     }
   });
+
+  client.dashboardApplyDiscordTemplate = async (guildId, templateKey) => applyDiscordTemplate(guildId, templateKey);
 
   client.dashboardCommands = commands.map(command => ({
     name: command.name,
