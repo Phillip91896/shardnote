@@ -62,8 +62,7 @@ async function loadStats(){
     document.getElementById("statusDot").className="dot "+(s.botOnline?"online":"");
     const tickets=await api("/api/tickets");
     document.getElementById("dashTickets").innerHTML=tickets.slice(0,5).map(t=>`<div class="activity-item"><div class="activity-icon">🎫</div><div><b>#${t.id} — ${escapeHtml(t.title)}</b><small>${escapeHtml(t.user)} · <span class="badge ${t.status}">${t.status}</span></small></div></div>`).join("")||'<div class="empty">Ingen tickets endnu.</div>';
-    const logs=await api("/api/logs");
-    document.getElementById("dashLogs").innerHTML=logs.slice(0,5).map(l=>`<div class="activity-item"><div class="activity-icon">•</div><div><b>${escapeHtml(l.message)}</b><small>${new Date(l.time).toLocaleString("da-DK")}</small></div></div>`).join("")||'<div class="empty">Ingen aktivitet endnu.</div>';
+    document.getElementById("dashLogs").innerHTML='<div class="empty">Logs er beskyttet. Åbn Logs for at se aktivitet.</div>';
   }catch(e){toast(e.message)}
 }
 
@@ -118,9 +117,74 @@ async function saveSettings(){
   await api("/api/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(settings)});
   toast("Indstillinger gemt");loadLogs();
 }
+function renderLogLocked(){
+  document.getElementById("logContent").style.display="none";
+  document.getElementById("logLockPanel").style.display="block";
+  document.getElementById("logPassword").value="";
+}
+
+function logCategory(type){
+  return ({
+    security:"Sikkerhed & login",
+    ticket:"Tickets",
+    message:"Beskeder",
+    command:"Commands",
+    settings:"Indstillinger",
+    success:"System",
+    warning:"Advarsler",
+    error:"Fejl"
+  })[type] || "Andet";
+}
+
+async function unlockLogs(){
+  const password=document.getElementById("logPassword").value;
+  document.getElementById("logUnlockError").textContent="";
+  try{
+    await api("/api/logs/unlock",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({password})
+    });
+    document.getElementById("logLockPanel").style.display="none";
+    document.getElementById("logContent").style.display="block";
+    await loadLogs();
+    toast("Logs er åbnet i 15 minutter");
+  }catch(e){
+    document.getElementById("logUnlockError").textContent=e.message;
+  }
+}
+
+async function lockLogs(){
+  try{await api("/api/logs/lock",{method:"POST"});}catch(e){}
+  renderLogLocked();
+  toast("Logs låst");
+}
+
 async function loadLogs(){
-  const logs=await api("/api/logs");
-  document.getElementById("logList").innerHTML=logs.length?`<table class="table"><thead><tr><th>Type</th><th>Hændelse</th><th>Tid</th></tr></thead><tbody>${logs.map(l=>`<tr><td><span class="badge ${l.type==="error"?"closed":l.type==="warning"?"pending":"open"}">${escapeHtml(l.type)}</span></td><td>${escapeHtml(l.message)}</td><td>${new Date(l.time).toLocaleString("da-DK")}</td></tr>`).join("")}</tbody></table>`:'<div class="empty">Ingen logs endnu.</div>';
+  try{
+    const logs=await api("/api/logs");
+    const groups={};
+    logs.forEach(l=>{
+      const key=logCategory(l.type);
+      if(!groups[key]) groups[key]=[];
+      groups[key].push(l);
+    });
+    const order=["Sikkerhed & login","Tickets","Beskeder","Commands","Indstillinger","System","Advarsler","Fejl","Andet"];
+    const html=order.filter(name=>groups[name]).map(name=>{
+      const items=groups[name];
+      return `<details class="log-category">
+        <summary><span>${escapeHtml(name)}</span><b>${items.length}</b></summary>
+        <div class="log-category-body">
+          <table class="table"><thead><tr><th>Type</th><th>Hændelse</th><th>Tid</th></tr></thead><tbody>
+          ${items.map(l=>`<tr><td><span class="badge ${l.type==="error"?"closed":l.type==="warning"?"pending":"open"}">${escapeHtml(l.type)}</span></td><td>${escapeHtml(l.message)}</td><td>${new Date(l.time).toLocaleString("da-DK")}</td></tr>`).join("")}
+          </tbody></table>
+        </div>
+      </details>`;
+    }).join("");
+    document.getElementById("logContent").innerHTML=(html||'<div class="empty">Ingen logs endnu.</div>')+`<div class="actions" style="margin-top:18px"><button class="btn danger" onclick="lockLogs()">🔒 Lås logs</button></div>`;
+  }catch(e){
+    if(e.message.includes("Logs er låst")) renderLogLocked(); else toast(e.message);
+  }
 }
 
 async function loadUsers(){
@@ -163,7 +227,10 @@ async function checkLogin(){
   try{
     const r=await fetch("/api/me"); if(!r.ok) throw new Error();
     const data=await r.json(); currentUser=data.user; document.body.classList.remove("locked");
-    if(currentUser.role!=="admin") document.querySelector('[data-page="admin"]')?.remove();
+    if(currentUser.role!=="admin"){
+      document.querySelector('[data-page="admin"]')?.remove();
+      document.querySelector('[data-page="logs"]')?.remove();
+    }
     loadStats();
   }catch(e){showLogin();}
 }
@@ -223,7 +290,10 @@ async function login(e){
     const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:document.getElementById("loginEmail").value,password:document.getElementById("loginPassword").value})});
     const data=await r.json(); if(!r.ok) throw new Error(data.error||"Login fejlede");
     currentUser=data.user; document.getElementById("loginScreen").remove(); document.body.classList.remove("locked");
-    if(currentUser.role!=="admin") document.querySelector('[data-page="admin"]')?.remove();
+    if(currentUser.role!=="admin"){
+      document.querySelector('[data-page="admin"]')?.remove();
+      document.querySelector('[data-page="logs"]')?.remove();
+    }
     loadStats();
   }catch(err){error.textContent=err.message}
 }
@@ -250,7 +320,10 @@ async function register(e){
     currentUser=data.user;
     document.getElementById("loginScreen")?.remove();
     document.body.classList.remove("locked");
-    if(currentUser.role!=="admin") document.querySelector('[data-page="admin"]')?.remove();
+    if(currentUser.role!=="admin"){
+      document.querySelector('[data-page="admin"]')?.remove();
+      document.querySelector('[data-page="logs"]')?.remove();
+    }
 
     toast("Konto oprettet");
     loadStats();
@@ -273,6 +346,8 @@ window.showRegister=showRegister;
 window.login=login;
 window.register=register;
 window.addBotToDiscord=addBotToDiscord;
+window.unlockLogs=unlockLogs;
+window.lockLogs=lockLogs;
 async function createUser(){
   try{
     await api("/api/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("newUserName").value,email:document.getElementById("newUserEmail").value,password:document.getElementById("newUserPassword").value,role:document.getElementById("newUserRole").value})});
