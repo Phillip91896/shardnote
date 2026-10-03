@@ -73,6 +73,7 @@ async function initDatabase() {
       maintenance BOOLEAN NOT NULL DEFAULT FALSE,
       auto_reply BOOLEAN NOT NULL DEFAULT TRUE,
       welcome_messages BOOLEAN NOT NULL DEFAULT TRUE,
+      button_labels JSONB NOT NULL DEFAULT '{}'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
