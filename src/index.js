@@ -130,6 +130,10 @@ async function loadPersistentState() {
   state.messages = messages.rows;
   state.logs = logs.rows;
   if (settings.rows[0]) state.settings = settings.rows[0];
+  const buttonLabelLog = state.logs.find(item => item.type === "button_labels");
+  if (buttonLabelLog) {
+    try { state.settings.buttonLabels = JSON.parse(buttonLabelLog.message) || {}; } catch (_) {}
+  }
 }
 
 const startedAt = Date.now();
