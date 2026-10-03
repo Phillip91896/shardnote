@@ -369,8 +369,33 @@ function showLanding(){
       <div style="font-size:13px;color:var(--muted)">ShardNote Premium</div>
       <div style="font-size:42px;font-weight:900;margin:5px 0">2 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
       <div style="color:var(--green);font-size:12px">✓ Fuld adgang til dashboardet</div>
-      <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Adgang til bot-funktionerne</div>
+      <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Adgang til alle bot-funktioner</div>
       <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Løbende adgang så længe abonnementet er aktivt</div>
+    </div>
+    <div style="max-width:680px;margin:22px auto 24px;text-align:left">
+      <div style="font-size:18px;font-weight:800;margin-bottom:12px">Alt dette får du i ShardNote</div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
+        <div class="card" style="padding:13px"><b>🛡️ Moderation</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Warn, kick, ban, timeout, purge og slowmode.</div></div>
+        <div class="card" style="padding:13px"><b>🎫 Tickets</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Support-tickets, claim, close og transcript.</div></div>
+        <div class="card" style="padding:13px"><b>🤖 AutoMod</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Automatisk spam-beskyttelse og moderering.</div></div>
+        <div class="card" style="padding:13px"><b>🚨 Anti-raid</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Beskyt serveren mod hurtige joins og raids.</div></div>
+        <div class="card" style="padding:13px"><b>👋 Welcome / Leave</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Automatiske velkomst- og farvelbeskeder.</div></div>
+        <div class="card" style="padding:13px"><b>🎭 Autorole</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Giv nye medlemmer roller automatisk.</div></div>
+        <div class="card" style="padding:13px"><b>💡 Suggestions</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Forslag samlet i en bestemt kanal.</div></div>
+        <div class="card" style="padding:13px"><b>🎉 Giveaways</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Giveaways med deltagelse og vindertrækning.</div></div>
+        <div class="card" style="padding:13px"><b>📊 Polls</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Interaktive afstemninger.</div></div>
+        <div class="card" style="padding:13px"><b>📈 Levels / XP</b><div style="font-size:12px;color:var(--muted);margin-top:4px">XP, levels og leaderboard.</div></div>
+        <div class="card" style="padding:13px"><b>💰 Economy</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Coins, daily og work-system.</div></div>
+        <div class="card" style="padding:13px"><b>✅ Verification</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Verification-panel med valgt rolle.</div></div>
+        <div class="card" style="padding:13px"><b>🎭 Role panel</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Interaktive selv-roller.</div></div>
+        <div class="card" style="padding:13px"><b>💾 Backups</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Backup og restore af serveropsætning.</div></div>
+        <div class="card" style="padding:13px"><b>🎵 Voice</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Join og leave voice-kanaler.</div></div>
+        <div class="card" style="padding:13px"><b>📝 Logs</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Botlogs til en valgt Discord-kanal.</div></div>
+        <div class="card" style="padding:13px"><b>🔒 Lockdown</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Lås tekstkanaler og åbn dem igen.</div></div>
+        <div class="card" style="padding:13px"><b>✨ AI-funktioner</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Planlagt i en kommende version.</div></div>
+        <div class="card" style="padding:13px"><b>⭐ Premium</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Abonnement og betalingsfunktioner.</div></div>
+        <div class="card" style="padding:13px"><b>🎧 Musikafspilning</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Planlagt rigtig musikafspilning.</div></div>
+      </div>
     </div>
     <div class="actions" style="justify-content:center">
       <button class="btn primary" onclick="showRegister()">Opret konto og betal</button>
