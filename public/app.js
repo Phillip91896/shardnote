@@ -286,16 +286,115 @@ async function loadDatabaseSummary(){
 let currentUser=null;
 async function checkLogin(){
   try{
-    const r=await fetch("/api/me"); if(!r.ok) throw new Error();
-    const data=await r.json(); currentUser=data.user; document.body.classList.remove("locked");
-    if(currentUser.role!=="admin"){
-      document.querySelector('[data-page="admin"]')?.remove();
-      document.querySelector('[data-page="logs"]')?.remove();
-      document.querySelector('[data-page="settings"]')?.remove();
-      document.getElementById("page-settings")?.remove();
+    const r=await fetch("/api/me");
+    if(!r.ok) throw new Error();
+    const data=await r.json();
+    currentUser=data.user;
+    if(!currentUser.hasPaidAccess && currentUser.role!=="admin"){
+      showPaywall();
+      return;
     }
-    loadStats();
-  }catch(e){showLogin();}
+    unlockDashboard();
+  }catch(e){
+    showLanding();
+  }
+}
+
+function unlockDashboard(){
+  document.getElementById("loginScreen")?.remove();
+  document.body.classList.remove("locked");
+  if(currentUser?.role!=="admin"){
+    document.querySelector('[data-page="admin"]')?.remove();
+    document.querySelector('[data-page="logs"]')?.remove();
+    document.querySelector('[data-page="settings"]')?.remove();
+    document.getElementById("page-settings")?.remove();
+  }
+  loadStats();
+}
+
+async function startSubscription(){
+  try{
+    const r=await fetch("/api/billing/create-checkout",{method:"POST"});
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error||"Betalingssiden kunne ikke åbnes.");
+    window.location.href=data.url;
+  }catch(error){
+    const el=document.getElementById("paymentError");
+    if(el) el.textContent=error.message;
+    else toast(error.message);
+  }
+}
+
+async function checkBillingStatus(){
+  try{
+    const r=await fetch("/api/billing/status");
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error||"Betalingsstatus kunne ikke hentes.");
+    if(data.hasPaidAccess){
+      currentUser.hasPaidAccess=true;
+      window.history.replaceState({},document.title,"/");
+      unlockDashboard();
+      toast("Betaling godkendt — adgang låst op.");
+      return true;
+    }
+    return false;
+  }catch(error){
+    const el=document.getElementById("paymentError");
+    if(el) el.textContent=error.message;
+    return false;
+  }
+}
+
+function watchPayment(){
+  const query=new URLSearchParams(window.location.search);
+  if(query.get("payment")!=="success") return;
+  let attempts=0;
+  const timer=setInterval(async()=>{
+    attempts+=1;
+    const done=await checkBillingStatus();
+    if(done || attempts>=15) clearInterval(timer);
+  },2000);
+}
+
+function showLanding(){
+  document.body.classList.add("locked");
+  const box=document.getElementById("loginScreen") || document.createElement("div");
+  box.id="loginScreen";
+  box.innerHTML=`<div class="login-card" style="width:min(720px,100%);text-align:center">
+    <div class="brand" style="justify-content:center;padding:0 0 12px"><div class="brand-mark">S</div><span>ShardNote</span></div>
+    <div style="font-size:12px;color:var(--accent2);font-weight:800;text-transform:uppercase;letter-spacing:.12em">Discord Control Center</div>
+    <h1 style="font-size:38px;margin:12px 0 10px">Få adgang til hele ShardNote</h1>
+    <p style="max-width:560px;margin:0 auto;color:var(--muted);font-size:15px;line-height:1.6">Styr din Discord-bot fra ét samlet kontrolpanel med moderation, tickets, AutoMod, levels, economy, giveaways, logs og meget mere.</p>
+    <div class="card" style="margin:26px auto 18px;max-width:390px;text-align:left">
+      <div style="font-size:13px;color:var(--muted)">ShardNote Premium</div>
+      <div style="font-size:42px;font-weight:900;margin:5px 0">2 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
+      <div style="color:var(--green);font-size:12px">✓ Fuld adgang til dashboardet</div>
+      <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Adgang til bot-funktionerne</div>
+      <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Løbende adgang så længe abonnementet er aktivt</div>
+    </div>
+    <div class="actions" style="justify-content:center">
+      <button class="btn primary" onclick="showRegister()">Opret konto og betal</button>
+      <button class="btn" onclick="showLogin()">Jeg har allerede en konto</button>
+    </div>
+  </div>`;
+  if(!box.parentElement) document.body.appendChild(box);
+}
+
+function showPaywall(){
+  document.body.classList.add("locked");
+  const box=document.getElementById("loginScreen") || document.createElement("div");
+  box.id="loginScreen";
+  box.innerHTML=`<div class="login-card" style="text-align:center">
+    <div class="brand" style="justify-content:center;padding:0 0 16px"><div class="brand-mark">S</div><span>ShardNote</span></div>
+    <h1>Abonnement kræves</h1>
+    <p>Din konto er oprettet, men du skal have et aktivt abonnement på <b>2 € pr. måned</b> for at få adgang til kontrolpanelet.</p>
+    <button class="btn primary" style="width:100%;margin-top:8px" onclick="startSubscription()">Betal 2 € / måned</button>
+    <button class="btn" style="width:100%;margin-top:10px" onclick="checkBillingStatus()">Jeg har allerede betalt</button>
+    <button class="btn small" style="margin-top:18px" onclick="logout()">Log ud</button>
+    <div id="paymentError" style="color:var(--red);font-size:12px;margin-top:12px"></div>
+  </div>`;
+  if(!box.parentElement) document.body.appendChild(box);
+  watchPayment();
 }
 function showLogin(){
   document.body.classList.add("locked");
@@ -352,14 +451,9 @@ async function login(e){
   try{
     const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:document.getElementById("loginEmail").value,password:document.getElementById("loginPassword").value})});
     const data=await r.json(); if(!r.ok) throw new Error(data.error||"Login fejlede");
-    currentUser=data.user; document.getElementById("loginScreen").remove(); document.body.classList.remove("locked");
-    if(currentUser.role!=="admin"){
-      document.querySelector('[data-page="admin"]')?.remove();
-      document.querySelector('[data-page="logs"]')?.remove();
-      document.querySelector('[data-page="settings"]')?.remove();
-      document.getElementById("page-settings")?.remove();
-    }
-    loadStats();
+    currentUser=data.user;
+    if(currentUser.hasPaidAccess || currentUser.role==="admin") unlockDashboard();
+    else showPaywall();
   }catch(err){error.textContent=err.message}
 }
 async function register(e){
@@ -383,17 +477,8 @@ async function register(e){
     if(!r.ok) throw new Error(data.error||"Kunne ikke oprette konto.");
 
     currentUser=data.user;
-    document.getElementById("loginScreen")?.remove();
-    document.body.classList.remove("locked");
-    if(currentUser.role!=="admin"){
-      document.querySelector('[data-page="admin"]')?.remove();
-      document.querySelector('[data-page="logs"]')?.remove();
-      document.querySelector('[data-page="settings"]')?.remove();
-      document.getElementById("page-settings")?.remove();
-    }
-
     toast("Konto oprettet");
-    loadStats();
+    showPaywall();
   }catch(err){
     error.textContent=err.message;
   }
@@ -410,6 +495,10 @@ window.navigate=navigate;
 window.logout=logout;
 window.showLogin=showLogin;
 window.showRegister=showRegister;
+window.showLanding=showLanding;
+window.showPaywall=showPaywall;
+window.startSubscription=startSubscription;
+window.checkBillingStatus=checkBillingStatus;
 window.login=login;
 window.register=register;
 window.addBotToDiscord=addBotToDiscord;
