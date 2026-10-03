@@ -35,7 +35,7 @@ const commands = [
   }
 ];
 
-function createBot({ state, log, setReady }) {
+function createBot({ state, log, createTicket, setReady }) {
   const client = new Client({
     intents: [
       GatewayIntentBits.Guilds,
@@ -106,16 +106,22 @@ function createBot({ state, log, setReady }) {
         }
 
         const title = interaction.options.getString("title", true).slice(0, 120);
-        const ticket = {
-          id: Date.now(),
-          title,
-          user: interaction.user.tag,
-          status: "open",
-          priority: "normal",
-          createdAt: new Date().toISOString()
-        };
+        const ticket = createTicket
+          ? await createTicket({
+              title,
+              user: interaction.user.tag,
+              status: "open",
+              priority: "normal"
+            })
+          : {
+              id: Date.now(),
+              title,
+              user: interaction.user.tag,
+              status: "open",
+              priority: "normal",
+              createdAt: new Date().toISOString()
+            };
 
-        state.tickets.unshift(ticket);
         log("ticket", `Ticket #${ticket.id} created by ${interaction.user.tag}`);
         return interaction.reply(
           `Ticket #${ticket.id} created: **${title}**`
@@ -202,16 +208,22 @@ function createBot({ state, log, setReady }) {
 
       if (command === "ticket") {
         const title = parts.join(" ").trim() || "New Discord ticket";
-        const ticket = {
-          id: Date.now(),
-          title: title.slice(0, 120),
-          user: message.author.tag,
-          status: "open",
-          priority: "normal",
-          createdAt: new Date().toISOString()
-        };
+        const ticket = createTicket
+          ? await createTicket({
+              title: title.slice(0, 120),
+              user: message.author.tag,
+              status: "open",
+              priority: "normal"
+            })
+          : {
+              id: Date.now(),
+              title: title.slice(0, 120),
+              user: message.author.tag,
+              status: "open",
+              priority: "normal",
+              createdAt: new Date().toISOString()
+            };
 
-        state.tickets.unshift(ticket);
         await message.reply(`Ticket #${ticket.id} created.`);
         log("ticket", `Ticket #${ticket.id} created by ${message.author.tag}`);
         return;
