@@ -21,7 +21,10 @@
     ["💾","Backups","Backup og restore af roller og kanaler.","/backup /restore"],
     ["🎵","Voice","Join og leave voice-kanaler.","/music-join /music-leave"],
     ["📝","Logs","Send botlogs til en valgt Discord-kanal.","/set-log-channel"],
-    ["🔒","Lockdown","Lås tekstkanaler og åbn dem igen.","/lockdown /unlockdown"]
+    ["🔒","Lockdown","Lås tekstkanaler og åbn dem igen.","/lockdown /unlockdown"],
+    ["✨","AI-funktioner","AI-assistent og automatisering til ShardNote.","Planlagt"],
+    ["⭐","Premium","Premium-planer og betalingsfunktioner.","Planlagt"],
+    ["🎧","Musikafspilning","Rigtig musikafspilning via en lydkilde.","Planlagt"]
   ];
 
   function esc(value){
