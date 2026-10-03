@@ -7,7 +7,7 @@ async function addBotToDiscord(){
     const r=await fetch("/api/bot/invite");
     const data=await r.json();
     if(!r.ok) throw new Error(data.error || "The Discord bot is not online yet.");
-    window.open(data.url, "_blank", "noopener,noreferrer");
+    window.location.href=data.url;
   }catch(e){
     toast(e.message);
   }
