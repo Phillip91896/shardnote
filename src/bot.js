@@ -311,7 +311,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
   }
 
 
-  async function applyDiscordTemplate(guildId, templateKey) {
+  async function applyDiscordTemplate(guildId, templateKey, options = {}) {
     const guild = client.guilds.cache.get(String(guildId));
     if (!guild) throw new Error("Discord serveren blev ikke fundet.");
     if (templateKey !== "f5-vip") throw new Error("Ukendt Discord-skitse.");
@@ -322,30 +322,39 @@ function createBot({ state, db, log, createTicket, setReady }) {
       throw new Error("ShardNote mangler rettighederne Manage Roles, Manage Channels eller Send Messages på serveren.");
     }
 
+    const prefixRoles = new Set(Array.isArray(options.prefixRoles) ? options.prefixRoles.map(String) : [
+      "owner", "admin", "moderator", "support", "vip", "member", "muted"
+    ]);
+    const prefixChannels = new Set(Array.isArray(options.prefixChannels) ? options.prefixChannels.map(String) : [
+      "welcome", "rules", "verification", "announcements", "chat", "suggestions", "support", "ticketPanel",
+      "vipChat", "staffChat", "logs", "generalVoice", "vipVoice"
+    ]);
+    const roleName = (key, base) => prefixRoles.has(key) ? "F5 " + base : base;
+
     const roleSpecs = [
-      { key: "owner", name: "👑 F5 Ejer", color: 0xf1c40f, hoist: true, permissions: [PermissionFlagsBits.Administrator] },
-      { key: "admin", name: "🛡️ F5 Admin", color: 0xe74c3c, hoist: true, permissions: [
+      { key: "owner", name: roleName("owner", "👑 Ejer"), color: 0xf1c40f, hoist: true, permissions: [PermissionFlagsBits.Administrator] },
+      { key: "admin", name: roleName("admin", "🛡️ Admin"), color: 0xe74c3c, hoist: true, permissions: [
         PermissionFlagsBits.ManageGuild, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageRoles,
         PermissionFlagsBits.ManageMessages, PermissionFlagsBits.KickMembers, PermissionFlagsBits.BanMembers,
         PermissionFlagsBits.ModerateMembers, PermissionFlagsBits.ViewAuditLog
       ] },
-      { key: "moderator", name: "🔨 F5 Moderator", color: 0xe67e22, hoist: true, permissions: [
+      { key: "moderator", name: roleName("moderator", "🔨 Moderator"), color: 0xe67e22, hoist: true, permissions: [
         PermissionFlagsBits.ManageMessages, PermissionFlagsBits.ModerateMembers,
         PermissionFlagsBits.KickMembers, PermissionFlagsBits.ViewAuditLog
       ] },
-      { key: "support", name: "🎫 F5 Support", color: 0x3498db, hoist: true, permissions: [
+      { key: "support", name: roleName("support", "🎫 Support"), color: 0x3498db, hoist: true, permissions: [
         PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory,
         PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks
       ] },
-      { key: "vip", name: "⭐ F5 VIP", color: 0x9b59b6, hoist: true, permissions: [
+      { key: "vip", name: roleName("vip", "⭐ VIP"), color: 0x9b59b6, hoist: true, permissions: [
         PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory,
         PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks, PermissionFlagsBits.Connect, PermissionFlagsBits.Speak
       ] },
-      { key: "member", name: "✅ F5 Medlem", color: 0x2ecc71, hoist: false, permissions: [
+      { key: "member", name: roleName("member", "✅ Medlem"), color: 0x2ecc71, hoist: false, permissions: [
         PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory,
         PermissionFlagsBits.Connect, PermissionFlagsBits.Speak
       ] },
-      { key: "muted", name: "🔇 F5 Muted", color: 0x7f8c8d, hoist: false, permissions: [
+      { key: "muted", name: roleName("muted", "🔇 Muted"), color: 0x7f8c8d, hoist: false, permissions: [
         PermissionFlagsBits.ViewChannel, PermissionFlagsBits.ReadMessageHistory
       ] }
     ];
@@ -442,23 +451,21 @@ function createBot({ state, db, log, createTicket, setReady }) {
       ])
     ];
 
-    function f5Name(name) {
+    function prefixedName(key, name) {
       const clean = String(name || "").trim();
-      return clean.toLowerCase().startsWith("f5 ") ? clean : "F5 " + clean;
+      const shouldPrefix = prefixChannels.has(key);
+      return shouldPrefix ? "F5 " + clean : clean;
     }
 
     async function ensureCategory(name, permissionOverwrites) {
-      const targetName = f5Name(name);
-      let category = guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name === targetName);
+      let category = guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name === name);
       if (!category) {
-        const old = guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name === name);
-        if (old) {
-          category = await old.setName(targetName, "ShardNote Discord-skitse: F5 prefix").catch(() => old);
-        }
+        const old = guild.channels.cache.find(c => c.type === ChannelType.GuildCategory && c.name === name.replace(/^F5 /, ""));
+        if (old) category = old;
       }
       if (!category) {
         category = await guild.channels.create({
-          name: targetName,
+          name,
           type: ChannelType.GuildCategory,
           permissionOverwrites,
           reason: "ShardNote Discord-skitse: F5 VIP"
@@ -469,13 +476,15 @@ function createBot({ state, db, log, createTicket, setReady }) {
       return category;
     }
 
-    async function ensureText(name, parent, permissionOverwrites = null) {
-      const targetName = f5Name(name);
+    async function ensureText(key, name, parent, permissionOverwrites = null) {
+      const targetName = prefixedName(key, name);
       let channel = guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === targetName && c.parentId === parent.id);
       if (!channel) {
-        const old = guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === name && c.parentId === parent.id);
-        if (old) {
-          channel = await old.setName(targetName, "ShardNote Discord-skitse: F5 prefix").catch(() => old);
+        const plain = guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === name && c.parentId === parent.id);
+        const prefixed = guild.channels.cache.find(c => c.type === ChannelType.GuildText && c.name === "F5 " + name && c.parentId === parent.id);
+        channel = plain || prefixed;
+        if (channel && channel.name !== targetName) {
+          await channel.setName(targetName, "ShardNote Discord-skitse: F5 prefix").catch(() => {});
         }
       }
       if (!channel) {
@@ -492,13 +501,15 @@ function createBot({ state, db, log, createTicket, setReady }) {
       return channel;
     }
 
-    async function ensureVoice(name, parent, permissionOverwrites) {
-      const targetName = f5Name(name);
+    async function ensureVoice(key, name, parent, permissionOverwrites) {
+      const targetName = prefixedName(key, name);
       let channel = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name === targetName && c.parentId === parent.id);
       if (!channel) {
-        const old = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name === name && c.parentId === parent.id);
-        if (old) {
-          channel = await old.setName(targetName, "ShardNote Discord-skitse: F5 prefix").catch(() => old);
+        const plain = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name === name && c.parentId === parent.id);
+        const prefixed = guild.channels.cache.find(c => c.type === ChannelType.GuildVoice && c.name === "F5 " + name && c.parentId === parent.id);
+        channel = plain || prefixed;
+        if (channel && channel.name !== targetName) {
+          await channel.setName(targetName, "ShardNote Discord-skitse: F5 prefix").catch(() => {});
         }
       }
       if (!channel) {
@@ -523,19 +534,19 @@ function createBot({ state, db, log, createTicket, setReady }) {
     const staff = await ensureCategory("🔒 STAFF", staffCategoryOverwrites);
     const voice = await ensureCategory("🔊 VOICE", voiceOverwrites);
 
-    const welcome = await ensureText("velkommen", info);
-    const rules = await ensureText("regler", info);
-    const verification = await ensureText("verification", info);
-    const announcements = await ensureText("annonceringer", info);
-    const chat = await ensureText("chat", community);
-    const suggestions = await ensureText("forslag", community);
-    const supportChannel = await ensureText("support", support);
-    const ticketPanel = await ensureText("ticket-panel", support);
-    const vipChat = await ensureText("vip-chat", vip);
-    const staffChat = await ensureText("staff-chat", staff);
-    const logs = await ensureText("logs", staff);
-    const generalVoice = await ensureVoice("Fælles", voice, voiceOverwrites);
-    const vipVoice = await ensureVoice("VIP Lounge", voice, vipOverwrites);
+    const welcome = await ensureText("welcome", "velkommen", info);
+    const rules = await ensureText("rules", "regler", info);
+    const verification = await ensureText("verification", "verification", info);
+    const announcements = await ensureText("announcements", "annonceringer", info);
+    const chat = await ensureText("chat", "chat", community);
+    const suggestions = await ensureText("suggestions", "forslag", community);
+    const supportChannel = await ensureText("support", "support", support);
+    const ticketPanel = await ensureText("ticketPanel", "ticket-panel", support);
+    const vipChat = await ensureText("vipChat", "vip-chat", vip);
+    const staffChat = await ensureText("staffChat", "staff-chat", staff);
+    const logs = await ensureText("logs", "logs", staff);
+    const generalVoice = await ensureVoice("generalVoice", "Fælles", voice, voiceOverwrites);
+    const vipVoice = await ensureVoice("vipVoice", "VIP Lounge", voice, vipOverwrites);
 
     for (const channel of [welcome, rules, verification, announcements]) {
       await channel.permissionOverwrites.edit(guild.roles.everyone, { SendMessages: false }, { reason: "ShardNote F5 VIP template" }).catch(() => {});
@@ -1724,7 +1735,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
     }
   });
 
-  client.dashboardApplyDiscordTemplate = async (guildId, templateKey) => applyDiscordTemplate(guildId, templateKey);
+  client.dashboardApplyDiscordTemplate = async (guildId, templateKey, options) => applyDiscordTemplate(guildId, templateKey, options);
 
   client.dashboardCommands = commands.map(command => ({
     name: command.name,
