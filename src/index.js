@@ -524,14 +524,62 @@ async function ensureAdmin() {
     }
   }
 }
+const SESSION_SECRET = process.env.SESSION_SECRET || process.env.DISCORD_TOKEN || process.env.STRIPE_SECRET_KEY || process.env.DATABASE_URL || "shardnote-session-secret";
+
+function signSessionUserId(userId) {
+  return crypto.createHmac("sha256", SESSION_SECRET).update(String(userId)).digest("hex");
+}
+
+function createSessionToken(userId) {
+  const id = String(userId);
+  return id + "." + signSessionUserId(id);
+}
+
+function verifySessionToken(token) {
+  const raw = String(token || "");
+  const [id, signature] = raw.split(".");
+  if (!id || !signature || !/^\d+$/.test(id)) return null;
+  const expected = signSessionUserId(id);
+  if (signature.length !== expected.length) return null;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expected)) ? Number(id) : null;
+  } catch {
+    return null;
+  }
+}
+
 function currentUser(req) {
   const sid = parseCookies(req).shardnote_session;
-  return sid ? sessions.get(sid) : null;
+  if (!sid) return null;
+  const cached = sessions.get(sid);
+  if (cached) return cached;
+
+  const userId = verifySessionToken(sid);
+  if (userId == null) return null;
+
+  if (!db) {
+    return state.users.find(user => Number(user.id) === userId) || null;
+  }
+
+  return { id: userId };
 }
 async function updateUserSubscription({userId,status,customerId=null,subscriptionId=null,currentPeriodEnd=null}){const normalizedStatus=String(status||"inactive");const periodEnd=currentPeriodEnd?new Date(Number(currentPeriodEnd)*1000).toISOString():null;if(db){await db.query(`UPDATE public.users SET subscription_status=$1,stripe_customer_id=COALESCE($2,stripe_customer_id),stripe_subscription_id=COALESCE($3,stripe_subscription_id),subscription_current_period_end=COALESCE($4::timestamptz,subscription_current_period_end) WHERE id=$5`,[normalizedStatus,customerId,subscriptionId,periodEnd,userId]);return;}const user=state.users.find(item=>String(item.id)===String(userId));if(user){user.subscriptionStatus=normalizedStatus;if(customerId)user.stripeCustomerId=customerId;if(subscriptionId)user.stripeSubscriptionId=subscriptionId;if(periodEnd)user.subscriptionCurrentPeriodEnd=periodEnd;}}
 async function updateUserSubscriptionByStripeSubscription(subscriptionId,status){if(!db||!subscriptionId)return;await db.query("UPDATE public.users SET subscription_status=$1 WHERE stripe_subscription_id=$2",[status,subscriptionId]);}
 async function refreshSubscriptionFromStripe(user){if(!stripe||!user?.stripeSubscriptionId)return user;try{const subscription=await stripe.subscriptions.retrieve(user.stripeSubscriptionId);const customerId=typeof subscription.customer==="string"?subscription.customer:subscription.customer?.id||user.stripeCustomerId||null;await updateUserSubscription({userId:user.id,status:subscription.status,customerId,subscriptionId:subscription.id,currentPeriodEnd:subscription.current_period_end});user.subscriptionStatus=subscription.status;user.stripeCustomerId=customerId;user.stripeSubscriptionId=subscription.id;user.subscriptionCurrentPeriodEnd=subscription.current_period_end?new Date(subscription.current_period_end*1000).toISOString():user.subscriptionCurrentPeriodEnd;}catch(error){console.error("[ShardNote] Could not refresh Stripe subscription:",error.message);}return user;}
-async function getSessionUser(req){const sessionUser=currentUser(req);if(!sessionUser)return null;if(!db)return sessionUser;const result=await db.query(`SELECT id,name,email,role,subscription_status AS "subscriptionStatus",trial_used AS "trialUsed",stripe_customer_id AS "stripeCustomerId",stripe_subscription_id AS "stripeSubscriptionId",subscription_current_period_end AS "subscriptionCurrentPeriodEnd" FROM public.users WHERE id=$1 LIMIT 1`,[sessionUser.id]);const row=result.rows[0];if(!row)return null;Object.assign(sessionUser,row);return sessionUser;}
+async function getSessionUser(req){
+  const sessionUser=currentUser(req);
+  if(!sessionUser) return null;
+  if(!db) return sessionUser;
+  const result=await db.query(
+    `SELECT id,name,email,role,plan,subscription_status AS "subscriptionStatus",trial_used AS "trialUsed",stripe_customer_id AS "stripeCustomerId",stripe_subscription_id AS "stripeSubscriptionId",subscription_current_period_end AS "subscriptionCurrentPeriodEnd"
+     FROM public.users WHERE id=$1 LIMIT 1`,
+    [sessionUser.id]
+  );
+  const row=result.rows[0];
+  if(!row) return null;
+  Object.assign(sessionUser,row);
+  return sessionUser;
+}
 function hasPaidAccess(user){return user?.role==="admin"||["active","trialing"].includes(user?.subscriptionStatus);}
 async function requireAuth(req,res,next){try{const user=await getSessionUser(req);if(!user)return res.status(401).json({error:"Du skal logge ind."});req.user=user;next();}catch(error){console.error(error);res.status(500).json({error:"Loginstatus kunne ikke hentes."});}}
 function requireAdmin(req, res, next) {
@@ -669,12 +717,13 @@ app.post("/api/login", async (req, res) => {
       return res.status(401).json({ error: "Forkert email eller adgangskode." });
     }
 
-    const sid = crypto.randomBytes(32).toString("hex");
+    const sid = createSessionToken(user.id);
     sessions.set(sid, {
       id: user.id,
       name: user.name,
       email: user.email,
-      role: user.role
+      role: user.role,
+      plan: user.plan || "member"
     });
 
     res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
