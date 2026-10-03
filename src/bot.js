@@ -225,7 +225,9 @@ const commands = [
     name: "restore",
     description: "Restore a ShardNote backup.",
     options: [{ type: 11, name: "file", description: "Backup JSON", required: true }]
-  }
+  },
+  { name: "music-join", description: "Join your current voice channel." },
+  { name: "music-leave", description: "Leave the current voice channel." }
 ];
 
 function createBot({ state, db, log, createTicket, setReady }) {
