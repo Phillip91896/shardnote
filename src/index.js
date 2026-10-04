@@ -1543,23 +1543,17 @@ app.patch("/api/settings", requireAuth, requireAdmin, async (req, res) => {
 
 app.post("/api/logs/unlock", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const password = String(req.body.password || "");
-    if (!password) return res.status(400).json({ error: "Adgangskode mangler." });
+    const accessCode = String(req.body.password || "");
+    const configuredCode = String(process.env.LOG_ACCESS_CODE || "");
 
-    let valid = false;
-    if (db) {
-      const result = await db.query(
-        "SELECT password_hash FROM public.users WHERE id = $1 AND role = 'admin' LIMIT 1",
-        [req.user.id]
-      );
-      const row = result.rows[0];
-      valid = !!row && row.password_hash === hashPassword(password);
-    } else {
-      const user = state.users.find(u => String(u.id) === String(req.user.id));
-      valid = !!user && user.role === "admin" && user.passwordHash === hashPassword(password);
-    }
+    if (!accessCode) return res.status(400).json({ error: "Logkode mangler." });
+    if (!configuredCode) return res.status(503).json({ error: "Logkoden er ikke konfigureret endnu." });
 
-    if (!valid) return res.status(401).json({ error: "Forkert adgangskode." });
+    const providedHash = crypto.createHash("sha256").update(accessCode).digest();
+    const configuredHash = crypto.createHash("sha256").update(configuredCode).digest();
+    const valid = crypto.timingSafeEqual(providedHash, configuredHash);
+
+    if (!valid) return res.status(401).json({ error: "Forkert logkode." });
 
     const sid = getSessionId(req);
     logsUnlocks.set(sid, Date.now() + 15 * 60 * 1000);
@@ -2141,9 +2135,9 @@ body.locked > .app{display:none}
       <div class="empty">
         <div style="font-size:34px;margin-bottom:10px">🔐</div>
         <b>Logcenter er låst</b>
-        <div style="color:var(--muted);font-size:12px;margin:8px 0 15px">Indtast din admin-adgangskode for at åbne logcenteret.</div>
+        <div style="color:var(--muted);font-size:12px;margin:8px 0 15px">Indtast den faste logkode for at åbne logcenteret.</div>
         <div style="max-width:360px;margin:0 auto">
-          <input id="logPassword" type="password" placeholder="Admin-adgangskode" style="width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none">
+          <input id="logPassword" type="password" placeholder="Logkode" style="width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none">
           <button class="btn primary" data-button-label="logsUnlock" style="margin-top:10px;width:100%" onclick="unlockLogs()">🔓 Åbn logcenter</button>
           <div id="logUnlockError" style="color:var(--red);font-size:12px;margin-top:10px"></div>
         </div>
