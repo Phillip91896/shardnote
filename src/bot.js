@@ -850,7 +850,12 @@ function createBot({ state, db, log, createTicket, setReady }) {
       categories.push(await ensureCategory(name,overwrites));
     }
 
-    const findCategory = (patterns, fallbackIndex=0) => categories.find(c=>patterns.some(p=>c.name.toLowerCase().includes(p))) || categories[fallbackIndex] || categories[0];
+    const findCategory = (patterns, fallbackIndex=0) => {
+      const index = config.categories.findIndex(categoryName =>
+        patterns.some(pattern => String(categoryName).toLowerCase().includes(pattern))
+      );
+      return categories[index >= 0 ? index : fallbackIndex] || categories[0];
+    };
 
     let textIndex=0;
     const textChannels=[];
@@ -1060,6 +1065,8 @@ function createBot({ state, db, log, createTicket, setReady }) {
       channels: textChannels.map(c=>c.name),
       staffVoiceRooms: staffVoiceChannels.map(c=>c.name),
       waitingSupportVoice: waitingSupportChannel?.name || null,
+      language,
+      languageName: TEMPLATE_LANGUAGE_NAMES[language] || language,
       features: config.features
     };
   }
