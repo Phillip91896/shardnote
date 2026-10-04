@@ -1991,6 +1991,10 @@ body.locked > .app{display:none}
       </div>
     </div>
   </div>
+  <div class="card" style="margin-top:18px">
+    <div class="section-title"><div><h2>📋 Dine opgraderingsidéer</h2><span>Seneste idéer sendt fra din konto.</span></div></div>
+    <div id="upgradeIdeasList"><div class="empty">Indlæser…</div></div>
+  </div>
 </section>
 
 <section class="page" id="page-tickets">
