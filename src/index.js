@@ -185,7 +185,9 @@ async function initDatabase() {
       ADD COLUMN IF NOT EXISTS guild_id VARCHAR(32),
       ADD COLUMN IF NOT EXISTS user_id VARCHAR(32),
       ADD COLUMN IF NOT EXISTS channel_id VARCHAR(32),
-      ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(32)
+      ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(32),
+      ADD COLUMN IF NOT EXISTS category VARCHAR(40) NOT NULL DEFAULT 'support',
+      ADD COLUMN IF NOT EXISTS description TEXT
   `);
 
   await db.query(`
@@ -607,11 +609,13 @@ async function isGuildLinkedToUser(userId, guildId) {
   return result.rowCount > 0;
 }
 
-async function saveTicket({ title, user, status = "open", priority = "normal", ownerUserId = null, guildId = null }) {
+async function saveTicket({ title, user, status = "open", priority = "normal", ownerUserId = null, guildId = null, category = "support", description = "" }) {
   const cleanTitle = String(title || "New ticket").slice(0, 120);
   const cleanUser = String(user || "Dashboard user").slice(0, 80);
   const cleanStatus = ["open", "pending", "closed"].includes(status) ? status : "open";
   const cleanPriority = ["low", "normal", "high"].includes(priority) ? priority : "normal";
+  const cleanCategory = String(category || "support").trim().slice(0, 40) || "support";
+  const cleanDescription = String(description || "").trim().slice(0, 5000);
   let resolvedOwnerUserId = ownerUserId || null;
 
   if (!resolvedOwnerUserId && db && guildId) {
@@ -624,13 +628,15 @@ async function saveTicket({ title, user, status = "open", priority = "normal", o
 
   if (db) {
     const result = await db.query(
-      `INSERT INTO public.tickets (title, user_name, status, priority, owner_user_id)
-       VALUES ($1, $2, $3, $4, $5)
-       RETURNING id, title, user_name AS "user", status, priority, created_at AS "createdAt"`,
-      [cleanTitle, cleanUser, cleanStatus, cleanPriority, resolvedOwnerUserId]
+      `INSERT INTO public.tickets (title, user_name, status, priority, owner_user_id, category, description)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
+       RETURNING id, title, user_name AS "user", status, priority, category, description, created_at AS "createdAt"`,
+      [cleanTitle, cleanUser, cleanStatus, cleanPriority, resolvedOwnerUserId, cleanCategory, cleanDescription]
     );
     const ticket = result.rows[0];
     ticket.ownerUserId = resolvedOwnerUserId;
+    ticket.category = cleanCategory;
+    ticket.description = cleanDescription;
     state.tickets.unshift(ticket);
     state.tickets = state.tickets.slice(0, 500);
     return ticket;
@@ -642,6 +648,8 @@ async function saveTicket({ title, user, status = "open", priority = "normal", o
     user: cleanUser,
     status: cleanStatus,
     priority: cleanPriority,
+    category: cleanCategory,
+    description: cleanDescription,
     ownerUserId: resolvedOwnerUserId,
     createdAt: new Date().toISOString()
   };
@@ -1250,7 +1258,7 @@ app.get("/api/tickets", async (req, res) => {
     if (db) {
       const result = req.user?.role === "admin"
         ? await db.query(`
-            SELECT id, title, user_name AS "user", status, priority, created_at AS "createdAt", owner_user_id AS "ownerUserId"
+            SELECT id, title, user_name AS "user", status, priority, category, description, created_at AS "createdAt", owner_user_id AS "ownerUserId"
             FROM public.tickets
             ORDER BY created_at DESC LIMIT 500
           `)
@@ -1285,6 +1293,33 @@ app.post("/api/tickets", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Ticket kunne ikke oprettes." });
+  }
+});
+
+app.post("/api/upgrade-ideas", async (req, res) => {
+  try {
+    const title = String(req.body?.title || "").trim().slice(0, 120);
+    const description = String(req.body?.description || "").trim().slice(0, 5000);
+    const area = String(req.body?.area || "Website / Bot").trim().slice(0, 80);
+
+    if (title.length < 3) return res.status(400).json({ error: "Skriv en titel på mindst 3 tegn." });
+    if (description.length < 10) return res.status(400).json({ error: "Skriv lidt mere om din idé." });
+
+    const ticket = await saveTicket({
+      title: "Opgradering: " + title,
+      user: req.user?.email || "Dashboard user",
+      status: "open",
+      priority: "normal",
+      ownerUserId: req.user.id,
+      category: "upgrade",
+      description: "Område: " + area + "\n\n" + description
+    });
+
+    log("ticket", `Upgrade idea #${ticket.id} created by ${req.user?.email || "user"}`, req.user.id);
+    res.status(201).json(ticket);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Opgraderingsidéen kunne ikke oprettes." });
   }
 });
 
@@ -1730,7 +1765,7 @@ app.post("/api/bot/guilds/:guildId/templates/:templateKey", requireAuth, require
 
     const templateKey = String(req.params.templateKey || "").trim().toLowerCase();
     const allowedTemplates = [
-      "f5-vip","fivem-vip","fivem-esx","fivem-rp","rust","vennegruppe",
+      "fivem-vip","fivem-esx","fivem-rp","rust","vennegruppe",
       "gaming","clan","streamer","community","support","shop","creator","custom"
     ];
     if (!allowedTemplates.includes(templateKey)) {
