@@ -931,7 +931,7 @@ app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
 
     if (db) {
       const result = await db.query(
-        "SELECT id, name, email, role, created_at AS \"createdAt\" FROM users ORDER BY id ASC"
+        "SELECT id, name, email, role, plan, created_at AS \"createdAt\" FROM users ORDER BY id ASC"
       );
       return res.json(result.rows);
     }
