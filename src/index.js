@@ -715,6 +715,16 @@ function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") return res.status(403).json({ error: "Kun administratorer har adgang." });
   next();
 }
+function getSiteOwnerEmail() {
+  return String(process.env.SITE_OWNER_EMAIL || process.env.ADMIN_EMAIL || "admin@shardnote.local").trim().toLowerCase();
+}
+function isSiteOwner(user) {
+  return !!user?.email && String(user.email).trim().toLowerCase() === getSiteOwnerEmail();
+}
+function requireSiteOwner(req, res, next) {
+  if (!isSiteOwner(req.user)) return res.status(403).json({ error: "Kun ejeren af ShardNote har adgang til IP-adresser." });
+  next();
+}
 function requirePaid(req, res, next) {
   if (!hasPaidAccess(req.user)) return res.status(402).json({ requiresSubscription: true, error: "Et aktivt ShardNote-abonnement kræves." });
   next();
@@ -902,7 +912,8 @@ app.post("/api/login", async (req, res) => {
         subscriptionStatus: user.subscriptionStatus || "inactive",
         trialUsed: !!user.trialUsed,
         plan: user.plan || "member",
-        hasPaidAccess: hasPaidAccess(user)
+        hasPaidAccess: hasPaidAccess(user),
+         isOwner: isSiteOwner(user)
       }
     });
   } catch (error) {
@@ -1027,7 +1038,7 @@ app.get("/api/me", async (req,res)=>{
   const user=await getSessionUser(req);
   if(!user)return res.status(401).json({error:"Ikke logget ind."});
   if(stripe&&user.stripeSubscriptionId)await refreshSubscriptionFromStripe(user);
-  res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role,plan:user.plan||"member",subscriptionStatus:user.subscriptionStatus||"inactive",trialUsed:!!user.trialUsed,hasPaidAccess:hasPaidAccess(user)}});
+  res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role,plan:user.plan||"member",subscriptionStatus:user.subscriptionStatus||"inactive",trialUsed:!!user.trialUsed,hasPaidAccess:hasPaidAccess(user),isOwner:isSiteOwner(user)}});
 });
 
 app.get("/api/admin/login-history", requireAuth, requireAdmin, async (req, res) => {
@@ -1406,6 +1417,7 @@ app.patch("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res
     }
 
     const banType = req.body?.type === "ip" ? "ip" : "normal";
+    if (banType === "ip" && !isSiteOwner(req.user)) return res.status(403).json({ error: "Kun ejeren af ShardNote kan bruge IP-ban." });
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: "Ugyldigt bruger-ID." });
 
@@ -1963,7 +1975,7 @@ app.patch("/api/settings", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-app.post("/api/ip/unlock", requireAuth, requireAdmin, async (req, res) => {
+app.post("/api/ip/unlock", requireAuth, requireSiteOwner, async (req, res) => {
   try {
     const accessCode = String(req.body.password || "");
     const configuredCode = String(process.env.IP_ACCESS_CODE || "");
@@ -1985,13 +1997,13 @@ app.post("/api/ip/unlock", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-app.post("/api/ip/lock", requireAuth, requireAdmin, (req, res) => {
+app.post("/api/ip/lock", requireAuth, requireSiteOwner, (req, res) => {
   const sid = getSessionId(req);
   if (sid) ipUnlocks.delete(sid);
   res.json({ ok: true });
 });
 
-app.get("/api/ip/overview", requireAuth, requireAdmin, requireIpAccess, async (req, res) => {
+app.get("/api/ip/overview", requireAuth, requireSiteOwner, requireIpAccess, async (req, res) => {
   try {
     if (db) {
       const [auditResult, banResult] = await Promise.all([
