@@ -548,7 +548,28 @@ function showLanding(){
   const box=document.getElementById("loginScreen") || document.createElement("div");
   box.id="loginScreen";
   box.innerHTML=`<div class="login-card" style="width:min(980px,100%);text-align:center;max-height:calc(100vh - 36px);overflow:auto">
-    <div class="brand" style="justify-content:center;padding:0 0 10px"><div class="brand-mark">S</div><span>ShardNote</span></div>
+    <div style="display:flex;justify-content:flex-end;margin-bottom:8px">
+      <select id="snLandingLanguagePicker" aria-label="Language" style="border:1px solid var(--border);background:#171722;color:#fff;border-radius:10px;padding:8px 10px;font-size:12px;outline:none;cursor:pointer">
+        <option value="da">🇩🇰 Dansk</option>
+        <option value="en">🇬🇧 English</option>
+        <option value="de">🇩🇪 Deutsch</option>
+        <option value="fr">🇫🇷 Français</option>
+        <option value="es">🇪🇸 Español</option>
+        <option value="it">🇮🇹 Italiano</option>
+        <option value="nl">🇳🇱 Nederlands</option>
+        <option value="pt">🇵🇹 Português</option>
+        <option value="sv">🇸🇪 Svenska</option>
+        <option value="no">🇳🇴 Norsk</option>
+        <option value="fi">🇫🇮 Suomi</option>
+        <option value="pl">🇵🇱 Polski</option>
+        <option value="tr">🇹🇷 Türkçe</option>
+        <option value="ru">🇷🇺 Русский</option>
+        <option value="uk">🇺🇦 Українська</option>
+        <option value="ja">🇯🇵 日本語</option>
+        <option value="ko">🇰🇷 한국어</option>
+        <option value="zh">🇨🇳 中文</option>
+      </select>
+    </div><div class="brand" style="justify-content:center;padding:0 0 10px"><div class="brand-mark">S</div><span>ShardNote</span></div>
     <div style="font-size:12px;color:var(--accent2);font-weight:800;text-transform:uppercase;letter-spacing:.12em">Discord Control Center</div>
     <h1 style="font-size:34px;margin:10px 0 8px">Få adgang til ShardNote</h1>
     <p style="max-width:620px;margin:0 auto;color:var(--muted);font-size:14px;line-height:1.55">Vælg en pakke. Tryk på en pakke for at se præcis, hvad der er inkluderet.</p>
@@ -590,6 +611,15 @@ function showLanding(){
     </div>
   </div>`;
   if(!box.parentElement) document.body.appendChild(box);
+  const landingPicker=document.getElementById("snLandingLanguagePicker");
+  if(landingPicker){
+    const savedLanguage=localStorage.getItem("shardnote_language");
+    if(savedLanguage && landingPicker.querySelector('option[value="'+savedLanguage+'"]')) landingPicker.value=savedLanguage;
+    landingPicker.addEventListener("change",function(){
+      localStorage.setItem("shardnote_language",this.value);
+      window.location.reload();
+    });
+  }
 }
 
 function showPaywall(){
