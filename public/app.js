@@ -46,7 +46,7 @@ function navigate(page){
 function renderSpotImage(){
   const canvas=document.getElementById("spotCanvas");
   if(!canvas) return;
-  const title=document.getElementById("spotTitle")?.value || "ShardNote";
+  const title=document.getElementById("spotTitle")?.value || "Shardnote Bot";
   const subtitle=document.getElementById("spotSubtitle")?.value || "";
   const width=Math.max(300,Math.min(2400,Number(document.getElementById("spotWidth")?.value||1200)));
   const height=Math.max(300,Math.min(1600,Number(document.getElementById("spotHeight")?.value||630)));
@@ -95,7 +95,7 @@ function downloadSpotImage(){
   const canvas=document.getElementById("spotCanvas");
   if(!canvas) return;
   const a=document.createElement("a");
-  const safe=(document.getElementById("spotTitle")?.value||"shardnote").trim().replace(/[^a-z0-9-_]+/gi,"-").replace(/^-|-$/g,"").toLowerCase()||"shardnote";
+  const safe=(document.getElementById("spotTitle")?.value||"Shardnote Bot").trim().replace(/[^a-z0-9-_]+/gi,"-").replace(/^-|-$/g,"").toLowerCase()||"Shardnote Bot";
   a.download=safe+".png";
   a.href=canvas.toDataURL("image/png");
   a.click();
@@ -233,8 +233,8 @@ async function sendMessage(){
 }
 
 const DANISH_COMMAND_DESCRIPTIONS={
-  ping:"Tjekker om ShardNote er online.",
-  help:"Viser alle tilgængelige ShardNote-commands.",
+  ping:"Tjekker om Shardnote Bot er online.",
+  help:"Viser alle tilgængelige Shardnote Bot-commands.",
   ticket:"Opretter en support-ticket.",
   serverinfo:"Viser oplysninger om denne Discord-server.",
   userinfo:"Viser oplysninger om et Discord-medlem.",
@@ -275,14 +275,14 @@ const DANISH_COMMAND_DESCRIPTIONS={
   leaderboard:"Viser serverens leaderboard.",
   level:"Viser XP og level.",
   backup:"Opretter en server-backup som JSON.",
-  restore:"Gendanner en ShardNote-backup.",
+  restore:"Gendanner en Shardnote Bot-backup.",
   "music-join":"Får botten til at gå ind i din voice-kanal.",
   "music-leave":"Får botten til at forlade voice-kanalen."
 };
 
 async function loadCommands(){
   const commands=await api("/api/commands");
-  const danish=localStorage.getItem("shardnote_language")==="da";
+  const danish=localStorage.getItem("Shardnote Bot_language")==="da";
   const title=document.querySelector("#page-commands .section-title h2");
   const label=document.querySelector("#page-commands .field label");
   const available=document.querySelector("#page-commands .card:nth-child(2) .section-title h2");
@@ -801,7 +801,7 @@ function showLanding(){
   window.showPlanDetails=function(plan){
     const plans={
       member:{
-        name:"ShardNote Member",
+        name:"Shardnote Bot Member",
         price:"2,67 €",
         summary:"Grundpakken til mindre Discord-servere.",
         included:[
@@ -824,7 +824,7 @@ function showLanding(){
         ]
       },
       member_plus:{
-        name:"ShardNote Member Plus",
+        name:"Shardnote Bot Member Plus",
         price:"4,68 €",
         summary:"Flere bot- og serverfunktioner oven på Member.",
         included:[
@@ -845,7 +845,7 @@ function showLanding(){
         ]
       },
       member_pro:{
-        name:"ShardNote Member Pro",
+        name:"Shardnote Bot Member Pro",
         price:"6,99 €",
         summary:"Den fulde medlems-pakke med AI.",
         included:[
@@ -872,7 +872,7 @@ function showLanding(){
     modal.innerHTML=
       '<div style="width:min(720px,100%);max-height:82vh;overflow:auto;background:#11111a;border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.5);padding:22px">'+
         '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">'+
-          '<div><div style="font-size:13px;color:var(--muted)">ShardNote-pakke</div><h2 style="margin:4px 0;font-size:26px">'+data.name+'</h2><div style="font-weight:800;color:var(--accent2);font-size:18px">'+data.price+' <span style="font-size:13px;color:var(--muted);font-weight:600">/ måned</span></div></div>'+
+          '<div><div style="font-size:13px;color:var(--muted)">Shardnote Bot-pakke</div><h2 style="margin:4px 0;font-size:26px">'+data.name+'</h2><div style="font-weight:800;color:var(--accent2);font-size:18px">'+data.price+' <span style="font-size:13px;color:var(--muted);font-weight:600">/ måned</span></div></div>'+
           '<button class="btn small" type="button" onclick="closePlanDetails()">Luk</button>'+
         '</div>'+
         '<p style="color:var(--muted);line-height:1.6;margin:14px 0 18px">'+data.summary+'</p>'+
@@ -917,14 +917,14 @@ function showLanding(){
         <option value="ko">🇰🇷 한국어</option>
         <option value="zh">🇨🇳 中文</option>
       </select>
-    </div><div class="brand" style="justify-content:center;padding:0 0 10px"><div class="brand-mark">S</div><span>ShardNote</span></div>
+    </div><div class="brand" style="justify-content:center;padding:0 0 10px"><div class="brand-mark">S</div><span>Shardnote Bot</span></div>
     <div style="font-size:12px;color:var(--accent2);font-weight:800;text-transform:uppercase;letter-spacing:.12em">Discord Control Center</div>
-    <h1 style="font-size:34px;margin:10px 0 8px">Få adgang til ShardNote</h1>
+    <h1 style="font-size:34px;margin:10px 0 8px">Få adgang til Shardnote Bot</h1>
     <p style="max-width:620px;margin:0 auto;color:var(--muted);font-size:14px;line-height:1.55">Vælg en pakke. Tryk på en pakke for at se præcis, hvad der er inkluderet.</p>
 
     <div style="max-width:920px;margin:22px auto 18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;text-align:left">
       <button type="button" class="card" style="border-color:rgba(109,93,252,.45);text-align:left;cursor:pointer;padding:16px" onclick="showPlanDetails('member')">
-        <div style="font-size:12px;color:var(--muted)">ShardNote</div>
+        <div style="font-size:12px;color:var(--muted)">Shardnote Bot</div>
         <div style="font-size:21px;font-weight:900;margin:3px 0">Member</div>
         <div style="font-size:25px;font-weight:900">2,67 € <span style="font-size:12px;font-weight:600;color:var(--muted)">/ måned</span></div>
         <div style="color:var(--accent2);font-size:11px;font-weight:800;margin-top:5px">10 dage gratis</div>
@@ -933,7 +933,7 @@ function showLanding(){
       </button>
 
       <button type="button" class="card" style="border-color:rgba(66,211,146,.35);text-align:left;cursor:pointer;padding:16px" onclick="showPlanDetails('member_plus')">
-        <div style="font-size:12px;color:var(--muted)">ShardNote</div>
+        <div style="font-size:12px;color:var(--muted)">Shardnote Bot</div>
         <div style="font-size:21px;font-weight:900;margin:3px 0">Member Plus</div>
         <div style="font-size:25px;font-weight:900">4,68 € <span style="font-size:12px;font-weight:600;color:var(--muted)">/ måned</span></div>
         <div style="color:var(--accent2);font-size:11px;font-weight:800;margin-top:5px">10 dage gratis</div>
@@ -942,7 +942,7 @@ function showLanding(){
       </button>
 
       <button type="button" class="card" style="border-color:rgba(245,201,94,.45);text-align:left;cursor:pointer;padding:16px" onclick="showPlanDetails('member_pro')">
-        <div style="font-size:12px;color:var(--muted)">ShardNote</div>
+        <div style="font-size:12px;color:var(--muted)">Shardnote Bot</div>
         <div style="font-size:21px;font-weight:900;margin:3px 0">Member Pro</div>
         <div style="font-size:25px;font-weight:900">6,99 € <span style="font-size:12px;font-weight:600;color:var(--muted)">/ måned</span></div>
         <div style="color:var(--accent2);font-size:11px;font-weight:800;margin-top:5px">10 dage gratis</div>
@@ -951,7 +951,7 @@ function showLanding(){
       </button>
     </div>
 
-    <div style="font-size:12px;color:var(--muted);margin:6px auto 18px">Køb først en ShardNote-pakke, få din serial key, og brug den ved oprettelsen af din konto for at få adgang.</div>
+    <div style="font-size:12px;color:var(--muted);margin:6px auto 18px">Køb først en Shardnote Bot-pakke, få din serial key, og brug den ved oprettelsen af din konto for at få adgang.</div>
 
     <div class="actions" style="justify-content:center">
       <button class="btn primary" type="button" onclick="showRegister()">Jeg har en serial key</button>
@@ -961,10 +961,10 @@ function showLanding(){
   if(!box.parentElement) document.body.appendChild(box);
   const landingPicker=document.getElementById("snLandingLanguagePicker");
   if(landingPicker){
-    const savedLanguage=localStorage.getItem("shardnote_language");
+    const savedLanguage=localStorage.getItem("Shardnote Bot_language");
     if(savedLanguage && landingPicker.querySelector('option[value="'+savedLanguage+'"]')) landingPicker.value=savedLanguage;
     landingPicker.addEventListener("change",function(){
-      localStorage.setItem("shardnote_language",this.value);
+      localStorage.setItem("Shardnote Bot_language",this.value);
       window.location.reload();
     });
   }
@@ -975,8 +975,8 @@ function showPaywall(){
   const box=document.getElementById("loginScreen") || document.createElement("div");
   box.id="loginScreen";
   box.innerHTML=`<div class="login-card" style="text-align:center">
-    <div class="brand" style="justify-content:center;padding:0 0 16px"><div class="brand-mark">S</div><span>ShardNote</span></div>
-    <h1>Vælg din ShardNote-pakke</h1>
+    <div class="brand" style="justify-content:center;padding:0 0 16px"><div class="brand-mark">S</div><span>Shardnote Bot</span></div>
+    <h1>Vælg din Shardnote Bot-pakke</h1>
     <p>Du får <b>10 dage gratis</b>. Vælg først hvor længe abonnementet skal løbe.</p>
     <div class="field" style="text-align:left;margin-top:14px">
       <label>Abonnementsperiode</label>
@@ -1005,9 +1005,9 @@ function showLogin(){
   const box=document.getElementById("loginScreen") || document.createElement("div");
   box.id="loginScreen";
   box.innerHTML=`<div class="login-card">
-    <div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div>
+    <div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>Shardnote Bot</span></div>
     <h1>Log ind</h1>
-    <p>Log ind på dit ShardNote-kontrolpanel.</p>
+    <p>Log ind på dit Shardnote Bot-kontrolpanel.</p>
     <form onsubmit="login(event)">
       <div class="field"><label>Email</label><input id="loginEmail" type="email" required autocomplete="username" placeholder="din@email.dk"></div>
       <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="loginPassword" type="password" required autocomplete="current-password" placeholder="Din adgangskode"></div>
@@ -1024,14 +1024,14 @@ function showLogin(){
 
 function showRegister(preferredPlan="member"){
   document.body.classList.add("locked");
-  window.shardnotePreferredPlan=preferredPlan;
+  window.Shardnote BotPreferredPlan=preferredPlan;
 
   const box=document.getElementById("loginScreen") || document.createElement("div");
   box.id="loginScreen";
   box.innerHTML=`<div class="login-card">
-    <div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div>
+    <div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>Shardnote Bot</span></div>
     <h1>Opret konto</h1>
-    <p>Har du købt ShardNote? Indtast serial key'en du fik efter købet. Key'en aktiverer din pakke med det samme.</p>
+    <p>Har du købt Shardnote Bot? Indtast serial key'en du fik efter købet. Key'en aktiverer din pakke med det samme.</p>
     <form onsubmit="register(event)">
       <div class="field"><label>Navn</label><input id="registerName" required maxlength="80" autocomplete="name" placeholder="Dit navn"></div>
       <div class="field" style="margin-top:12px"><label>Email</label><input id="registerEmail" type="email" required autocomplete="email" placeholder="din@email.dk"></div>
@@ -1151,7 +1151,7 @@ checkLogin();
 setInterval(()=>{if(currentUser)loadStats()},15000);
 
 
-/* ShardNote multilingual UI */
+/* Shardnote Bot multilingual UI */
 (function(){
   const LANGS = {
     da:{name:"Dansk",flag:"🇩🇰"}, en:{name:"English",flag:"🇬🇧"}, de:{name:"Deutsch",flag:"🇩🇪"},
@@ -1208,7 +1208,7 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
     "Login logs":["Login logs","Login logs","Login-Protokolle","Journaux de connexion","Registros de inicio de sesión","Log di accesso","Inloglogs","Logs de login","Inloggningsloggar","Innloggingslogger","Kirjautumislogit","Logi logowania","Giriş kayıtları","Логи входов","Журнали входу","ログインログ","로그인 로그","登录日志"],
     "Log ind":["Log ind","Log in","Anmelden","Se connecter","Iniciar sesión","Accedi","Inloggen","Iniciar sessão","Logga in","Logg inn","Kirjaudu","Zaloguj się","Giriş yap","Войти","Увійти","ログイン","로그인","登录"],
     "Opret konto":["Opret konto","Create account","Konto erstellen","Créer un compte","Crear cuenta","Crea account","Account aanmaken","Criar conta","Skapa konto","Opprett konto","Luo tili","Utwórz konto","Hesap oluştur","Создать аккаунт","Створити обліковий запис","アカウント作成","계정 만들기","创建账户"],
-    "Log ind på dit ShardNote-kontrolpanel.":["Log ind på dit ShardNote-kontrolpanel.","Log in to your ShardNote control panel.","Melde dich im ShardNote-Kontrollzentrum an.","Connectez-vous à votre panneau de contrôle ShardNote.","Inicia sesión en tu panel de control de ShardNote.","Accedi al pannello di controllo ShardNote.","Log in op je ShardNote-controlepaneel.","Inicie sessão no painel de controlo ShardNote.","Logga in på din ShardNote-kontrollpanel.","Logg inn på ShardNote-kontrollpanelet.","Kirjaudu ShardNote-ohjauspaneeliin.","Zaloguj się do panelu ShardNote.","ShardNote kontrol panelinize giriş yapın.","Войдите в панель управления ShardNote.","Увійдіть до панелі керування ShardNote.","ShardNoteコントロールパネルにログインしてください。","ShardNote 제어판에 로그인하세요.","登录 ShardNote 控制面板。"],
+    "Log ind på dit Shardnote Bot-kontrolpanel.":["Log ind på dit Shardnote Bot-kontrolpanel.","Log in to your Shardnote Bot control panel.","Melde dich im Shardnote Bot-Kontrollzentrum an.","Connectez-vous à votre panneau de contrôle Shardnote Bot.","Inicia sesión en tu panel de control de Shardnote Bot.","Accedi al pannello di controllo Shardnote Bot.","Log in op je Shardnote Bot-controlepaneel.","Inicie sessão no painel de controlo Shardnote Bot.","Logga in på din Shardnote Bot-kontrollpanel.","Logg inn på Shardnote Bot-kontrollpanelet.","Kirjaudu Shardnote Bot-ohjauspaneeliin.","Zaloguj się do panelu Shardnote Bot.","Shardnote Bot kontrol panelinize giriş yapın.","Войдите в панель управления Shardnote Bot.","Увійдіть до панелі керування Shardnote Bot.","Shardnote Botコントロールパネルにログインしてください。","Shardnote Bot 제어판에 로그인하세요.","登录 Shardnote Bot 控制面板。"],
     "Har du ikke en konto?":["Har du ikke en konto?","Don't have an account?","Noch kein Konto?","Pas encore de compte ?","¿No tienes una cuenta?","Non hai un account?","Nog geen account?","Ainda não tem uma conta?","Har du inget konto?","Har du ingen konto?","Eikö sinulla ole tiliä?","Nie masz konta?","Hesabınız yok mu?","Нет аккаунта?","Немає облікового запису?","アカウントをお持ちでないですか？","계정이 없나요?","还没有账户？"],
     "Har du allerede en konto?":["Har du allerede en konto?","Already have an account?","Schon ein Konto?","Vous avez déjà un compte ?","¿Ya tienes una cuenta?","Hai già un account?","Heb je al een account?","Já tem uma conta?","Har du redan ett konto?","Har du allerede en konto?","Onko sinulla jo tili?","Masz już konto?","Zaten hesabınız var mı?","Уже есть аккаунт?","Вже маєте обліковий запис?","すでにアカウントをお持ちですか？","이미 계정이 있나요?","已有账户？"],
     "Navn":["Navn","Name","Name","Nom","Nombre","Nome","Naam","Nome","Namn","Navn","Nimi","Nazwa","Ad","Имя","Ім'я","名前","이름","姓名"],
@@ -1223,8 +1223,8 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
   });
 
   const EXTRA_TRANSLATIONS = {
-    "DANISH_ONLY":["Vælg din ShardNote-pakke","Vælg først hvor længe abonnementet skal løbe.","Abonnementsperiode","1 måned","3 måneder","12 måneder","Betalingen gentages efter den valgte periode: hver 1., 3. eller 12. måned.","Log ud","Din adgangskode","Dit navn","Mindst 8 tegn","Serial key","Aktivér key og opret konto","Har du allerede en konto?","Har du ikke en konto?","Opret konto","Log ind","Log ind på dit ShardNote-kontrolpanel.","Indtast serial key'en du fik efter købet. Key'en aktiverer din pakke med det samme.","Jeg har en serial key","Jeg har allerede en konto","Grundpakken","Se alle funktioner →","10 dage gratis","Alle funktioner + AI","Tickets og support-håndtering","Commands og grundlæggende botstyring","Standard moderation","Velkomstbeskeder","Forslag og Polls","Verification og Role panel","Flere bot- og serverfunktioner","Avancerede serverindstillinger","AI-kanaler kan vælges og gemmes fra dashboardet","Aktivitet","Send besked","Kør command","Gem ændringer","Opdater","Lås","Slet","Ingen beskeder endnu.","Ingen tickets endnu.","Skift status","Slet denne ticket?","Ticket titel:","Besked gemt","Ticket slettet","Bruger oprettet","Bruger slettet","Admin-adgang givet","Admin-adgang fjernet","Member Pro givet","Member Plus givet","Member givet","Tilbagekald","Tilbagekaldt","Udløbet","Brugt op","Aktiv","Ingen serial keys endnu.","Ingen aktive IP-bans.","Ingen gemte IP-adresser endnu.","Database-overblik","Supabase forbundet","Midlertidig hukommelse","Oprettet","Type","Hændelse","Tid","Bruger","Resultat","Browser/enhed","Succes","Fejlet","Ukendt","Henter logs…","Åbner…","Ingen logs i denne kategori endnu.","Ingen login-logs endnu.","Køb først en ShardNote-pakke, få din serial key, og brug den ved oprettelsen af din konto for at få adgang.","Jeg har købt denne pakke","Vælg server","Vælg rolle","Ikke nødvendig for konto-key","Vælg en server","Produktnavn","Antal keys","Brug pr. key","Udløbsdato (valgfri)","Generér serial keys","Redeem key","Server-ID","Discord bruger-ID"],
-    "EN":["Choose your ShardNote plan","First choose how long the subscription should run.","Subscription period","1 month","3 months","12 months","Payment repeats after the selected period: every 1, 3, or 12 months.","Log out","Your password","Your name","At least 8 characters","Serial key","Activate key and create account","Already have an account?","Don't have an account?","Create account","Log in","Log in to your ShardNote control panel.","Enter the serial key you received after purchase. The key activates your package immediately.","I have a serial key","I already have an account","The basic package","See all features →","10 days free","All features + AI","Tickets and support handling","Commands and basic bot control","Standard moderation","Welcome messages","Suggestions and Polls","Verification and Role panel","More bot and server features","Advanced server settings","AI channels can be selected and saved from the dashboard","Activity","Send message","Run command","Save changes","Refresh","Lock","Delete","No messages yet.","No tickets yet.","Change status","Ticket title:","Message saved","Ticket deleted","User created","User deleted","Admin access granted","Admin access removed","Member Pro granted","Member Plus granted","Member granted","Revoke","Revoked","Expired","Used up","Active","No serial keys yet.","No active IP bans.","No stored IP addresses yet.","Database overview","Supabase connected","Temporary memory","Created","Type","Event","Time","User","Result","Browser/device","Success","Failed","Unknown","Loading logs…","Opening…","No logs in this category yet.","No login logs yet.","Buy a ShardNote package first, receive your serial key, and use it when creating your account to get access.","I bought this package","Select server","Select role","Not required for account key","Select a server","Product name","Number of keys","Uses per key","Expiration date (optional)","Generate serial keys","Redeem key","Server ID","Discord user ID"]
+    "DANISH_ONLY":["Vælg din Shardnote Bot-pakke","Vælg først hvor længe abonnementet skal løbe.","Abonnementsperiode","1 måned","3 måneder","12 måneder","Betalingen gentages efter den valgte periode: hver 1., 3. eller 12. måned.","Log ud","Din adgangskode","Dit navn","Mindst 8 tegn","Serial key","Aktivér key og opret konto","Har du allerede en konto?","Har du ikke en konto?","Opret konto","Log ind","Log ind på dit Shardnote Bot-kontrolpanel.","Indtast serial key'en du fik efter købet. Key'en aktiverer din pakke med det samme.","Jeg har en serial key","Jeg har allerede en konto","Grundpakken","Se alle funktioner →","10 dage gratis","Alle funktioner + AI","Tickets og support-håndtering","Commands og grundlæggende botstyring","Standard moderation","Velkomstbeskeder","Forslag og Polls","Verification og Role panel","Flere bot- og serverfunktioner","Avancerede serverindstillinger","AI-kanaler kan vælges og gemmes fra dashboardet","Aktivitet","Send besked","Kør command","Gem ændringer","Opdater","Lås","Slet","Ingen beskeder endnu.","Ingen tickets endnu.","Skift status","Slet denne ticket?","Ticket titel:","Besked gemt","Ticket slettet","Bruger oprettet","Bruger slettet","Admin-adgang givet","Admin-adgang fjernet","Member Pro givet","Member Plus givet","Member givet","Tilbagekald","Tilbagekaldt","Udløbet","Brugt op","Aktiv","Ingen serial keys endnu.","Ingen aktive IP-bans.","Ingen gemte IP-adresser endnu.","Database-overblik","Supabase forbundet","Midlertidig hukommelse","Oprettet","Type","Hændelse","Tid","Bruger","Resultat","Browser/enhed","Succes","Fejlet","Ukendt","Henter logs…","Åbner…","Ingen logs i denne kategori endnu.","Ingen login-logs endnu.","Køb først en Shardnote Bot-pakke, få din serial key, og brug den ved oprettelsen af din konto for at få adgang.","Jeg har købt denne pakke","Vælg server","Vælg rolle","Ikke nødvendig for konto-key","Vælg en server","Produktnavn","Antal keys","Brug pr. key","Udløbsdato (valgfri)","Generér serial keys","Redeem key","Server-ID","Discord bruger-ID"],
+    "EN":["Choose your Shardnote Bot plan","First choose how long the subscription should run.","Subscription period","1 month","3 months","12 months","Payment repeats after the selected period: every 1, 3, or 12 months.","Log out","Your password","Your name","At least 8 characters","Serial key","Activate key and create account","Already have an account?","Don't have an account?","Create account","Log in","Log in to your Shardnote Bot control panel.","Enter the serial key you received after purchase. The key activates your package immediately.","I have a serial key","I already have an account","The basic package","See all features →","10 days free","All features + AI","Tickets and support handling","Commands and basic bot control","Standard moderation","Welcome messages","Suggestions and Polls","Verification and Role panel","More bot and server features","Advanced server settings","AI channels can be selected and saved from the dashboard","Activity","Send message","Run command","Save changes","Refresh","Lock","Delete","No messages yet.","No tickets yet.","Change status","Ticket title:","Message saved","Ticket deleted","User created","User deleted","Admin access granted","Admin access removed","Member Pro granted","Member Plus granted","Member granted","Revoke","Revoked","Expired","Used up","Active","No serial keys yet.","No active IP bans.","No stored IP addresses yet.","Database overview","Supabase connected","Temporary memory","Created","Type","Event","Time","User","Result","Browser/device","Success","Failed","Unknown","Loading logs…","Opening…","No logs in this category yet.","No login logs yet.","Buy a Shardnote Bot package first, receive your serial key, and use it when creating your account to get access.","I bought this package","Select server","Select role","Not required for account key","Select a server","Product name","Number of keys","Uses per key","Expiration date (optional)","Generate serial keys","Redeem key","Server ID","Discord user ID"]
   };
   Object.entries(EXTRA_TRANSLATIONS.DANISH_ONLY).forEach((da,i)=>{
     const en=EXTRA_TRANSLATIONS.EN[i];
@@ -1240,7 +1240,7 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
   `;
   document.head.appendChild(styles);
 
-  let current = localStorage.getItem("shardnote_language");
+  let current = localStorage.getItem("Shardnote Bot_language");
   if(!current || !LANGS[current]){
     const browser = (navigator.language || "da").slice(0,2).toLowerCase();
     current = LANGS[browser] ? browser : "da";
@@ -1303,7 +1303,7 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
       [...el.childNodes].forEach(translateNode);
     });
     translateAttributes(document);
-    document.title="ShardNote — "+translateValue("Discord Control Center");
+    document.title="Shardnote Bot — "+translateValue("Discord Control Center");
   }
 
   function updateBillingDurationLabels(){
@@ -1334,7 +1334,7 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
     select.value=current;
     select.addEventListener("change",()=>{
       current=select.value;
-      localStorage.setItem("shardnote_language",current);
+      localStorage.setItem("Shardnote Bot_language",current);
       translatePage();
       updateBillingDurationLabels();
       if(typeof loadCommands==="function") setTimeout(()=>{try{loadCommands()}catch(e){}},0);
