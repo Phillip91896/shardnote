@@ -8,7 +8,7 @@ const Stripe = require("stripe");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
-const PUBLIC_SITE_URL = String(process.env.PUBLIC_SITE_URL || "https://shardnote-mxj3.onrender.com").replace(/\/$/, "");
+const PUBLIC_SITE_URL = String(process.env.PUBLIC_SITE_URL || "https://Shardnote Bot-mxj3.onrender.com").replace(/\/$/, "");
 
 app.set("trust proxy", 1);
 
@@ -16,7 +16,7 @@ app.post("/api/billing/webhook", express.raw({ type: "application/json" }), asyn
   if(!stripe||!process.env.STRIPE_WEBHOOK_SECRET)return res.status(503).send("Stripe webhook is not configured.");
   let event;
   try{event=stripe.webhooks.constructEvent(req.body,req.headers["stripe-signature"],process.env.STRIPE_WEBHOOK_SECRET);}
-  catch(error){console.error("[ShardNote] Stripe webhook signature failed:",error.message);return res.status(400).send("Invalid webhook signature.");}
+  catch(error){console.error("[Shardnote Bot] Stripe webhook signature failed:",error.message);return res.status(400).send("Invalid webhook signature.");}
   try{
     const object=event.data.object;
     if(event.type==="checkout.session.completed"){
@@ -52,7 +52,7 @@ app.post("/api/billing/webhook", express.raw({ type: "application/json" }), asyn
       }
     }
     return res.json({received:true});
-  }catch(error){console.error("[ShardNote] Stripe webhook handler failed:",error);return res.status(500).send("Webhook handler failed.");}
+  }catch(error){console.error("[Shardnote Bot] Stripe webhook handler failed:",error);return res.status(500).send("Webhook handler failed.");}
 });
 
 app.use(express.json({ limit: "1mb" }));
@@ -400,7 +400,7 @@ function log(type, message, ownerUserId = null) {
     db.query(
       "INSERT INTO public.logs (type, message, owner_user_id) VALUES ($1, $2, $3)",
       [type, message, ownerUserId || null]
-    ).catch(error => console.error("[ShardNote] Log persistence failed:", error.message));
+    ).catch(error => console.error("[Shardnote Bot] Log persistence failed:", error.message));
   }
 }
 
@@ -497,7 +497,7 @@ async function migrateProtectedIpData() {
 }
 
 function getSessionId(req) {
-  return parseCookies(req).shardnote_session;
+  return parseCookies(req).Shardnote Bot_session;
 }
 
 function hasLogsAccess(req) {
@@ -593,7 +593,7 @@ function parseCookies(req) {
 
 async function ensureAdmin() {
   const configuredEmail = String(process.env.ADMIN_EMAIL || "").trim().toLowerCase();
-  const email = (configuredEmail || "admin@shardnote.local");
+  const email = (configuredEmail || "admin@Shardnote Bot.local");
   const hasBootstrapPassword = Object.prototype.hasOwnProperty.call(process.env, "ADMIN_PASSWORD");
   const password = hasBootstrapPassword ? String(process.env.ADMIN_PASSWORD || "") : "change-me-now";
 
@@ -653,7 +653,7 @@ async function ensureAdmin() {
     }
   }
 }
-const SESSION_SECRET = process.env.SESSION_SECRET || process.env.DISCORD_TOKEN || process.env.STRIPE_SECRET_KEY || process.env.DATABASE_URL || "shardnote-session-secret";
+const SESSION_SECRET = process.env.SESSION_SECRET || process.env.DISCORD_TOKEN || process.env.STRIPE_SECRET_KEY || process.env.DATABASE_URL || "Shardnote Bot-session-secret";
 
 function signSessionUserId(userId) {
   return crypto.createHmac("sha256", SESSION_SECRET).update(String(userId)).digest("hex");
@@ -678,7 +678,7 @@ function verifySessionToken(token) {
 }
 
 function currentUser(req) {
-  const sid = parseCookies(req).shardnote_session;
+  const sid = parseCookies(req).Shardnote Bot_session;
   if (!sid) return null;
   const cached = sessions.get(sid);
   if (cached) return cached;
@@ -694,7 +694,7 @@ function currentUser(req) {
 }
 async function updateUserSubscription({userId,status,customerId=null,subscriptionId=null,currentPeriodEnd=null}){const normalizedStatus=String(status||"inactive");const periodEnd=currentPeriodEnd?new Date(Number(currentPeriodEnd)*1000).toISOString():null;if(db){await db.query(`UPDATE public.users SET subscription_status=$1,stripe_customer_id=COALESCE($2,stripe_customer_id),stripe_subscription_id=COALESCE($3,stripe_subscription_id),subscription_current_period_end=COALESCE($4::timestamptz,subscription_current_period_end) WHERE id=$5`,[normalizedStatus,customerId,subscriptionId,periodEnd,userId]);return;}const user=state.users.find(item=>String(item.id)===String(userId));if(user){user.subscriptionStatus=normalizedStatus;if(customerId)user.stripeCustomerId=customerId;if(subscriptionId)user.stripeSubscriptionId=subscriptionId;if(periodEnd)user.subscriptionCurrentPeriodEnd=periodEnd;}}
 async function updateUserSubscriptionByStripeSubscription(subscriptionId,status){if(!db||!subscriptionId)return;await db.query("UPDATE public.users SET subscription_status=$1 WHERE stripe_subscription_id=$2",[status,subscriptionId]);}
-async function refreshSubscriptionFromStripe(user){if(!stripe||!user?.stripeSubscriptionId)return user;try{const subscription=await stripe.subscriptions.retrieve(user.stripeSubscriptionId);const customerId=typeof subscription.customer==="string"?subscription.customer:subscription.customer?.id||user.stripeCustomerId||null;await updateUserSubscription({userId:user.id,status:subscription.status,customerId,subscriptionId:subscription.id,currentPeriodEnd:subscription.current_period_end});user.subscriptionStatus=subscription.status;user.stripeCustomerId=customerId;user.stripeSubscriptionId=subscription.id;user.subscriptionCurrentPeriodEnd=subscription.current_period_end?new Date(subscription.current_period_end*1000).toISOString():user.subscriptionCurrentPeriodEnd;}catch(error){console.error("[ShardNote] Could not refresh Stripe subscription:",error.message);}return user;}
+async function refreshSubscriptionFromStripe(user){if(!stripe||!user?.stripeSubscriptionId)return user;try{const subscription=await stripe.subscriptions.retrieve(user.stripeSubscriptionId);const customerId=typeof subscription.customer==="string"?subscription.customer:subscription.customer?.id||user.stripeCustomerId||null;await updateUserSubscription({userId:user.id,status:subscription.status,customerId,subscriptionId:subscription.id,currentPeriodEnd:subscription.current_period_end});user.subscriptionStatus=subscription.status;user.stripeCustomerId=customerId;user.stripeSubscriptionId=subscription.id;user.subscriptionCurrentPeriodEnd=subscription.current_period_end?new Date(subscription.current_period_end*1000).toISOString():user.subscriptionCurrentPeriodEnd;}catch(error){console.error("[Shardnote Bot] Could not refresh Stripe subscription:",error.message);}return user;}
 async function getSessionUser(req){
   const sessionUser=currentUser(req);
   if(!sessionUser) return null;
@@ -716,17 +716,17 @@ function requireAdmin(req, res, next) {
   next();
 }
 function getSiteOwnerEmail() {
-  return String(process.env.SITE_OWNER_EMAIL || process.env.ADMIN_EMAIL || "admin@shardnote.local").trim().toLowerCase();
+  return String(process.env.SITE_OWNER_EMAIL || process.env.ADMIN_EMAIL || "admin@Shardnote Bot.local").trim().toLowerCase();
 }
 function isSiteOwner(user) {
   return !!user?.email && String(user.email).trim().toLowerCase() === getSiteOwnerEmail();
 }
 function requireSiteOwner(req, res, next) {
-  if (!isSiteOwner(req.user)) return res.status(403).json({ error: "Kun ejeren af ShardNote har adgang til IP-adresser." });
+  if (!isSiteOwner(req.user)) return res.status(403).json({ error: "Kun ejeren af Shardnote Bot har adgang til IP-adresser." });
   next();
 }
 function requirePaid(req, res, next) {
-  if (!hasPaidAccess(req.user)) return res.status(402).json({ requiresSubscription: true, error: "Et aktivt ShardNote-abonnement kræves." });
+  if (!hasPaidAccess(req.user)) return res.status(402).json({ requiresSubscription: true, error: "Et aktivt Shardnote Bot-abonnement kræves." });
   next();
 }
 function requirePlan(minimumPlan, req, res, next) {
@@ -900,7 +900,7 @@ app.post("/api/login", async (req, res) => {
       banned: !!user.banned
     });
 
-    res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    res.setHeader("Set-Cookie", `Shardnote Bot_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
     await recordLoginAudit({ req, user, success: true, eventType: "login" });
     log("security", `User ${user.email} logged in`);
     res.json({
@@ -967,7 +967,7 @@ app.post("/api/register", async (req, res) => {
 
         if (!keyRow) throw Object.assign(new Error("Serial key findes ikke."), { statusCode: 400 });
         if (keyRow.revoked) throw Object.assign(new Error("Denne serial key er tilbagekaldt."), { statusCode: 400 });
-        if (!keyRow.accessPlan || !["member","member_plus","member_pro"].includes(keyRow.accessPlan)) throw Object.assign(new Error("Denne serial key er ikke en ShardNote-konto-key."), { statusCode: 400 });
+        if (!keyRow.accessPlan || !["member","member_plus","member_pro"].includes(keyRow.accessPlan)) throw Object.assign(new Error("Denne serial key er ikke en Shardnote Bot-konto-key."), { statusCode: 400 });
         if (keyRow.expiresAt && new Date(keyRow.expiresAt).getTime() <= Date.now()) throw Object.assign(new Error("Denne serial key er udløbet."), { statusCode: 400 });
         if (keyRow.uses >= keyRow.maxUses) throw Object.assign(new Error("Denne serial key er allerede brugt op."), { statusCode: 400 });
 
@@ -1004,7 +1004,7 @@ app.post("/api/register", async (req, res) => {
       plan: user.plan || activatedPlan
     });
 
-    res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    res.setHeader("Set-Cookie", `Shardnote Bot_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
     log("security", `New account registered with serial key: ${email} (${user.plan || activatedPlan})`);
     res.status(201).json({
       user: {
@@ -1024,13 +1024,13 @@ app.post("/api/register", async (req, res) => {
   }
 });
 app.post("/api/logout", (req, res) => {
-  const sid = parseCookies(req).shardnote_session;
+  const sid = parseCookies(req).Shardnote Bot_session;
   if (sid) {
     sessions.delete(sid);
     logsUnlocks.delete(sid);
     ipUnlocks.delete(sid);
   }
-  res.setHeader("Set-Cookie", "shardnote_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+  res.setHeader("Set-Cookie", "Shardnote Bot_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
   res.json({ ok: true });
 });
 
@@ -1292,7 +1292,7 @@ app.get("/api/admin/serial-keys", requireAuth, requireAdmin, async (req, res) =>
 
 app.post("/api/admin/serial-keys/generate", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const productName = String(req.body?.productName || "ShardNote Access").trim().slice(0,120) || "ShardNote Access";
+    const productName = String(req.body?.productName || "Shardnote Bot Access").trim().slice(0,120) || "Shardnote Bot Access";
     const accessPlan = ["member","member_plus","member_pro","member_premium"].includes(String(req.body?.accessPlan || "")) ? String(req.body.accessPlan) : null;
     const guildId = String(req.body?.guildId || "").trim() || null;
     const roleId = String(req.body?.roleId || "").trim() || null;
@@ -1301,7 +1301,7 @@ app.post("/api/admin/serial-keys/generate", requireAuth, requireAdmin, async (re
     const expiresAtRaw = String(req.body?.expiresAt || "").trim();
     const expiresAt = expiresAtRaw ? new Date(expiresAtRaw) : null;
 
-    if (!accessPlan && (!guildId || !roleId)) return res.status(400).json({ error: "Vælg enten en ShardNote-pakke eller både Discord-server og rolle." });
+    if (!accessPlan && (!guildId || !roleId)) return res.status(400).json({ error: "Vælg enten en Shardnote Bot-pakke eller både Discord-server og rolle." });
     if (expiresAt && Number.isNaN(expiresAt.getTime())) return res.status(400).json({ error: "Ugyldig udløbsdato." });
     if (!db) return res.status(503).json({ error: "Database er nødvendig for serial keys." });
 
@@ -1310,10 +1310,10 @@ app.post("/api/admin/serial-keys/generate", requireAuth, requireAdmin, async (re
     if (!accessPlan) {
       if (!client || !discordReady) return res.status(503).json({ error: "Discord-botten er ikke online." });
       guild = client.guilds.cache.get(guildId);
-      if (!guild) return res.status(404).json({ error: "ShardNote-botten er ikke på den valgte server." });
+      if (!guild) return res.status(404).json({ error: "Shardnote Bot-botten er ikke på den valgte server." });
       role = guild.roles.cache.get(roleId);
       if (!role || role.id === guild.id) return res.status(404).json({ error: "Rollen blev ikke fundet." });
-      if (!role.editable) return res.status(400).json({ error: "Botten kan ikke give den valgte rolle. Flyt rollen under ShardNote-bottens rolle." });
+      if (!role.editable) return res.status(400).json({ error: "Botten kan ikke give den valgte rolle. Flyt rollen under Shardnote Bot-bottens rolle." });
     }
 
     const created = [];
@@ -1385,14 +1385,14 @@ app.post("/api/serial-keys/redeem", requireAuth, async (req, res) => {
     if (item.uses >= item.maxUses) return res.status(400).json({ error: "Denne serial key er allerede brugt op." });
 
     const guild = client.guilds.cache.get(guildId);
-    if (!guild) return res.status(400).json({ error: "ShardNote-botten er ikke på den valgte server." });
+    if (!guild) return res.status(400).json({ error: "Shardnote Bot-botten er ikke på den valgte server." });
     const member = await guild.members.fetch(discordUserId).catch(() => null);
     if (!member) return res.status(404).json({ error: "Discord-brugeren er ikke medlem af serveren." });
     const role = guild.roles.cache.get(item.roleId);
     if (!role) return res.status(404).json({ error: "Rollen findes ikke længere på serveren." });
-    if (!role.editable) return res.status(400).json({ error: "Botten kan ikke give denne rolle. Flyt rollen under ShardNote-bottens rolle." });
+    if (!role.editable) return res.status(400).json({ error: "Botten kan ikke give denne rolle. Flyt rollen under Shardnote Bot-bottens rolle." });
 
-    await member.roles.add(role, "ShardNote serial key redemption");
+    await member.roles.add(role, "Shardnote Bot serial key redemption");
 
     const used = await db.query(
       'UPDATE public.serial_keys SET uses = uses + 1, last_redeemed_by = $1, last_redeemed_at = NOW() WHERE id = $2 AND uses < max_uses RETURNING uses',
@@ -1417,7 +1417,7 @@ app.patch("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res
     }
 
     const banType = req.body?.type === "ip" ? "ip" : "normal";
-    if (banType === "ip" && !isSiteOwner(req.user)) return res.status(403).json({ error: "Kun ejeren af ShardNote kan bruge IP-ban." });
+    if (banType === "ip" && !isSiteOwner(req.user)) return res.status(403).json({ error: "Kun ejeren af Shardnote Bot kan bruge IP-ban." });
     const id = Number(req.params.id);
     if (!Number.isInteger(id)) return res.status(400).json({ error: "Ugyldigt bruger-ID." });
 
@@ -1575,7 +1575,7 @@ app.get("/api/bot/invite", requireAuth, (req, res) => {
 app.get("/health", (req, res) => {
   res.json({
     ok: true,
-    service: "ShardNote",
+    service: "Shardnote Bot",
     discord: discordReady,
     uptime: Math.floor((Date.now() - startedAt) / 1000)
   });
@@ -1589,9 +1589,9 @@ app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
     const requestedPlan=["member","member_plus","member_pro"].includes(req.body?.plan) ? req.body.plan : "member";
     const requestedMonths=[1,3,12].includes(Number(req.body?.months)) ? Number(req.body.months) : 1;
     const planInfo={
-      member:{amount:267,name:"ShardNote Member"},
-      member_plus:{amount:468,name:"ShardNote Member Plus"},
-      member_pro:{amount:Number(process.env.STRIPE_MEMBER_PRO_AMOUNT_EUR || 699),name:"ShardNote Member Pro"}
+      member:{amount:267,name:"Shardnote Bot Member"},
+      member_plus:{amount:468,name:"Shardnote Bot Member Plus"},
+      member_pro:{amount:Number(process.env.STRIPE_MEMBER_PRO_AMOUNT_EUR || 699),name:"Shardnote Bot Member Pro"}
     }[requestedPlan];
 
     let customerId=req.user.stripeCustomerId;
@@ -1624,7 +1624,7 @@ app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
 
     res.json({url:session.url,plan:requestedPlan,months:requestedMonths});
   }catch(error){
-    console.error("[ShardNote] Stripe checkout failed:",error);
+    console.error("[Shardnote Bot] Stripe checkout failed:",error);
     res.status(500).json({error:"Betalingssiden kunne ikke åbnes."});
   }
 });
@@ -1634,7 +1634,7 @@ app.get("/api/billing/status",requireAuth,async(req,res)=>{
     if(stripe&&req.user.stripeSubscriptionId)await refreshSubscriptionFromStripe(req.user);
     res.json({configured:!!stripe,status:req.user.subscriptionStatus||"inactive",hasPaidAccess:hasPaidAccess(req.user)});
   }catch(error){
-    console.error("[ShardNote] Stripe status check failed:",error);
+    console.error("[Shardnote Bot] Stripe status check failed:",error);
     res.status(500).json({error:"Betalingsstatus kunne ikke hentes."});
   }
 });
@@ -1645,7 +1645,7 @@ app.post("/api/billing/portal",requireAuth,async(req,res)=>{
     const portal=await stripe.billingPortal.sessions.create({customer:req.user.stripeCustomerId,return_url:PUBLIC_SITE_URL});
     res.json({url:portal.url});
   }catch(error){
-    console.error("[ShardNote] Stripe portal failed:",error);
+    console.error("[Shardnote Bot] Stripe portal failed:",error);
     res.status(500).json({error:"Abonnementsadministration kunne ikke åbnes."});
   }
 });
@@ -1655,7 +1655,7 @@ app.use("/api", (req, res, next) => {
   requireAuth(req,res,async()=>{
     try{
       if(["/billing/create-checkout","/billing/status","/billing/portal"].some(path=>req.path.startsWith(path))) return next();
-      if(!hasPaidAccess(req.user))return res.status(402).json({requiresSubscription:true,error:"Et aktivt ShardNote-abonnement kræves."});
+      if(!hasPaidAccess(req.user))return res.status(402).json({requiresSubscription:true,error:"Et aktivt Shardnote Bot-abonnement kræves."});
       next();
     }catch(error){console.error(error);res.status(500).json({error:"Adgangskontrol kunne ikke gennemføres."});}
   });
@@ -2279,7 +2279,7 @@ app.get("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, (req,res,
     if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
     const guild = client.guilds.cache.get(String(req.params.guildId));
     if (!guild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
-    if (req.user?.role !== "admin" && !(await isGuildLinkedToUser(req.user.id, guild.id))) return res.status(403).json({ error: "Denne Discord-server er ikke koblet til din ShardNote-konto." });
+    if (req.user?.role !== "admin" && !(await isGuildLinkedToUser(req.user.id, guild.id))) return res.status(403).json({ error: "Denne Discord-server er ikke koblet til din Shardnote Bot-konto." });
 
     let settings;
     if (client.dashboardGetGuildSettings) {
@@ -2324,7 +2324,7 @@ app.get("/api/bot/guilds/:guildId/ai", requireAuth, requirePaid, (req,res,next)=
   try{
     const guild=client.guilds.cache.get(String(req.params.guildId));
     if(!guild)return res.status(404).json({error:"Botten er ikke med i den valgte Discord-server."});
-    if(req.user?.role!=="admin" && !(await isGuildLinkedToUser(req.user.id,guild.id)))return res.status(403).json({error:"Denne Discord-server er ikke koblet til din ShardNote-konto."});
+    if(req.user?.role!=="admin" && !(await isGuildLinkedToUser(req.user.id,guild.id)))return res.status(403).json({error:"Denne Discord-server er ikke koblet til din Shardnote Bot-konto."});
     const settings=client.dashboardGetGuildSettings ? await client.dashboardGetGuildSettings(guild.id) : {};
     res.json({enabled:!!settings.ai_enabled,channelIds:Array.isArray(settings.ai_channel_ids)?settings.ai_channel_ids:[]});
   }catch(error){console.error(error);res.status(500).json({error:"AI-indstillingerne kunne ikke hentes."});}
@@ -2334,7 +2334,7 @@ app.patch("/api/bot/guilds/:guildId/ai", requireAuth, requirePaid, (req,res,next
   try{
     const guild=client.guilds.cache.get(String(req.params.guildId));
     if(!guild)return res.status(404).json({error:"Botten er ikke med i den valgte Discord-server."});
-    if(req.user?.role!=="admin" && !(await isGuildLinkedToUser(req.user.id,guild.id)))return res.status(403).json({error:"Denne Discord-server er ikke koblet til din ShardNote-konto."});
+    if(req.user?.role!=="admin" && !(await isGuildLinkedToUser(req.user.id,guild.id)))return res.status(403).json({error:"Denne Discord-server er ikke koblet til din Shardnote Bot-konto."});
     const enabled=Boolean(req.body?.enabled);
     const channelIds=Array.isArray(req.body?.channelIds)
       ? [...new Set(req.body.channelIds.map(id=>String(id)).filter(id=>guild.channels.cache.has(id)))].slice(0,50)
@@ -2356,7 +2356,7 @@ app.post("/api/bot/guilds/:guildId/templates/:templateKey", requireAuth, require
     if (!guild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
 
     if (req.user?.role !== "admin" && !(await isGuildLinkedToUser(req.user.id, guild.id))) {
-      return res.status(403).json({ error: "Denne Discord-server er ikke koblet til din ShardNote-konto." });
+      return res.status(403).json({ error: "Denne Discord-server er ikke koblet til din Shardnote Bot-konto." });
     }
 
     if (!client.dashboardApplyDiscordTemplate) {
@@ -2462,7 +2462,7 @@ const html = `<!DOCTYPE html>
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ShardNote — Discord Control Center</title>
+<title>Shardnote Bot — Discord Control Center</title>
 <style>
 :root{
   --bg:#07070b;--panel:#101018;--panel2:#151521;--border:#272735;
@@ -2497,7 +2497,7 @@ body.locked > .app{display:none}
 <body>
 <div class="app">
 <aside class="sidebar">
-  <div class="brand"><div class="brand-mark">S</div><span>ShardNote</span></div>
+  <div class="brand"><div class="brand-mark">S</div><span>Shardnote Bot</span></div>
   <nav class="nav">
     <button class="active" data-page="dashboard"><span class="icon">⌂</span><span>Dashboard</span></button>
     <button data-page="spot"><span class="icon">🎨</span><span>Mit spot</span></button>
@@ -2513,7 +2513,7 @@ body.locked > .app{display:none}
     <button data-page="logs"><span class="icon">◷</span><span>Logs</span></button>
     <button data-page="admin"><span class="icon">👑</span><span>Admin</span></button>
   </nav>
-  <div class="sidebar-footer">ShardNote 2.0<br>Discord Control Center</div>
+  <div class="sidebar-footer">Shardnote Bot 2.0<br>Discord Control Center</div>
 </aside>
 
 <main class="main">
@@ -2541,7 +2541,7 @@ body.locked > .app{display:none}
 <section class="page" id="page-spot">
   <div class="card" style="margin-bottom:18px">
     <div class="section-title">
-      <div><h2>🎨 Mit spot</h2><span>Lav dit eget billede direkte inde på ShardNote.</span></div>
+      <div><h2>🎨 Mit spot</h2><span>Lav dit eget billede direkte inde på Shardnote Bot.</span></div>
     </div>
     <p class="spot-help" style="margin:0">Du kan skrive tekst, vælge størrelse og farver og hente billedet som PNG. Det bliver lavet lokalt i din browser.</p>
   </div>
@@ -2550,7 +2550,7 @@ body.locked > .app{display:none}
     <div class="card">
       <div class="section-title"><div><h2>Opret billede</h2><span>Dit billede ændres med det samme.</span></div></div>
       <div class="form-grid">
-        <div class="field"><label>Titel</label><input id="spotTitle" maxlength="60" value="ShardNote"></div>
+        <div class="field"><label>Titel</label><input id="spotTitle" maxlength="60" value="Shardnote Bot"></div>
         <div class="field"><label>Undertekst</label><input id="spotSubtitle" maxlength="90" value="Mit spot"></div>
         <div class="field"><label>Bredde</label><input id="spotWidth" type="number" min="300" max="2400" value="1200"></div>
         <div class="field"><label>Højde</label><input id="spotHeight" type="number" min="300" max="1600" value="630"></div>
@@ -2588,7 +2588,7 @@ body.locked > .app{display:none}
 <section class="page" id="page-upgrades">
   <div class="card" style="margin-bottom:18px">
     <div class="section-title">
-      <div><h2>🚀 Opgraderinger</h2><span>Har du en idé til en forbedring af ShardNote-hjemmesiden eller botten?</span></div>
+      <div><h2>🚀 Opgraderinger</h2><span>Har du en idé til en forbedring af Shardnote Bot-hjemmesiden eller botten?</span></div>
       <div class="badge open">Idé → Ticket</div>
     </div>
     <p style="color:var(--muted);line-height:1.6;margin:0">Send din idé her. Den bliver automatisk oprettet som en ticket, så den kan behandles og følges ligesom andre tickets.</p>
@@ -2623,10 +2623,10 @@ body.locked > .app{display:none}
     </div>
 
     <div class="card">
-      <div class="section-title"><div><h2>🎫 Sådan fungerer det</h2><span>Din idé bliver til en rigtig ShardNote-ticket.</span></div></div>
+      <div class="section-title"><div><h2>🎫 Sådan fungerer det</h2><span>Din idé bliver til en rigtig Shardnote Bot-ticket.</span></div></div>
       <div class="activity">
         <div class="activity-item"><div class="activity-icon">1</div><div><b>Du sender idéen</b><small>Vælg område og skriv dit forslag.</small></div></div>
-        <div class="activity-item"><div class="activity-icon">2</div><div><b>ShardNote opretter ticketen</b><small>Idéen bliver gemt med din konto.</small></div></div>
+        <div class="activity-item"><div class="activity-icon">2</div><div><b>Shardnote Bot opretter ticketen</b><small>Idéen bliver gemt med din konto.</small></div></div>
         <div class="activity-item"><div class="activity-icon">3</div><div><b>Den kan behandles</b><small>Status og prioritet kan følges i Ticket-systemet.</small></div></div>
       </div>
     </div>
@@ -2640,7 +2640,7 @@ body.locked > .app{display:none}
 <section class="page" id="page-store">
   <div class="card" style="margin-bottom:18px">
     <div class="section-title">
-      <div><h2>🛒 ShardNote Store</h2><span>Redeem en serial key for en Discord-rolle</span></div>
+      <div><h2>🛒 Shardnote Bot Store</h2><span>Redeem en serial key for en Discord-rolle</span></div>
     </div>
     <p style="color:var(--muted);line-height:1.6">
       Din serial key er bundet til én bestemt Discord-server og rolle. Du kan også bruge <b>/redeem</b> direkte i Discord.
@@ -2659,9 +2659,9 @@ body.locked > .app{display:none}
   <div class="card">
     <div class="section-title"><div><h2>Sådan fungerer det</h2><span>3 simple trin</span></div></div>
     <div class="activity">
-      <div class="activity-item"><div class="activity-icon">1</div><div><b>Få din serial key</b><small>Du får en key fra ShardNote Store eller en administrator.</small></div></div>
+      <div class="activity-item"><div class="activity-icon">1</div><div><b>Få din serial key</b><small>Du får en key fra Shardnote Bot Store eller en administrator.</small></div></div>
       <div class="activity-item"><div class="activity-icon">2</div><div><b>Indtast den</b><small>Brug formularen her eller kommandoen <code>/redeem</code> i Discord.</small></div></div>
-      <div class="activity-item"><div class="activity-icon">3</div><div><b>Få rollen</b><small>ShardNote kontrollerer nøglen og giver rollen automatisk.</small></div></div>
+      <div class="activity-item"><div class="activity-icon">3</div><div><b>Få rollen</b><small>Shardnote Bot kontrollerer nøglen og giver rollen automatisk.</small></div></div>
     </div>
   </div>
 </section>
@@ -2782,10 +2782,10 @@ body.locked > .app{display:none}
     <div class="section-title"><div><h2>🔑 Serial Keys</h2><span>Kun administratorer · generér nøgler til Discord-roller</span></div></div>
     <div class="form-grid">
       <div class="field"><label>Key type</label><select id="serialType" onchange="toggleSerialType()"><option value="account">Website access</option><option value="discord">Discord role</option></select></div>
-      <div class="field"><label>ShardNote-pakke</label><select id="serialAccessPlan"><option value="member">Member</option><option value="member_plus">Member Plus</option><option value="member_pro">Member Pro</option></select></div>
+      <div class="field"><label>Shardnote Bot-pakke</label><select id="serialAccessPlan"><option value="member">Member</option><option value="member_plus">Member Plus</option><option value="member_pro">Member Pro</option></select></div>
       <div class="field"><label>Server</label><select id="serialGuild" onchange="loadSerialRoles()" disabled><option value="">Vælg server</option></select></div>
       <div class="field"><label>Discord-rolle</label><select id="serialRole" disabled><option value="">Vælg rolle</option></select></div>
-      <div class="field"><label>Produktnavn</label><input id="serialProduct" maxlength="120" value="ShardNote Access"></div>
+      <div class="field"><label>Produktnavn</label><input id="serialProduct" maxlength="120" value="Shardnote Bot Access"></div>
       <div class="field"><label>Antal keys</label><input id="serialQuantity" type="number" min="1" max="100" value="1"></div>
       <div class="field"><label>Brug pr. key</label><input id="serialMaxUses" type="number" min="1" max="10000" value="1"></div>
       <div class="field"><label>Udløbsdato (valgfri)</label><input id="serialExpiresAt" type="datetime-local"></div>
@@ -2898,8 +2898,8 @@ async function startServer() {
     }
 
     app.listen(PORT, () => {
-      log("success", `ShardNote web server started on port ${PORT}`);
-      console.log(`ShardNote running on port ${PORT}`);
+      log("success", `Shardnote Bot web server started on port ${PORT}`);
+      console.log(`Shardnote Bot running on port ${PORT}`);
     });
   } catch (error) {
     console.error("Database initialization failed:", error);
