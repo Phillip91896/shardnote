@@ -1902,6 +1902,7 @@ body.locked > .app{display:none}
     <button data-page="commands"><span class="icon">⌘</span><span>Commands</span></button>
     <button data-page="features"><span class="icon">🧩</span><span>Bot-funktioner</span></button>
     <button data-page="templates"><span class="icon">🧱</span><span>Discord-skitser</span></button>
+    <button data-page="upgrades"><span class="icon">🚀</span><span>Opgraderinger</span></button>
     <button data-page="music"><span class="icon">♫</span><span>Musik</span></button>
     <button data-page="settings"><span class="icon">⚙</span><span>Indstillinger</span></button>
     <button data-page="logs"><span class="icon">◷</span><span>Logs</span></button>
@@ -1941,6 +1942,54 @@ body.locked > .app{display:none}
 <section class="page" id="page-templates">
   <div id="discordTemplatesPage">
     <div class="card"><div class="empty">Indlæser Discord-skitser…</div></div>
+  </div>
+</section>
+
+<section class="page" id="page-upgrades">
+  <div class="card" style="margin-bottom:18px">
+    <div class="section-title">
+      <div><h2>🚀 Opgraderinger</h2><span>Har du en idé til en forbedring af ShardNote-hjemmesiden eller botten?</span></div>
+      <div class="badge open">Idé → Ticket</div>
+    </div>
+    <p style="color:var(--muted);line-height:1.6;margin:0">Send din idé her. Den bliver automatisk oprettet som en ticket, så den kan behandles og følges ligesom andre tickets.</p>
+  </div>
+
+  <div class="grid two">
+    <div class="card">
+      <div class="section-title"><div><h2>💡 Send en idé</h2><span>Fortæl os, hvad der skal forbedres.</span></div></div>
+      <div class="field">
+        <label>Område</label>
+        <select id="upgradeArea">
+          <option>Website</option>
+          <option>Discord-bot</option>
+          <option>Dashboard</option>
+          <option>Betaling / Member Plus</option>
+          <option>Discord-skitser</option>
+          <option>Andet</option>
+        </select>
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label>Titel</label>
+        <input id="upgradeTitle" maxlength="120" placeholder="Fx Tilføj en ny FiveM-skabelon">
+      </div>
+      <div class="field" style="margin-top:12px">
+        <label>Din idé</label>
+        <textarea id="upgradeDescription" maxlength="5000" rows="8" placeholder="Beskriv hvad du gerne vil have lavet, og hvordan det skal fungere…"></textarea>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="button" onclick="submitUpgradeIdea()">🚀 Send opgraderingsidé</button>
+      </div>
+      <div id="upgradeResult" style="margin-top:12px"></div>
+    </div>
+
+    <div class="card">
+      <div class="section-title"><div><h2>🎫 Sådan fungerer det</h2><span>Din idé bliver til en rigtig ShardNote-ticket.</span></div></div>
+      <div class="activity">
+        <div class="activity-item"><div class="activity-icon">1</div><div><b>Du sender idéen</b><small>Vælg område og skriv dit forslag.</small></div></div>
+        <div class="activity-item"><div class="activity-icon">2</div><div><b>ShardNote opretter ticketen</b><small>Idéen bliver gemt med din konto.</small></div></div>
+        <div class="activity-item"><div class="activity-icon">3</div><div><b>Den kan behandles</b><small>Status og prioritet kan følges i Ticket-systemet.</small></div></div>
+      </div>
+    </div>
   </div>
 </section>
 
