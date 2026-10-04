@@ -305,8 +305,9 @@ async function initDatabase() {
       key_hash TEXT NOT NULL UNIQUE,
       key_last4 VARCHAR(8) NOT NULL,
       product_name VARCHAR(120) NOT NULL,
-      guild_id VARCHAR(32) NOT NULL,
-      role_id VARCHAR(32) NOT NULL,
+      guild_id VARCHAR(32),
+      role_id VARCHAR(32),
+      access_plan VARCHAR(30),
       max_uses INTEGER NOT NULL DEFAULT 1,
       uses INTEGER NOT NULL DEFAULT 0,
       created_by BIGINT,
@@ -316,6 +317,13 @@ async function initDatabase() {
       last_redeemed_at TIMESTAMPTZ,
       revoked BOOLEAN NOT NULL DEFAULT FALSE
     )
+  `);
+
+  await db.query(`
+    ALTER TABLE public.serial_keys
+      ALTER COLUMN guild_id DROP NOT NULL,
+      ALTER COLUMN role_id DROP NOT NULL,
+      ADD COLUMN IF NOT EXISTS access_plan VARCHAR(30)
   `);
 
   await db.query(`
@@ -902,18 +910,15 @@ app.post("/api/register", async (req, res) => {
     const name = String(req.body.name || "").trim().slice(0, 80);
     const email = String(req.body.email || "").trim().toLowerCase().slice(0, 160);
     const password = String(req.body.password || "");
+    const serialKey = String(req.body.serialKey || "").trim().toUpperCase();
 
-    if (name.length < 2) {
-      return res.status(400).json({ error: "Navnet skal være mindst 2 tegn." });
-    }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      return res.status(400).json({ error: "Skriv en gyldig emailadresse." });
-    }
-    if (password.length < 8) {
-      return res.status(400).json({ error: "Adgangskoden skal være mindst 8 tegn." });
-    }
+    if (name.length < 2) return res.status(400).json({ error: "Navnet skal være mindst 2 tegn." });
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Skriv en gyldig emailadresse." });
+    if (password.length < 8) return res.status(400).json({ error: "Adgangskoden skal være mindst 8 tegn." });
+    if (!serialKey) return res.status(400).json({ error: "Du skal indtaste din serial key for at oprette kontoen." });
 
     let user;
+    let activatedPlan = "member";
 
     if (db) {
       const existing = await db.query("SELECT id, banned FROM users WHERE email = $1 LIMIT 1", [email]);
@@ -932,39 +937,43 @@ app.post("/api/register", async (req, res) => {
         if (ipBan.rowCount) return res.status(403).json({ error: "Denne IP-adresse er bannet." });
       }
 
+      await db.query("BEGIN");
       try {
+        const keyHash = hashSerialKey(serialKey);
+        const keyResult = await db.query(
+          "SELECT id, access_plan AS \"accessPlan\", max_uses AS \"maxUses\", uses, expires_at AS \"expiresAt\", revoked FROM public.serial_keys WHERE key_hash = $1 FOR UPDATE",
+          [keyHash]
+        );
+        const keyRow = keyResult.rows[0];
+
+        if (!keyRow) throw Object.assign(new Error("Serial key findes ikke."), { statusCode: 400 });
+        if (keyRow.revoked) throw Object.assign(new Error("Denne serial key er tilbagekaldt."), { statusCode: 400 });
+        if (!keyRow.accessPlan || !["member","member_plus","member_pro","member_premium"].includes(keyRow.accessPlan)) throw Object.assign(new Error("Denne serial key er ikke en ShardNote-konto-key."), { statusCode: 400 });
+        if (keyRow.expiresAt && new Date(keyRow.expiresAt).getTime() <= Date.now()) throw Object.assign(new Error("Denne serial key er udløbet."), { statusCode: 400 });
+        if (keyRow.uses >= keyRow.maxUses) throw Object.assign(new Error("Denne serial key er allerede brugt op."), { statusCode: 400 });
+
+        activatedPlan = keyRow.accessPlan;
         const result = await db.query(
-          "INSERT INTO users (name, email, role, password_hash, plan) VALUES ($1, $2, 'member', $3, 'member') RETURNING id, name, email, role, plan, created_at, banned",
-          [name, email, hashPassword(password)]
+          "INSERT INTO users (name, email, role, password_hash, plan, subscription_status, trial_used) VALUES ($1, $2, 'member', $3, $4, 'active', TRUE) RETURNING id, name, email, role, plan, created_at, banned",
+          [name, email, hashPassword(password), activatedPlan]
         );
         user = result.rows[0];
+
+        const used = await db.query(
+          "UPDATE public.serial_keys SET uses = uses + 1, last_redeemed_by = $1, last_redeemed_at = NOW() WHERE id = $2 AND uses < max_uses RETURNING id",
+          [String(user.id), keyRow.id]
+        );
+        if (!used.rowCount) throw Object.assign(new Error("Denne serial key blev brugt op lige før."), { statusCode: 409 });
+
+        await db.query("COMMIT");
       } catch (error) {
-        if (error.code === "23505") {
-          return res.status(409).json({ error: "Der findes allerede en konto med den email." });
-        }
+        await db.query("ROLLBACK");
+        if (error.code === "23505") return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+        if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
         throw error;
       }
     } else {
-      const existingUser = state.users.find(u => u.email === email);
-      if (existingUser) {
-        if (existingUser.banned) return res.status(403).json({ error: "Denne email er bannet." });
-        return res.status(409).json({ error: "Der findes allerede en konto med den email." });
-      }
-      const clientIp = getClientIp(req);
-      const ipHash = hashIp(clientIp);
-      if (clientIp && state.users.some(u => u.banned && u.banType === "ip" && u.bannedIpHash === ipHash)) {
-        return res.status(403).json({ error: "Denne IP-adresse er bannet." });
-      }
-
-      user = {
-        id: Date.now(),
-        name,
-        email,
-        role: "member",
-        passwordHash: hashPassword(password),
-        createdAt: new Date().toISOString()
-      };
-      state.users.push(user);
+      return res.status(503).json({ error: "Database er nødvendig for serial key-aktivering." });
     }
 
     const sid = createSessionToken(user.id);
@@ -973,18 +982,21 @@ app.post("/api/register", async (req, res) => {
       name: user.name,
       email: user.email,
       role: user.role,
-      plan: user.plan || "member"
+      plan: user.plan || activatedPlan
     });
 
     res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
-    log("security", `New account registered: ${email}`);
+    log("security", `New account registered with serial key: ${email} (${user.plan || activatedPlan})`);
     res.status(201).json({
       user: {
         id: user.id,
         name: user.name,
         email: user.email,
         role: user.role,
-        plan: user.plan || "member"
+        plan: user.plan || activatedPlan,
+        subscriptionStatus: "active",
+        trialUsed: true,
+        hasPaidAccess: true
       }
     });
   } catch (error) {
@@ -992,7 +1004,6 @@ app.post("/api/register", async (req, res) => {
     res.status(500).json({ error: "Kontoen kunne ikke oprettes." });
   }
 });
-
 app.post("/api/logout", (req, res) => {
   const sid = parseCookies(req).shardnote_session;
   if (sid) {
