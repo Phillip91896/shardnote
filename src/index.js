@@ -187,7 +187,8 @@ async function initDatabase() {
       ADD COLUMN IF NOT EXISTS channel_id VARCHAR(32),
       ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(32),
       ADD COLUMN IF NOT EXISTS category VARCHAR(40) NOT NULL DEFAULT 'support',
-      ADD COLUMN IF NOT EXISTS description TEXT
+      ADD COLUMN IF NOT EXISTS description TEXT,
+      ADD COLUMN IF NOT EXISTS handler VARCHAR(20) NOT NULL DEFAULT 'admins'
   `);
 
   await db.query(`
@@ -609,13 +610,14 @@ async function isGuildLinkedToUser(userId, guildId) {
   return result.rowCount > 0;
 }
 
-async function saveTicket({ title, user, status = "open", priority = "normal", ownerUserId = null, guildId = null, category = "support", description = "" }) {
+async function saveTicket({ title, user, status = "open", priority = "normal", ownerUserId = null, guildId = null, category = "support", description = "", handler = "admins" }) {
   const cleanTitle = String(title || "New ticket").slice(0, 120);
   const cleanUser = String(user || "Dashboard user").slice(0, 80);
   const cleanStatus = ["open", "pending", "closed"].includes(status) ? status : "open";
   const cleanPriority = ["low", "normal", "high"].includes(priority) ? priority : "normal";
   const cleanCategory = String(category || "support").trim().slice(0, 40) || "support";
   const cleanDescription = String(description || "").trim().slice(0, 5000);
+  const cleanHandler = ["ai","admins","ticket"].includes(String(handler)) ? String(handler) : "admins";
   let resolvedOwnerUserId = ownerUserId || null;
 
   if (!resolvedOwnerUserId && db && guildId) {
@@ -628,15 +630,16 @@ async function saveTicket({ title, user, status = "open", priority = "normal", o
 
   if (db) {
     const result = await db.query(
-      `INSERT INTO public.tickets (title, user_name, status, priority, owner_user_id, category, description)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, title, user_name AS "user", status, priority, category, description, created_at AS "createdAt"`,
-      [cleanTitle, cleanUser, cleanStatus, cleanPriority, resolvedOwnerUserId, cleanCategory, cleanDescription]
+      `INSERT INTO public.tickets (title, user_name, status, priority, owner_user_id, category, description, handler)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+       RETURNING id, title, user_name AS "user", status, priority, category, description, handler, created_at AS "createdAt"`,
+      [cleanTitle, cleanUser, cleanStatus, cleanPriority, resolvedOwnerUserId, cleanCategory, cleanDescription, cleanHandler]
     );
     const ticket = result.rows[0];
     ticket.ownerUserId = resolvedOwnerUserId;
     ticket.category = cleanCategory;
     ticket.description = cleanDescription;
+    ticket.handler = cleanHandler;
     state.tickets.unshift(ticket);
     state.tickets = state.tickets.slice(0, 500);
     return ticket;
@@ -650,6 +653,7 @@ async function saveTicket({ title, user, status = "open", priority = "normal", o
     priority: cleanPriority,
     category: cleanCategory,
     description: cleanDescription,
+    handler: cleanHandler,
     ownerUserId: resolvedOwnerUserId,
     createdAt: new Date().toISOString()
   };
@@ -1258,7 +1262,7 @@ app.get("/api/tickets", async (req, res) => {
     if (db) {
       const result = req.user?.role === "admin"
         ? await db.query(`
-            SELECT id, title, user_name AS "user", status, priority, category, description, created_at AS "createdAt", owner_user_id AS "ownerUserId"
+            SELECT id, title, user_name AS "user", status, priority, category, description, handler, created_at AS "createdAt", owner_user_id AS "ownerUserId"
             FROM public.tickets
             ORDER BY created_at DESC LIMIT 500
           `)
@@ -1286,7 +1290,8 @@ app.post("/api/tickets", async (req, res) => {
       user: req.body.user,
       status: "open",
       priority: req.body.priority,
-      ownerUserId: req.user.id
+      ownerUserId: req.user.id,
+      handler: req.body.handler
     });
     log("ticket", `Ticket #${ticket.id} created from dashboard`, req.user.id);
     res.status(201).json(ticket);
@@ -1329,7 +1334,8 @@ app.patch("/api/tickets/:id", async (req, res) => {
       const result = await db.query(
         `UPDATE public.tickets
          SET status = COALESCE($1, status),
-             priority = COALESCE($2, priority)
+             priority = COALESCE($2, priority),
+             handler = COALESCE($6, handler)
          WHERE id = $3 AND (owner_user_id = $4 OR $5 = TRUE)
          RETURNING id, title, user_name AS "user", status, priority, created_at AS "createdAt", owner_user_id AS "ownerUserId"`,
         [
@@ -1337,7 +1343,8 @@ app.patch("/api/tickets/:id", async (req, res) => {
           ["low", "normal", "high"].includes(req.body.priority) ? req.body.priority : null,
           req.params.id,
           req.user.id,
-          req.user.role === "admin"
+          req.user.role === "admin",
+          ["ai","admins","ticket"].includes(req.body.handler) ? req.body.handler : null
         ]
       );
       if (!result.rowCount) return res.status(404).json({ error: "Ticket not found" });
@@ -1352,6 +1359,7 @@ app.patch("/api/tickets/:id", async (req, res) => {
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
     if (["open", "pending", "closed"].includes(req.body.status)) ticket.status = req.body.status;
     if (["low", "normal", "high"].includes(req.body.priority)) ticket.priority = req.body.priority;
+    if (["ai","admins","ticket"].includes(req.body.handler)) ticket.handler = req.body.handler;
     log("ticket", `Ticket #${ticket.id} updated`, req.user.id);
     res.json(ticket);
   } catch (error) {
@@ -2002,7 +2010,17 @@ body.locked > .app{display:none}
 
 <section class="page" id="page-tickets">
   <div class="card">
-    <div class="section-title"><h2>Ticket-system</h2><button class="btn primary" data-button-label="ticketNew" onclick="newTicket()">+ Ny ticket</button></div>
+    <div class="section-title">
+      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+        <h2 style="margin:0">Ticket-system</h2>
+        <select id="ticketHandlerDefault" class="feature-select" style="min-width:160px">
+          <option value="ticket">🎫 Ticket</option>
+          <option value="ai">🤖 AI</option>
+          <option value="admins" selected>👑 Admins</option>
+        </select>
+      </div>
+      <button class="btn primary" data-button-label="ticketNew" onclick="newTicket()">+ Ny ticket</button>
+    </div>
     <div id="ticketList"></div>
   </div>
 </section>
