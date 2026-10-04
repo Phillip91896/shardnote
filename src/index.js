@@ -210,8 +210,16 @@ async function initDatabase() {
       economy_enabled BOOLEAN NOT NULL DEFAULT TRUE,
       anti_raid_enabled BOOLEAN NOT NULL DEFAULT TRUE,
       lockdown BOOLEAN NOT NULL DEFAULT FALSE,
+      ai_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      ai_channel_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
+  `);
+
+  await db.query(`
+    ALTER TABLE public.guild_settings
+      ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS ai_channel_ids JSONB NOT NULL DEFAULT '[]'::jsonb
   `);
 
   await db.query(`
@@ -1145,10 +1153,11 @@ app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
     if(!stripe)return res.status(503).json({error:"Stripe er ikke konfigureret endnu."});
     if(hasPaidAccess(req.user))return res.status(400).json({error:"Du har allerede adgang."});
 
-    const requestedPlan=["member","member_plus"].includes(req.body?.plan) ? req.body.plan : "member";
+    const requestedPlan=["member","member_plus","member_pro"].includes(req.body?.plan) ? req.body.plan : "member";
     const planInfo={
       member:{amount:267,name:"ShardNote Member"},
-      member_plus:{amount:468,name:"ShardNote Member Plus"}
+      member_plus:{amount:468,name:"ShardNote Member Plus"},
+      member_pro:{amount:Number(process.env.STRIPE_MEMBER_PRO_AMOUNT_EUR || 699),name:"ShardNote Member Pro"}
     }[requestedPlan];
 
     let customerId=req.user.stripeCustomerId;
@@ -1754,6 +1763,34 @@ app.get("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, (req,res,
     console.error(error);
     res.status(500).json({ error: "Kunne ikke hente serverindstillinger." });
   }
+});
+
+app.get("/api/bot/guilds/:guildId/ai", requireAuth, requirePaid, (req,res,next)=>requirePlan("member_pro",req,res,next), async (req,res)=>{
+  try{
+    const guild=client.guilds.cache.get(String(req.params.guildId));
+    if(!guild)return res.status(404).json({error:"Botten er ikke med i den valgte Discord-server."});
+    if(req.user?.role!=="admin" && !(await isGuildLinkedToUser(req.user.id,guild.id)))return res.status(403).json({error:"Denne Discord-server er ikke koblet til din ShardNote-konto."});
+    const settings=client.dashboardGetGuildSettings ? await client.dashboardGetGuildSettings(guild.id) : {};
+    res.json({enabled:!!settings.ai_enabled,channelIds:Array.isArray(settings.ai_channel_ids)?settings.ai_channel_ids:[]});
+  }catch(error){console.error(error);res.status(500).json({error:"AI-indstillingerne kunne ikke hentes."});}
+});
+
+app.patch("/api/bot/guilds/:guildId/ai", requireAuth, requirePaid, (req,res,next)=>requirePlan("member_pro",req,res,next), async (req,res)=>{
+  try{
+    const guild=client.guilds.cache.get(String(req.params.guildId));
+    if(!guild)return res.status(404).json({error:"Botten er ikke med i den valgte Discord-server."});
+    if(req.user?.role!=="admin" && !(await isGuildLinkedToUser(req.user.id,guild.id)))return res.status(403).json({error:"Denne Discord-server er ikke koblet til din ShardNote-konto."});
+    const enabled=Boolean(req.body?.enabled);
+    const channelIds=Array.isArray(req.body?.channelIds)
+      ? [...new Set(req.body.channelIds.map(id=>String(id)).filter(id=>guild.channels.cache.has(id)))].slice(0,50)
+      : [];
+    if(client.dashboardSetGuildSetting){
+      await client.dashboardSetGuildSetting(guild.id,"ai_enabled",enabled);
+      await client.dashboardSetGuildSetting(guild.id,"ai_channel_ids",channelIds);
+    }
+    log("settings","AI-indstillinger ændret for "+guild.name,req.user?.id||null);
+    res.json({ok:true,enabled,channelIds});
+  }catch(error){console.error(error);res.status(500).json({error:error.message||"AI-indstillingerne kunne ikke gemmes."});}
 });
 
 app.post("/api/bot/guilds/:guildId/templates/:templateKey", requireAuth, requirePaid, (req,res,next)=>requirePlan("member_plus",req,res,next), async (req, res) => {
