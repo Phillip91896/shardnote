@@ -765,10 +765,17 @@ async function checkBillingStatus(){
     const data=await r.json();
     if(!r.ok) throw new Error(data.error||"Betalingsstatus kunne ikke hentes.");
     if(data.hasPaidAccess){
-      currentUser.hasPaidAccess=true;
+      try{
+        const me=await fetch("/api/me");
+        if(me.ok){
+          const meData=await me.json();
+          if(meData.user) currentUser=meData.user;
+        }
+      }catch(_){}
       window.history.replaceState({},document.title,"/");
       unlockDashboard();
-      toast("Betaling godkendt — adgang låst op.");
+      navigate("store");
+      toast("Betaling godkendt — din adgang er låst op. Du kan nu redeem din license.");
       return true;
     }
     return false;
@@ -1024,20 +1031,19 @@ function showLogin(){
 
 function showRegister(preferredPlan="member"){
   document.body.classList.add("locked");
-  window.Shardnote BotPreferredPlan=preferredPlan;
+  window.shardnoteBotPreferredPlan=preferredPlan;
 
   const box=document.getElementById("loginScreen") || document.createElement("div");
   box.id="loginScreen";
   box.innerHTML=`<div class="login-card">
     <div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>Shardnote Bot</span></div>
     <h1>Opret konto</h1>
-    <p>Har du købt Shardnote Bot? Indtast serial key'en du fik efter købet. Key'en aktiverer din pakke med det samme.</p>
+    <p>Opret først din konto. Når kontoen er oprettet, vælger du 1, 3 eller 12 måneder og fortsætter til betaling.</p>
     <form onsubmit="register(event)">
       <div class="field"><label>Navn</label><input id="registerName" required maxlength="80" autocomplete="name" placeholder="Dit navn"></div>
       <div class="field" style="margin-top:12px"><label>Email</label><input id="registerEmail" type="email" required autocomplete="email" placeholder="din@email.dk"></div>
       <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="registerPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="Mindst 8 tegn"></div>
-      <div class="field" style="margin-top:12px"><label>Serial key</label><input id="registerSerialKey" required autocomplete="off" placeholder="XXXXX-XXXXX-XXXXX-XXXXX"></div>
-      <button class="btn primary" style="width:100%;margin-top:16px">Aktivér key og opret konto</button>
+      <button class="btn primary" style="width:100%;margin-top:16px">Opret konto</button>
       <div id="registerError" style="color:var(--red);font-size:12px;margin-top:10px"></div>
     </form>
     <div style="text-align:center;margin-top:18px;color:var(--muted);font-size:12px">
@@ -1073,8 +1079,7 @@ async function register(e){
       body:JSON.stringify({
         name:document.getElementById("registerName").value,
         email:document.getElementById("registerEmail").value,
-        password:document.getElementById("registerPassword").value,
-        serialKey:document.getElementById("registerSerialKey").value
+        password:document.getElementById("registerPassword").value
       })
     });
 
@@ -1082,8 +1087,9 @@ async function register(e){
     if(!r.ok) throw new Error(data.error||"Kunne ikke oprette konto.");
 
     currentUser=data.user;
-    toast("✅ Key aktiveret — konto oprettet");
-    unlockDashboard();
+    toast("✅ Konto oprettet");
+    if(currentUser.hasPaidAccess || currentUser.role==="admin") unlockDashboard();
+    else showPaywall();
   }catch(err){
     error.textContent=err.message;
   }
