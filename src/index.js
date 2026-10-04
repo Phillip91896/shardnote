@@ -509,7 +509,7 @@ async function migrateProtectedIpData() {
 }
 
 function getSessionId(req) {
-  return parseCookies(req).Shardnote Bot_session;
+  return parseCookies(req).ShardNote_session;
 }
 
 function hasLogsAccess(req) {
@@ -690,7 +690,7 @@ function verifySessionToken(token) {
 }
 
 function currentUser(req) {
-  const sid = parseCookies(req).Shardnote Bot_session;
+  const sid = parseCookies(req).ShardNote_session;
   if (!sid) return null;
   const cached = sessions.get(sid);
   if (cached) return cached;
@@ -912,7 +912,7 @@ app.post("/api/login", async (req, res) => {
       banned: !!user.banned
     });
 
-    res.setHeader("Set-Cookie", `Shardnote Bot_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    res.setHeader("Set-Cookie", `ShardNote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
     await recordLoginAudit({ req, user, success: true, eventType: "login" });
     log("security", `User ${user.email} logged in`);
     res.json({
@@ -1021,7 +1021,7 @@ app.post("/api/register", async (req, res) => {
       plan: user.plan || activatedPlan
     });
 
-    res.setHeader("Set-Cookie", `Shardnote Bot_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    res.setHeader("Set-Cookie", `ShardNote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
     log("security", `New account registered: ${email}${activatedFromKey ? " with serial key (" + (user.plan || activatedPlan) + ")" : ""}`);
     res.status(201).json({
       user: {
@@ -1089,13 +1089,13 @@ app.post("/api/license/redeem", requireAuth, async (req, res) => {
 });
 
 app.post("/api/logout", (req, res) => {
-  const sid = parseCookies(req).Shardnote Bot_session;
+  const sid = parseCookies(req).ShardNote_session;
   if (sid) {
     sessions.delete(sid);
     logsUnlocks.delete(sid);
     ipUnlocks.delete(sid);
   }
-  res.setHeader("Set-Cookie", "Shardnote Bot_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+  res.setHeader("Set-Cookie", "ShardNote_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
   res.json({ ok: true });
 });
 
