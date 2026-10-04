@@ -559,6 +559,585 @@ async function redeemStoreSerialKey(){
   const result=document.getElementById("storeRedeemResult");
   if(result) result.textContent="";
   try{
+    const data=await api("/api/license/redeem",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({key:document.getElementById("storeRedeemKey").value.trim()})
+    });
+    if(result) result.innerHTML='<span class="badge open">✅ License aktiveret · '+escapeHtml(data.productName||data.plan)+'</span>';
+    toast("✅ License aktiveret");
+    try{
+      const me=await fetch("/api/me");
+      if(me.ok){
+        const meData=await me.json();
+        if(meData.user) currentUser=meData.user;
+      }
+    }catch(_){}
+    loadStats();
+  }catch(e){
+    if(result) result.innerHTML='<span class="badge closed">'+escapeHtml(e.message)+'</span>';
+  }
+}onst pages = ["dashboard","spot","tickets","messages","commands","features","templates","upgrades","store","music","settings","logs","admin"];
+const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord-skitser",upgrades:"Opgraderinger",store:"Store",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
+let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true,buttonLabels:{}};
+
+async function addBotToDiscord(){
+  try{
+    const r=await fetch("/api/bot/invite");
+    const data=await r.json();
+    if(!r.ok) throw new Error(data.error || "The Discord bot is not online yet.");
+    window.location.href=data.url;
+  }catch(e){
+    toast(e.message);
+  }
+}
+
+document.querySelectorAll(".nav button").forEach(btn=>{
+  btn.onclick = function(event){
+    event.preventDefault();
+    navigate(this.dataset.page);
+    return false;
+  };
+});
+
+function navigate(page){
+  if(!pages.includes(page)) return;
+  if(page==="settings" && currentUser && currentUser.role!=="admin" && currentUser.plan!=="member_pro") return;
+  pages.forEach(p=>{
+    const el=document.getElementById("page-"+p);
+    if(el) el.classList.toggle("active",p===page);
+  });
+  document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
+  const title=document.getElementById("pageTitle");
+  if(title) title.textContent=titles[page] || page;
+  if(page==="spot") setTimeout(renderSpotImage,0);
+  if(page==="tickets") loadTickets();
+  if(page==="messages") loadMessages();
+  if(page==="upgrades") loadUpgradeIdeas();
+  if(page==="store") loadStorePage();
+  if(page==="commands") loadCommands();
+  if(page==="settings") loadSettings();
+  if(page==="logs") loadLogs();
+  if(page==="admin"){ loadUsers(); loadDatabaseSummary(); loadIpCenter(); loadSerialGuilds(); loadSerialKeysList(); }
+}
+
+
+function renderSpotImage(){
+  const canvas=document.getElementById("spotCanvas");
+  if(!canvas) return;
+  const title=document.getElementById("spotTitle")?.value || "Shardnote Bot";
+  const subtitle=document.getElementById("spotSubtitle")?.value || "";
+  const width=Math.max(300,Math.min(2400,Number(document.getElementById("spotWidth")?.value||1200)));
+  const height=Math.max(300,Math.min(1600,Number(document.getElementById("spotHeight")?.value||630)));
+  const bg=document.getElementById("spotBackground")?.value || "#11111b";
+  const textColor=document.getElementById("spotTextColor")?.value || "#ffffff";
+  const accent=document.getElementById("spotAccent")?.value || "#6d28d9";
+  const radius=Math.max(0,Number(document.getElementById("spotRadius")?.value||0));
+  canvas.width=width; canvas.height=height;
+  const ctx=canvas.getContext("2d");
+  ctx.clearRect(0,0,width,height);
+
+  function roundedRect(x,y,w,h,r){
+    r=Math.min(r,w/2,h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+  ctx.save();
+  if(radius){roundedRect(0,0,width,height,radius);ctx.clip();}
+  ctx.fillStyle=bg;ctx.fillRect(0,0,width,height);
+  const grad=ctx.createLinearGradient(0,0,width,height);
+  grad.addColorStop(0,accent);
+  grad.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.globalAlpha=.34;ctx.fillStyle=grad;ctx.fillRect(0,0,width,height);
+  ctx.globalAlpha=1;
+  ctx.fillStyle=accent;ctx.fillRect(0,height-10,width,10);
+
+  const pad=Math.round(width*.075);
+  ctx.fillStyle=textColor;
+  ctx.textAlign="left";
+  ctx.textBaseline="middle";
+  const titleSize=Math.max(34,Math.min(110,width*.075));
+  ctx.font="800 "+titleSize+"px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+  ctx.fillText(title,pad,height*.46);
+  if(subtitle){
+    const subSize=Math.max(18,Math.min(48,width*.032));
+    ctx.font="500 "+subSize+"px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+    ctx.globalAlpha=.82;
+    ctx.fillText(subtitle,pad,height*.58);
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
+function downloadSpotImage(){
+  renderSpotImage();
+  const canvas=document.getElementById("spotCanvas");
+  if(!canvas) return;
+  const a=document.createElement("a");
+  const safe=(document.getElementById("spotTitle")?.value||"Shardnote Bot").trim().replace(/[^a-z0-9-_]+/gi,"-").replace(/^-|-$/g,"").toLowerCase()||"Shardnote Bot";
+  a.download=safe+".png";
+  a.href=canvas.toDataURL("image/png");
+  a.click();
+  toast("✅ Billedet er hentet");
+}
+
+async function api(url, options){
+  const r=await fetch(url, options);
+  const data=await r.json();
+  if(!r.ok) throw new Error(data.error||"Request failed");
+  return data;
+}
+function toast(msg){const el=document.getElementById("toast");el.textContent=msg;el.style.display="block";setTimeout(()=>el.style.display="none",2500)}
+function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
+
+function botInstallButton(){
+  return '<button class="btn primary small" onclick="addBotToDiscord()">+ Add Bot to Discord</button>';
+}
+
+const DEFAULT_BUTTON_LABELS={dashboardSeeAll:"Se alle",ticketNew:"+ Ny ticket",messageSend:"Send besked",commandRun:"Kør command",musicExecute:"Udfør",settingsSave:"Gem ændringer",logsRefresh:"Opdater",logsLock:"🔒 Lås",logsUnlock:"🔓 Åbn logcenter",adminAddUser:"+ Tilføj bruger",adminRefresh:"Opdater"};
+function getButtonLabel(key){const custom=settings.buttonLabels||{};return escapeHtml(String(custom[key]||DEFAULT_BUTTON_LABELS[key]||key));}
+function applyButtonLabels(){Object.keys(DEFAULT_BUTTON_LABELS).forEach(key=>{const node=document.querySelector('[data-button-label="' + key + '"]');if(node)node.textContent=getButtonLabel(key);const input=document.getElementById("buttonLabel_"+key);if(input)input.value=String((settings.buttonLabels||{})[key]||DEFAULT_BUTTON_LABELS[key]);});}
+
+async function loadStats(){
+  try{
+    const s=await api("/api/stats");
+    document.getElementById("statBot").textContent=s.botOnline?"Online":"Offline";
+    document.getElementById("statServers").textContent=s.servers;
+    const usersCard=document.getElementById("statUsersCard");
+    if(usersCard){
+      const isAdmin=currentUser?.role==="admin";
+      usersCard.style.display=isAdmin?"":"none";
+      if(isAdmin) document.getElementById("statUsers").textContent=s.users ?? 0;
+    }
+    document.getElementById("statTickets").textContent=s.tickets;
+    document.getElementById("statusText").textContent=s.botOnline?"Discord connected":"Web mode";
+    document.getElementById("statusDot").className="dot "+(s.botOnline?"online":"");
+    const tickets=await api("/api/tickets");
+    document.getElementById("dashTickets").innerHTML=tickets.slice(0,5).map(t=>`<div class="activity-item"><div class="activity-icon">🎫</div><div><b>#${t.id} — ${escapeHtml(t.title)}</b><small>${escapeHtml(t.user)} · <span class="badge ${t.status}">${t.status}</span></small></div></div>`).join("")||'<div class="empty">Ingen tickets endnu.</div>';
+    document.getElementById("dashLogs").innerHTML='<div class="empty">Logs er beskyttet. Åbn Logs for at se aktivitet.</div>';
+  }catch(e){toast(e.message)}
+}
+
+async function loadTickets(){
+  const tickets=await api("/api/tickets");
+  document.getElementById("ticketList").innerHTML=tickets.length?
+    '<table class="table"><thead><tr><th>ID</th><th>Titel</th><th>Bruger</th><th>Behandler</th><th>Status</th><th>Prioritet</th><th>Handlinger</th></tr></thead><tbody>'+
+    tickets.map(function(t){
+      return '<tr><td>#'+t.id+'</td><td>'+escapeHtml(t.title)+'</td><td>'+escapeHtml(t.user)+'</td><td>'+
+        '<select class="ticket-handler" data-ticket-handler="'+t.id+'">'+
+          '<option value="ticket" '+(t.handler==="ticket"?"selected":"")+'>🎫 Ticket</option>'+
+          '<option value="ai" '+(t.handler==="ai"?"selected":"")+'>🤖 AI</option>'+
+          '<option value="admins" '+((!t.handler||t.handler==="admins")?"selected":"")+'>👑 Admins</option>'+
+        '</select></td><td><span class="badge '+t.status+'">'+t.status+'</span></td><td>'+t.priority+'</td><td>'+
+        '<button class="btn small ticket-cycle" data-ticket-id="'+t.id+'" data-ticket-status="'+t.status+'">Skift status</button> '+
+        '<button class="btn small danger ticket-delete" data-ticket-id="'+t.id+'">Slet</button>'+
+      '</td></tr>';
+    }).join("")+
+    '</tbody></table>' : '<div class="empty">Ingen tickets endnu.</div>';
+  document.querySelectorAll(".ticket-handler").forEach(function(el){el.addEventListener("change",function(){setTicketHandler(this.dataset.ticketHandler,this.value);});});
+  document.querySelectorAll(".ticket-cycle").forEach(function(el){el.addEventListener("click",function(){cycleTicket(this.dataset.ticketId,this.dataset.ticketStatus);});});
+  document.querySelectorAll(".ticket-delete").forEach(function(el){el.addEventListener("click",function(){deleteTicket(this.dataset.ticketId);});});
+}
+async function newTicket(){
+  const title=prompt("Ticket titel:");
+  if(!title) return;
+  const handler=document.getElementById("ticketHandlerDefault")?.value || "admins";
+  await api("/api/tickets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,user:"Dashboard user",priority:"normal",handler})});
+  toast(handler==="ai"?"🤖 Ticket oprettet til AI":handler==="admins"?"👑 Ticket oprettet til Admins":"🎫 Ticket oprettet");
+  loadTickets();loadStats();
+}
+async function setTicketHandler(id,handler){
+  try{
+    await api("/api/tickets/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({handler})});
+    toast(handler==="ai"?"🤖 AI valgt":handler==="admins"?"👑 Admins valgt":"🎫 Ticket valgt");
+    loadTickets();
+  }catch(e){toast(e.message)}
+}
+async function cycleTicket(id,status){
+  const next={open:"pending",pending:"closed",closed:"open"}[status];
+  await api("/api/tickets/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:next})});
+  loadTickets();loadStats();
+}
+async function deleteTicket(id){
+  if(!confirm("Slet denne ticket?")) return;
+  await api("/api/tickets/"+id,{method:"DELETE"});toast("Ticket slettet");loadTickets();loadStats();
+}
+
+async function submitUpgradeIdea(){
+  const area=document.getElementById("upgradeArea")?.value || "Website / Bot";
+  const title=document.getElementById("upgradeTitle")?.value.trim();
+  const description=document.getElementById("upgradeDescription")?.value.trim();
+  const result=document.getElementById("upgradeResult");
+  if(!title){if(result)result.innerHTML='<div class="badge closed">Skriv en titel.</div>';return;}
+  if(description.length<10){if(result)result.innerHTML='<div class="badge closed">Beskriv idéen lidt mere.</div>';return;}
+  try{
+    const ticket=await api("/api/upgrade-ideas",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({area,title,description})
+    });
+    document.getElementById("upgradeTitle").value="";
+    document.getElementById("upgradeDescription").value="";
+    if(result)result.innerHTML='<div class="badge open">✅ Idé sendt som ticket #'+escapeHtml(String(ticket.id))+'</div>';
+    loadStats();
+    loadUpgradeIdeas();
+  }catch(e){
+    if(result)result.innerHTML='<div class="badge closed">'+escapeHtml(e.message)+'</div>';
+  }
+}
+async function loadUpgradeIdeas(){
+  try{
+    const tickets=await api("/api/tickets");
+    const upgrades=tickets.filter(t=>String(t.category||"") === "upgrade");
+    const box=document.getElementById("upgradeIdeasList");
+    if(box){
+      box.innerHTML=upgrades.length
+        ? upgrades.slice(0,10).map(t=>'<div class="activity-item"><div class="activity-icon">🚀</div><div><b>#'+escapeHtml(String(t.id))+' — '+escapeHtml(t.title)+'</b><small>'+escapeHtml(t.status)+' · '+new Date(t.createdAt).toLocaleString("da-DK")+'</small></div></div>').join("")
+        : '<div class="empty">Du har ikke sendt nogen opgraderingsidéer endnu.</div>';
+    }
+  }catch(e){
+    const box=document.getElementById("upgradeIdeasList");
+    if(box)box.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';
+  }
+}
+
+async function loadMessages(){
+  const items=await api("/api/messages");
+  document.getElementById("messageList").innerHTML=items.length?items.map(m=>`<div class="activity-item"><div class="activity-icon">✉</div><div><b>${escapeHtml(m.channel)}</b><small>${escapeHtml(m.content)} · ${new Date(m.time).toLocaleString("da-DK")}</small></div></div>`).join(""):'<div class="empty">Ingen beskeder endnu.</div>';
+}
+async function sendMessage(){
+  const channel=document.getElementById("messageChannel").value;
+  const content=document.getElementById("messageContent").value;
+  try{await api("/api/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({channel,content})});document.getElementById("messageContent").value="";toast("Besked gemt");loadMessages()}catch(e){toast(e.message)}
+}
+
+const DANISH_COMMAND_DESCRIPTIONS={
+  ping:"Tjekker om Shardnote Bot er online.",
+  help:"Viser alle tilgængelige Shardnote Bot-commands.",
+  ticket:"Opretter en support-ticket.",
+  serverinfo:"Viser oplysninger om denne Discord-server.",
+  userinfo:"Viser oplysninger om et Discord-medlem.",
+  "ticket-panel":"Sender et panel, hvor brugere kan oprette tickets.",
+  "ticket-close":"Lukker den aktuelle ticket.",
+  "ticket-claim":"Tager den aktuelle ticket.",
+  "ticket-transcript":"Opretter en transcript af den aktuelle ticket.",
+  warn:"Giver et medlem en advarsel.",
+  warnings:"Viser advarsler for et medlem.",
+  clearwarnings:"Sletter alle advarsler for et medlem.",
+  kick:"Kicker et medlem fra serveren.",
+  ban:"Banner et medlem fra serveren.",
+  unban:"Fjerner et ban ved hjælp af Discord-brugerens ID.",
+  timeout:"Sætter timeout på et medlem.",
+  untimeout:"Fjerner timeout fra et medlem.",
+  purge:"Sletter mellem 1 og 100 beskeder.",
+  slowmode:"Indstiller slowmode i den aktuelle kanal.",
+  lockdown:"Låser tekstkanaler.",
+  unlockdown:"Låser tekstkanaler op igen.",
+  announce:"Sender en announcement som embed.",
+  poll:"Opretter en afstemning.",
+  suggest:"Sender et forslag.",
+  giveaway:"Starter en giveaway.",
+  "role-panel":"Sender en knap til en selvvalgt rolle.",
+  "verify-panel":"Sender et verification-panel.",
+  "set-log-channel":"Vælger log-kanalen.",
+  "set-welcome":"Indstiller velkomstbeskeder.",
+  "set-leave":"Indstiller farvelbeskeder.",
+  "set-autorole":"Vælger den rolle, nye medlemmer får automatisk.",
+  "set-support-role":"Vælger support-rollen til tickets.",
+  "set-ticket-category":"Vælger kategorien til tickets.",
+  "set-verification-role":"Vælger verification-rollen.",
+  "set-suggestion-channel":"Vælger kanalen til forslag.",
+  "set-features":"Slår botfunktioner til eller fra.",
+  balance:"Viser dine coins og dit level.",
+  daily:"Henter din daglige belønning.",
+  work:"Tjen coins ved at arbejde.",
+  leaderboard:"Viser serverens leaderboard.",
+  level:"Viser XP og level.",
+  backup:"Opretter en server-backup som JSON.",
+  restore:"Gendanner en Shardnote Bot-backup.",
+  "music-join":"Får botten til at gå ind i din voice-kanal.",
+  "music-leave":"Får botten til at forlade voice-kanalen."
+};
+
+async function loadCommands(){
+  const commands=await api("/api/commands");
+  const danish=localStorage.getItem("Shardnote Bot_language")==="da";
+  const title=document.querySelector("#page-commands .section-title h2");
+  const label=document.querySelector("#page-commands .field label");
+  const available=document.querySelector("#page-commands .card:nth-child(2) .section-title h2");
+  if(title) title.textContent=danish?"Kommandocenter":"Command Center";
+  if(label) label.textContent=danish?"Kommando":"Command";
+  if(available) available.textContent=danish?"Tilgængelige commands":"Available commands";
+  document.getElementById("commandCount").textContent=commands.length+" "+(danish?"commands":"commands");
+  document.getElementById("commandList").innerHTML=commands.map(c=>{
+    const description=danish?(DANISH_COMMAND_DESCRIPTIONS[c.name]||c.description):c.description;
+    return `<div class="activity-item"><div class="activity-icon">⌘</div><div><b>${escapeHtml(c.usage)}</b><small>${escapeHtml(description)}</small></div></div>`;
+  }).join("");
+}
+async function runCommand(){
+  const command=document.getElementById("commandInput").value;
+  try{const r=await api("/api/commands",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({command})});document.getElementById("commandResult").textContent=r.message;loadLogs()}catch(e){toast(e.message)}
+}
+function musicAction(){toast("Musikmodulet er klar til Discord voice-integration.")}
+async function loadSettings(){
+  settings=await api("/api/settings");
+  settings.buttonLabels=settings.buttonLabels||{};
+  document.getElementById("prefix").value=settings.prefix;
+  ["maintenance","autoReply","welcomeMessages"].forEach(k=>document.getElementById(k+"Switch").classList.toggle("on",!!settings[k]));
+  applyButtonLabels();
+}
+function toggleSetting(key){settings[key]=!settings[key];document.getElementById(key+"Switch").classList.toggle("on",settings[key])}
+async function saveSettings(){
+  settings.prefix=document.getElementById("prefix").value||"!";
+  settings.buttonLabels={};
+  Object.keys(DEFAULT_BUTTON_LABELS).forEach(key=>{const input=document.getElementById("buttonLabel_"+key);if(input)settings.buttonLabels[key]=String(input.value||DEFAULT_BUTTON_LABELS[key]).trim().slice(0,80);});
+  settings=await api("/api/settings",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify(settings)});
+  applyButtonLabels();
+  toast("Indstillinger gemt");
+}
+function renderLogLocked(){
+  document.getElementById("logContent").style.display="none";
+  document.getElementById("logLockPanel").style.display="block";
+  document.getElementById("logCategoryList").innerHTML="";
+  document.getElementById("logPassword").value="";
+}
+
+async function loadLogCategories(){
+  const categories=await api("/api/logs/categories");
+  const icons={login:"🔐",security:"🛡️",tickets:"🎫",messages:"✉️",commands:"⌘",settings:"⚙️",system:"✅",warnings:"⚠️",errors:"❌"};
+  document.getElementById("logCategoryList").innerHTML=categories.map(c=>`
+    <details class="log-category" data-category="${escapeHtml(c.key)}" ontoggle="loadLogCategory(this)">
+      <summary><span>${icons[c.key]||"•"} ${escapeHtml(c.label)}</span><b>${c.count}</b></summary>
+      <div class="log-category-body"><div class="empty">Åbner…</div></div>
+    </details>
+  `).join("");
+  document.getElementById("logLockPanel").style.display="none";
+  document.getElementById("logContent").style.display="block";
+}
+
+async function loadLogCategory(element){
+  if(!element.open || element.dataset.loaded==="1") return;
+  const category=element.dataset.category;
+  const body=element.querySelector(".log-category-body");
+  body.innerHTML='<div class="empty">Henter logs…</div>';
+  try{
+    const items=await api("/api/logs?category="+encodeURIComponent(category));
+    if(category==="login"){
+      body.innerHTML=items.length
+        ? `<div class="table-wrap"><table class="table"><thead><tr><th>Tid</th><th>Bruger</th><th>Resultat</th><th>Sted</th><th>Browser/enhed</th></tr></thead><tbody>${items.map(item=>{
+            const place=[item.city,item.country].filter(Boolean).join(", ")||"Ukendt";
+            return `<tr><td>${new Date(item.createdAt).toLocaleString("da-DK")}</td><td>${escapeHtml(item.userName||item.userEmail||"Ukendt")}</td><td><span class="badge ${item.success?"open":"closed"}">${item.success?"Succes":"Fejlet"}</span></td><td>${escapeHtml(place)}</td><td title="${escapeHtml(item.userAgent||"")}">${escapeHtml(item.userAgent||"Ukendt")}</td></tr>`;
+          }).join("")}</tbody></table></div>`
+        : '<div class="empty">Ingen login-logs endnu.</div>';
+    }else{
+      body.innerHTML=items.length
+        ? `<table class="table"><thead><tr><th>Type</th><th>Hændelse</th><th>Tid</th></tr></thead><tbody>${items.map(item=>`<tr><td><span class="badge ${item.type==="error"?"closed":item.type==="warning"?"pending":"open"}">${escapeHtml(item.type)}</span></td><td>${escapeHtml(item.message)}</td><td>${new Date(item.time).toLocaleString("da-DK")}</td></tr>`).join("")}</tbody></table>`
+        : '<div class="empty">Ingen logs i denne kategori endnu.</div>';
+    }
+    element.dataset.loaded="1";
+  }catch(e){
+    body.innerHTML=`<div class="empty">${escapeHtml(e.message)}</div>`;
+  }
+}
+
+async function unlockLogs(){
+  const password=document.getElementById("logPassword").value;
+  document.getElementById("logUnlockError").textContent="";
+  try{
+    await api("/api/logs/unlock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});
+    document.getElementById("logLockPanel").style.display="none";
+    document.getElementById("logContent").style.display="block";
+    await loadLogCategories();
+    toast("Logs er åbnet i 15 minutter");
+  }catch(e){
+    document.getElementById("logUnlockError").textContent=e.message;
+  }
+}
+
+async function lockLogs(){
+  try{await api("/api/logs/lock",{method:"POST"});}catch(e){}
+  renderLogLocked();
+  toast("Logs låst");
+}
+
+async function loadLogs(){
+  try{
+    await loadLogCategories();
+  }catch(e){
+    if(e.message.includes("Logs er låst")) renderLogLocked();
+    else toast(e.message);
+  }
+}
+
+async function loadUsers(){
+  try{
+    const users=await api("/api/admin/users");
+    const planNames={member:"Member",member_plus:"Member Plus",member_pro:"Member Pro"};
+    document.getElementById("userList").innerHTML=users.map(u=>{
+      const roleButton=u.id!==currentUser?.id
+        ? `<button class="btn small" onclick="toggleUserRole(${u.id},'${u.role}')">${u.role==="admin"?"Gør til member":"Gør til admin"}</button>`
+        : "";
+
+      const nextPlan={member:"member_plus",member_plus:"member_pro",member_pro:"member"}[u.plan||"member"] || "member";
+      const planButton=u.role!=="admin"
+        ? `<button class="btn small" onclick="toggleUserPlan(${u.id},'${nextPlan}')">${u.plan==="member_pro"?"Gør til Member":u.plan==="member_plus"?"Gør til Member Pro":"Gør til Member Plus"}</button>`
+        : "";
+
+      let moderationButtons="";
+      if(u.id!==currentUser?.id){
+        moderationButtons=u.banned
+          ? `<button class="btn small" onclick="unbanUser(${u.id})">✅ Fjern ban</button>`
+          : `<button class="btn small danger" onclick="banUser(${u.id},'normal')">🚫 Normal ban</button>`+
+            `<button class="btn small danger" onclick="banUser(${u.id},'ip')">🌐 IP-ban</button>`;
+      }
+
+      const deleteButton=u.id!==currentUser?.id
+        ? `<button class="btn small danger" onclick="deleteUser(${u.id})">Slet</button>`
+        : "";
+
+      const banStatus=u.banned
+        ? `<span class="badge closed">${u.banType==="ip"?"IP-bannet":"Bannet"}</span>`
+        : `<span class="badge open">Aktiv</span>`;
+
+      return `<div class="activity-item">
+        <div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div>
+        <div style="flex:1">
+          <b>${escapeHtml(u.name)}</b>
+          <small>${escapeHtml(u.email)} · ${escapeHtml(u.role)} · <b>${escapeHtml(planNames[u.plan]||"Member")}</b> · ${banStatus}</small>
+        </div>
+        ${roleButton} ${planButton} ${moderationButtons} ${deleteButton}
+      </div>`;
+    }).join("")||'<div class="empty">Ingen brugere.</div>';
+  }catch(e){toast(e.message)}
+}
+
+async function banUser(id,type){
+  const label=type==="ip"?"IP-ban":"normal ban";
+  if(!confirm("Er du sikker på, at du vil bruge "+label+" på denne bruger?\n\nVed IP-ban bliver både brugerens email/konto og den senest registrerede IP-adresse bannet.")) return;
+  try{
+    const result=await api("/api/admin/users/"+id+"/ban",{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({type})
+    });
+    toast(type==="ip"?"✅ IP-ban oprettet":"✅ Bruger bannet");
+    loadUsers();
+    if(document.getElementById("ipContent")?.style.display==="block") loadIpOverview();
+  }catch(e){toast(e.message)}
+}
+
+async function unbanUser(id){
+  if(!confirm("Fjern bannet fra denne bruger?")) return;
+  try{
+    await api("/api/admin/users/"+id+"/unban",{method:"PATCH"});
+    toast("✅ Ban fjernet");
+    loadUsers();
+  }catch(e){toast(e.message)}
+}
+
+
+function renderIpLocked(){
+  const content=document.getElementById("ipContent");
+  const panel=document.getElementById("ipLockPanel");
+  if(content) content.style.display="none";
+  if(panel) panel.style.display="block";
+  const input=document.getElementById("ipPassword");
+  if(input) input.value="";
+  const error=document.getElementById("ipUnlockError");
+  if(error) error.textContent="";
+}
+
+async function unlockIpCenter(){
+  const password=document.getElementById("ipPassword").value;
+  document.getElementById("ipUnlockError").textContent="";
+  try{
+    await api("/api/ip/unlock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});
+    document.getElementById("ipLockPanel").style.display="none";
+    document.getElementById("ipContent").style.display="block";
+    await loadIpOverview();
+    toast("IP-adresser er åbnet i 15 minutter");
+  }catch(e){
+    document.getElementById("ipUnlockError").textContent=e.message;
+  }
+}
+
+async function lockIpCenter(){
+  try{await api("/api/ip/lock",{method:"POST"});}catch(e){}
+  renderIpLocked();
+  toast("IP-adresser låst");
+}
+
+async function loadIpCenter(){
+  try{
+    await loadIpOverview();
+  }catch(e){}
+}
+
+async function loadIpOverview(){
+  try{
+    const data=await api("/api/ip/overview");
+    const loginRows=data.loginHistory||[];
+    const banRows=data.bannedIps||[];
+    const distinct=data.distinctIps||[];
+
+    const distinctNode=document.getElementById("ipDistinctList");
+    if(distinctNode){
+      distinctNode.innerHTML=distinct.length
+        ? distinct.map(function(ip){return '<span class="badge open" style="margin:3px">'+escapeHtml(ip)+'</span>';}).join("")
+        : '<div class="empty">Ingen gemte IP-adresser endnu.</div>';
+    }
+
+    const loginNode=document.getElementById("ipLoginList");
+    if(loginNode){
+      loginNode.innerHTML=loginRows.length
+        ? '<div class="table-wrap"><table class="table"><thead><tr><th>Tid</th><th>Bruger</th><th>Resultat</th><th>IP-adresse</th><th>Browser/enhed</th></tr></thead><tbody>'+
+          loginRows.map(function(item){
+            return '<tr><td>'+new Date(item.createdAt).toLocaleString("da-DK")+
+              '</td><td>'+escapeHtml(item.userName||item.userEmail||"Ukendt")+
+              '</td><td><span class="badge '+(item.success?"open":"closed")+'">'+(item.success?"Succes":"Fejlet")+
+              '</span></td><td><code>'+escapeHtml(item.ipAddress||"Ukendt")+
+              '</code></td><td title="'+escapeHtml(item.userAgent||"")+'">'+escapeHtml(item.userAgent||"Ukendt")+
+              '</td></tr>';
+          }).join("")+
+          '</tbody></table></div>'
+        : '<div class="empty">Ingen login-IP\'er endnu.</div>';
+    }
+
+    const banNode=document.getElementById("ipBanList");
+    if(banNode){
+      banNode.innerHTML=banRows.length
+        ? '<div class="table-wrap"><table class="table"><thead><tr><th>Bruger</th><th>Email</th><th>IP-adresse</th><th>Bannet</th></tr></thead><tbody>'+
+          banRows.map(function(item){
+            return '<tr><td>'+escapeHtml(item.name||"Ukendt")+
+              '</td><td>'+escapeHtml(item.email||"Ukendt")+
+              '</td><td><code>'+escapeHtml(item.ipAddress||"Ukendt")+
+              '</code></td><td>'+(item.bannedAt?new Date(item.bannedAt).toLocaleString("da-DK"):"Ukendt")+
+              '</td></tr>';
+          }).join("")+
+          '</tbody></table></div>'
+        : '<div class="empty">Ingen aktive IP-bans.</div>';
+    }
+
+    const panel=document.getElementById("ipLockPanel");
+    const content=document.getElementById("ipContent");
+    if(panel) panel.style.display="none";
+    if(content) content.style.display="block";
+  }catch(e){
+    if(e.message.includes("IP-adressecenteret er låst")) renderIpLocked();
+    else toast(e.message);
+  }
+}
+
+
+async function loadStorePage(){
+  const result=document.getElementById("storeRedeemResult");
+  if(result) result.textContent="";
+}
+
+async function redeemStoreSerialKey(){
+  const result=document.getElementById("storeRedeemResult");
+  if(result) result.textContent="";
+  try{
     const data=await api("/api/serial-keys/redeem",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
