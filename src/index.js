@@ -1262,7 +1262,7 @@ app.get("/api/admin/serial-keys", requireAuth, requireAdmin, async (req, res) =>
   try {
     if (!db) return res.json([]);
     const result = await db.query(
-      'SELECT id, product_name AS "productName", guild_id AS "guildId", role_id AS "roleId", key_last4 AS "keyLast4", max_uses AS "maxUses", uses, revoked, created_at AS "createdAt", expires_at AS "expiresAt", last_redeemed_by AS "lastRedeemedBy", last_redeemed_at AS "lastRedeemedAt" FROM public.serial_keys ORDER BY created_at DESC LIMIT 300'
+      'SELECT id, product_name AS "productName", guild_id AS "guildId", role_id AS "roleId", access_plan AS "accessPlan", key_last4 AS "keyLast4", max_uses AS "maxUses", uses, revoked, created_at AS "createdAt", expires_at AS "expiresAt", last_redeemed_by AS "lastRedeemedBy", last_redeemed_at AS "lastRedeemedAt" FROM public.serial_keys ORDER BY created_at DESC LIMIT 300'
     );
     res.json(result.rows);
   } catch (error) {
@@ -1273,26 +1273,29 @@ app.get("/api/admin/serial-keys", requireAuth, requireAdmin, async (req, res) =>
 
 app.post("/api/admin/serial-keys/generate", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const productName = String(req.body?.productName || "Discord role").trim().slice(0,120) || "Discord role";
-    const guildId = String(req.body?.guildId || "").trim();
-    const roleId = String(req.body?.roleId || "").trim();
+    const productName = String(req.body?.productName || "ShardNote Access").trim().slice(0,120) || "ShardNote Access";
+    const accessPlan = ["member","member_plus","member_pro","member_premium"].includes(String(req.body?.accessPlan || "")) ? String(req.body.accessPlan) : null;
+    const guildId = String(req.body?.guildId || "").trim() || null;
+    const roleId = String(req.body?.roleId || "").trim() || null;
     const quantity = Math.min(Math.max(Number(req.body?.quantity || 1), 1), 100);
     const maxUses = Math.min(Math.max(Number(req.body?.maxUses || 1), 1), 10000);
     const expiresAtRaw = String(req.body?.expiresAt || "").trim();
     const expiresAt = expiresAtRaw ? new Date(expiresAtRaw) : null;
 
-    if (!guildId || !roleId) return res.status(400).json({ error: "Vælg både Discord-server og rolle." });
+    if (!accessPlan && (!guildId || !roleId)) return res.status(400).json({ error: "Vælg enten en ShardNote-pakke eller både Discord-server og rolle." });
     if (expiresAt && Number.isNaN(expiresAt.getTime())) return res.status(400).json({ error: "Ugyldig udløbsdato." });
-    if (!client || !discordReady) return res.status(503).json({ error: "Discord-botten er ikke online." });
-
-    const guild = client.guilds.cache.get(guildId);
-    if (!guild) return res.status(404).json({ error: "ShardNote-botten er ikke på den valgte server." });
-
-    const role = guild.roles.cache.get(roleId);
-    if (!role || role.id === guild.id) return res.status(404).json({ error: "Rollen blev ikke fundet." });
-    if (!role.editable) return res.status(400).json({ error: "Botten kan ikke give den valgte rolle. Flyt rollen under ShardNote-bottens rolle." });
-
     if (!db) return res.status(503).json({ error: "Database er nødvendig for serial keys." });
+
+    let guild = null;
+    let role = null;
+    if (!accessPlan) {
+      if (!client || !discordReady) return res.status(503).json({ error: "Discord-botten er ikke online." });
+      guild = client.guilds.cache.get(guildId);
+      if (!guild) return res.status(404).json({ error: "ShardNote-botten er ikke på den valgte server." });
+      role = guild.roles.cache.get(roleId);
+      if (!role || role.id === guild.id) return res.status(404).json({ error: "Rollen blev ikke fundet." });
+      if (!role.editable) return res.status(400).json({ error: "Botten kan ikke give den valgte rolle. Flyt rollen under ShardNote-bottens rolle." });
+    }
 
     const created = [];
     for (let i = 0; i < quantity; i++) {
@@ -1302,8 +1305,8 @@ app.post("/api/admin/serial-keys/generate", requireAuth, requireAdmin, async (re
         const hash = hashSerialKey(key);
         try {
           const result = await db.query(
-            'INSERT INTO public.serial_keys (key_hash, key_last4, product_name, guild_id, role_id, max_uses, created_by, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
-            [hash, key.slice(-4), productName, guildId, roleId, maxUses, req.user.id, expiresAt ? expiresAt.toISOString() : null]
+            'INSERT INTO public.serial_keys (key_hash, key_last4, product_name, guild_id, role_id, access_plan, max_uses, created_by, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
+            [hash, key.slice(-4), productName, guildId, roleId, accessPlan, maxUses, req.user.id, expiresAt ? expiresAt.toISOString() : null]
           );
           if (result.rowCount) inserted = { key, id: result.rows[0].id };
         } catch (error) {
@@ -1357,6 +1360,7 @@ app.post("/api/serial-keys/redeem", requireAuth, async (req, res) => {
     const item = result.rows[0];
     if (!item) return res.status(404).json({ error: "Serial key findes ikke." });
     if (item.revoked) return res.status(400).json({ error: "Denne serial key er tilbagekaldt." });
+    if (item.accessPlan) return res.status(400).json({ error: "Denne key skal aktiveres ved konto-oprettelse." });
     if (item.guildId !== guildId) return res.status(400).json({ error: "Denne key er lavet til en anden Discord-server." });
     if (item.expiresAt && new Date(item.expiresAt).getTime() <= Date.now()) return res.status(400).json({ error: "Denne serial key er udløbet." });
     if (item.uses >= item.maxUses) return res.status(400).json({ error: "Denne serial key er allerede brugt op." });
