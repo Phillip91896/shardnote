@@ -1774,7 +1774,10 @@ app.post("/api/bot/guilds/:guildId/templates/:templateKey", requireAuth, require
 
     const body = req.body || {};
     const cleanList = value => Array.isArray(value) ? value.map(item => String(item)).filter(Boolean).slice(0, 100) : [];
+    const supportedLanguages = ["da","en","de","fr","es","it","nl","pt","sv","no","fi","pl","tr","ru","uk","ja","ko","zh"];
+    const language = supportedLanguages.includes(String(body.language || "")) ? String(body.language) : "da";
     const result = await client.dashboardApplyDiscordTemplate(guild.id, templateKey, {
+      language,
       prefixRoles: cleanList(body.prefixRoles),
       prefixChannels: cleanList(body.prefixChannels)
     });
