@@ -23,7 +23,7 @@ document.querySelectorAll(".nav button").forEach(btn=>{
 
 function navigate(page){
   if(!pages.includes(page)) return;
-  if(page==="settings" && currentUser && currentUser.role!=="admin") return;
+  if(page==="settings" && currentUser && currentUser.role!=="admin" && currentUser.plan!=="member_pro") return;
   pages.forEach(p=>{
     const el=document.getElementById("page-"+p);
     if(el) el.classList.toggle("active",p===page);
@@ -336,9 +336,9 @@ async function loadUsers(){
       const roleButton=u.id!==currentUser?.id
         ? `<button class="btn small" onclick="toggleUserRole(${u.id},'${u.role}')">${u.role==="admin"?"Gør til member":"Gør til admin"}</button>`
         : "";
-      const nextPlan=u.plan==="member_plus"?"member":"member_plus";
+      const nextPlan={member:"member_plus",member_plus:"member_pro",member_pro:"member"}[u.plan||"member"] || "member";
       const planButton=u.role!=="admin"
-        ? `<button class="btn small" onclick="toggleUserPlan(${u.id},'${nextPlan}')">${u.plan==="member_plus"?"Gør til Member":"Gør til Member Plus"}</button>`
+        ? `<button class="btn small" onclick="toggleUserPlan(${u.id},'${nextPlan}')">${u.plan==="member_pro"?"Gør til Member":u.plan==="member_plus"?"Gør til Member Pro":"Gør til Member Plus"}</button>`
         : "";
       const deleteButton=u.id!==currentUser?.id
         ? `<button class="btn small danger" onclick="deleteUser(${u.id})">Slet</button>`
@@ -380,9 +380,11 @@ function unlockDashboard(){
   if(currentUser?.role!=="admin"){
     document.querySelector('[data-page="admin"]')?.remove();
     document.querySelector('[data-page="logs"]')?.remove();
-    document.querySelector('[data-page="settings"]')?.remove();
-    document.getElementById("page-settings")?.remove();
-    if(currentUser?.plan!=="member_plus" && currentUser?.role!=="admin"){
+    if(currentUser?.role!=="admin" && currentUser?.plan!=="member_pro"){
+      document.querySelector('[data-page="settings"]')?.remove();
+      document.getElementById("page-settings")?.remove();
+    }
+    if(currentUser?.plan!=="member_plus" && currentUser?.plan!=="member_pro" && currentUser?.role!=="admin"){
       document.querySelector('[data-page="features"]')?.remove();
       document.getElementById("page-features")?.remove();
       document.querySelector('[data-page="templates"]')?.remove();
@@ -449,7 +451,7 @@ function showLanding(){
     <div style="font-size:12px;color:var(--accent2);font-weight:800;text-transform:uppercase;letter-spacing:.12em">Discord Control Center</div>
     <h1 style="font-size:38px;margin:12px 0 10px">Få adgang til hele ShardNote</h1>
     <p style="max-width:560px;margin:0 auto;color:var(--muted);font-size:15px;line-height:1.6">Styr din Discord-bot fra ét samlet kontrolpanel med moderation, tickets, AutoMod, levels, economy, giveaways, logs og meget mere.</p>
-    <div style="max-width:760px;margin:26px auto 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;text-align:left">
+    <div style="max-width:1080px;margin:26px auto 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;text-align:left">
       <div class="card" style="border-color:rgba(109,93,252,.45)">
         <div style="font-size:13px;color:var(--muted)">ShardNote Member</div>
         <div style="font-size:38px;font-weight:900;margin:5px 0">2,67 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
@@ -465,6 +467,13 @@ function showLanding(){
         <div style="color:var(--green);font-size:12px;margin-top:8px">✓ Alt fra Member</div>
         <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Flere bot- og serverfunktioner</div>
         <button class="btn primary" style="width:100%;margin-top:14px" onclick="showRegister('member_plus')">Vælg Member Plus</button>
+      </div>      <div class="card" style="border-color:rgba(245,201,94,.45)">
+        <div style="font-size:13px;color:var(--muted)">ShardNote Member Pro</div>
+        <div style="font-size:38px;font-weight:900;margin:5px 0">6,99 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
+        <div style="color:var(--accent2);font-size:12px;font-weight:800">10 dage gratis</div>
+        <div style="color:var(--green);font-size:12px;margin-top:8px">✓ Alt fra Member Plus</div>
+        <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Alle funktioner + AI-assistent på Discord</div>
+        <button class="btn primary" style="width:100%;margin-top:14px" onclick="showRegister('member_plus')">Vælg Member Pro</button>
       </div>
     </div>
     <div style="max-width:680px;margin:22px auto 24px;text-align:left">
@@ -487,7 +496,7 @@ function showLanding(){
         <div class="card" style="padding:13px"><b>🎵 Voice</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Join og leave voice-kanaler.</div></div>
         <div class="card" style="padding:13px"><b>📝 Logs</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Botlogs til en valgt Discord-kanal.</div></div>
         <div class="card" style="padding:13px"><b>🔒 Lockdown</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Lås tekstkanaler og åbn dem igen.</div></div>
-        <div class="card" style="padding:13px"><b>✨ AI-funktioner</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Planlagt i en kommende version.</div></div>
+        <div class="card" style="padding:13px"><b>✨ AI-assistent</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Member Pro kan lade AI svare automatisk i udvalgte Discord-kanaler.</div></div>
         <div class="card" style="padding:13px"><b>⭐ Premium</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Abonnement og betalingsfunktioner.</div></div>
         <div class="card" style="padding:13px"><b>🎧 Musikafspilning</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Planlagt rigtig musikafspilning.</div></div>
       </div>
@@ -551,7 +560,7 @@ function showRegister(preferredPlan="member"){
   box.innerHTML=`<div class="login-card">
     <div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div>
     <h1>Opret konto</h1>
-    <p>Opret din egen ShardNote-konto. Nye konti oprettes som Member.</p>
+    <p>Opret din egen ShardNote-konto. Din valgte pakke bruges til betalingen bagefter.</p>
     <form onsubmit="register(event)">
       <div class="field"><label>Navn</label><input id="registerName" required maxlength="80" autocomplete="name" placeholder="Dit navn"></div>
       <div class="field" style="margin-top:12px"><label>Email</label><input id="registerEmail" type="email" required autocomplete="email" placeholder="din@email.dk"></div>
@@ -657,7 +666,7 @@ async function toggleUserPlan(id,nextPlan){
       headers:{"Content-Type":"application/json"},
       body:JSON.stringify({plan:nextPlan})
     });
-    toast(nextPlan==="member_plus"?"Member Plus givet":"Member givet");
+    toast(nextPlan==="member_pro"?"Member Pro givet":nextPlan==="member_plus"?"Member Plus givet":"Member givet");
     loadUsers();
   }catch(e){toast(e.message)}
 }
