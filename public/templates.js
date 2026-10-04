@@ -103,7 +103,7 @@
       });
       const r=response.result||{};
       if(result)result.innerHTML='<div class="badge open">✅ '+esc(r.name||selectedTemplate)+' er sat op</div>'+
-        '<div style="color:var(--muted);font-size:12px;margin-top:8px">'+esc(String(r.createdRoles||0))+' nye roller · '+esc(String((r.channels||[]).length))+' kanaler behandlet</div>';
+        '<div style="color:var(--muted);font-size:12px;margin-top:8px">'+esc(String(r.createdRoles||0))+' nye roller · '+esc(String((r.channels||[]).length))+' kanaler behandlet · sprog: '+esc(String(r.languageName||selectedLanguage))+'</div>';
     }catch(error){
       if(result){
         const permissionError=String(error.message||"").includes("mangler rettighederne");
