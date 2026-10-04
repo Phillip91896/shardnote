@@ -934,36 +934,39 @@ app.post("/api/register", async (req, res) => {
     if (name.length < 2) return res.status(400).json({ error: "Navnet skal være mindst 2 tegn." });
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Skriv en gyldig emailadresse." });
     if (password.length < 8) return res.status(400).json({ error: "Adgangskoden skal være mindst 8 tegn." });
-    if (!serialKey) return res.status(400).json({ error: "Du skal indtaste din serial key for at oprette kontoen." });
 
     let user;
     let activatedPlan = "member";
+    let activatedFromKey = false;
 
-    if (db) {
-      const existing = await db.query("SELECT id, banned FROM users WHERE email = $1 LIMIT 1", [email]);
-      if (existing.rowCount) {
-        if (existing.rows[0].banned) return res.status(403).json({ error: "Denne email er bannet." });
-        return res.status(409).json({ error: "Der findes allerede en konto med den email." });
-      }
+    if (!db) return res.status(503).json({ error: "Database er nødvendig for at oprette kontoen." });
 
-      const clientIp = getClientIp(req);
-      if (clientIp) {
-        const ipHash = hashIp(clientIp);
-        const ipBan = await db.query(
-          "SELECT 1 FROM public.users WHERE banned = TRUE AND ban_type = 'ip' AND banned_ip_hash = $1 LIMIT 1",
-          [ipHash]
-        );
-        if (ipBan.rowCount) return res.status(403).json({ error: "Denne IP-adresse er bannet." });
-      }
+    const existing = await db.query("SELECT id, banned FROM users WHERE email = $1 LIMIT 1", [email]);
+    if (existing.rowCount) {
+      if (existing.rows[0].banned) return res.status(403).json({ error: "Denne email er bannet." });
+      return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+    }
 
-      await db.query("BEGIN");
-      try {
+    const clientIp = getClientIp(req);
+    if (clientIp) {
+      const ipHash = hashIp(clientIp);
+      const ipBan = await db.query(
+        "SELECT 1 FROM public.users WHERE banned = TRUE AND ban_type = 'ip' AND banned_ip_hash = $1 LIMIT 1",
+        [ipHash]
+      );
+      if (ipBan.rowCount) return res.status(403).json({ error: "Denne IP-adresse er bannet." });
+    }
+
+    await db.query("BEGIN");
+    try {
+      let keyRow = null;
+      if (serialKey) {
         const keyHash = hashSerialKey(serialKey);
         const keyResult = await db.query(
           "SELECT id, access_plan AS \"accessPlan\", max_uses AS \"maxUses\", uses, expires_at AS \"expiresAt\", revoked FROM public.serial_keys WHERE key_hash = $1 FOR UPDATE",
           [keyHash]
         );
-        const keyRow = keyResult.rows[0];
+        keyRow = keyResult.rows[0];
 
         if (!keyRow) throw Object.assign(new Error("Serial key findes ikke."), { statusCode: 400 });
         if (keyRow.revoked) throw Object.assign(new Error("Denne serial key er tilbagekaldt."), { statusCode: 400 });
@@ -972,27 +975,29 @@ app.post("/api/register", async (req, res) => {
         if (keyRow.uses >= keyRow.maxUses) throw Object.assign(new Error("Denne serial key er allerede brugt op."), { statusCode: 400 });
 
         activatedPlan = keyRow.accessPlan;
-        const result = await db.query(
-          "INSERT INTO users (name, email, role, password_hash, plan, subscription_status, trial_used) VALUES ($1, $2, 'member', $3, $4, 'active', TRUE) RETURNING id, name, email, role, plan, created_at, banned",
-          [name, email, hashPassword(password), activatedPlan]
-        );
-        user = result.rows[0];
+        activatedFromKey = true;
+      }
 
+      const result = await db.query(
+        "INSERT INTO users (name, email, role, password_hash, plan, subscription_status, trial_used) VALUES ($1, $2, 'member', $3, $4, $5, $6) RETURNING id, name, email, role, plan, subscription_status, trial_used, created_at, banned",
+        [name, email, hashPassword(password), activatedPlan, activatedFromKey ? "active" : "inactive", activatedFromKey]
+      );
+      user = result.rows[0];
+
+      if (keyRow) {
         const used = await db.query(
           "UPDATE public.serial_keys SET uses = uses + 1, last_redeemed_by = $1, last_redeemed_at = NOW() WHERE id = $2 AND uses < max_uses RETURNING id",
           [String(user.id), keyRow.id]
         );
         if (!used.rowCount) throw Object.assign(new Error("Denne serial key blev brugt op lige før."), { statusCode: 409 });
-
-        await db.query("COMMIT");
-      } catch (error) {
-        await db.query("ROLLBACK");
-        if (error.code === "23505") return res.status(409).json({ error: "Der findes allerede en konto med den email." });
-        if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
-        throw error;
       }
-    } else {
-      return res.status(503).json({ error: "Database er nødvendig for serial key-aktivering." });
+
+      await db.query("COMMIT");
+    } catch (error) {
+      await db.query("ROLLBACK");
+      if (error.code === "23505") return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+      if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
     }
 
     const sid = createSessionToken(user.id);
@@ -1005,7 +1010,7 @@ app.post("/api/register", async (req, res) => {
     });
 
     res.setHeader("Set-Cookie", `Shardnote Bot_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
-    log("security", `New account registered with serial key: ${email} (${user.plan || activatedPlan})`);
+    log("security", `New account registered: ${email}${activatedFromKey ? " with serial key (" + (user.plan || activatedPlan) + ")" : ""}`);
     res.status(201).json({
       user: {
         id: user.id,
@@ -1013,9 +1018,9 @@ app.post("/api/register", async (req, res) => {
         email: user.email,
         role: user.role,
         plan: user.plan || activatedPlan,
-        subscriptionStatus: "active",
-        trialUsed: true,
-        hasPaidAccess: true
+        subscriptionStatus: user.subscriptionStatus || (activatedFromKey ? "active" : "inactive"),
+        trialUsed: !!user.trialUsed,
+        hasPaidAccess: hasPaidAccess(user)
       }
     });
   } catch (error) {
