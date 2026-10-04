@@ -1267,7 +1267,7 @@ app.get("/api/tickets", async (req, res) => {
             ORDER BY created_at DESC LIMIT 500
           `)
         : await db.query(`
-            SELECT id, title, user_name AS "user", status, priority, created_at AS "createdAt", owner_user_id AS "ownerUserId"
+            SELECT id, title, user_name AS "user", status, priority, category, description, handler, created_at AS "createdAt", owner_user_id AS "ownerUserId"
             FROM public.tickets
             WHERE owner_user_id = $1
             ORDER BY created_at DESC LIMIT 500
