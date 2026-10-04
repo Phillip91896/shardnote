@@ -607,8 +607,8 @@ function createBot({ state, db, log, createTicket, setReady }) {
     const staffVoiceRoleIds = [...new Set([
       ...staffRoleIds,
       ...extraRoleSpecs
-        .filter(r => ["supportchef","supportlead","seniorsupporter","supporter","moderatorlead","developer","developerlead"].includes(r.key))
-        .map(r => roles[r.key]?.id)
+        .filter(r => /support|moderator|developer/i.test(String(r.name)))
+        .map(r => guild.roles.cache.find(role => role.name === r.name)?.id)
         .filter(Boolean)
     ])];
     async function ensureDepartmentSection(department) {
