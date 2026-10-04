@@ -49,6 +49,7 @@
     const title=document.getElementById("pageTitle");if(title)title.textContent=TEMPLATE_TITLE;
   }
   function selectTemplate(key){
+    if(!TEMPLATES.some(function(item){return item.key===key;})) key="fivem-vip";
     selectedTemplate=key;
     localStorage.setItem("shardnote_selected_template",key);
     document.querySelectorAll("[data-template-key]").forEach(function(card){
@@ -61,13 +62,11 @@
     const title=document.getElementById("selectedTemplateTitle");
     const desc=document.getElementById("selectedTemplateDesc");
     const apply=document.getElementById("snTemplatePageApply");
-    const f5=document.getElementById("f5Options");
     if(title) title.textContent=(cfg?cfg.icon+" ":"")+((cfg&&cfg.name)||key);
     if(desc) desc.textContent=(cfg&&cfg.desc)||"";
     if(apply) apply.textContent="🚀 Opsæt "+((cfg&&cfg.name)||"denne skitse");
     const custom=document.getElementById("customFeatures");
     if(custom) custom.style.display=key==="custom"?"block":"none";
-    if(f5) f5.style.display="none";
     const result=document.getElementById("snTemplatePageResult");
     if(result) result.innerHTML="";
   }
@@ -77,8 +76,8 @@
     const result=document.getElementById("snTemplatePageResult");
     const button=document.getElementById("snTemplatePageApply");
     if(!guildId){if(result)result.innerHTML='<div class="badge pending">Vælg en Discord-server først.</div>';return;}
-    const prefixRoles=[...document.querySelectorAll("[data-prefix-role]:checked")].map(function(el){return el.getAttribute("data-prefix-role");});
-    const prefixChannels=[...document.querySelectorAll("[data-prefix-channel]:checked")].map(function(el){return el.getAttribute("data-prefix-channel");});
+    const prefixRoles=[];
+    const prefixChannels=[];
     const features={};
     FEATURE_KEYS.forEach(function(item){
       const el=document.getElementById("tpl_"+item[0]);
@@ -126,29 +125,6 @@
         '<div class="section-title"><div><h2 id="selectedTemplateTitle">🚓 FiveM VIP</h2><span id="selectedTemplateDesc">Vælg en skitse ovenfor.</span></div><div class="badge open">Valgt skitse</div></div>'+
         '<div class="field"><label>Discord-server</label><select id="snTemplatePageGuild"></select></div>'+
         '<div id="customFeatures" style="display:none;margin-top:16px"><h3 style="margin-bottom:4px">🧰 Vælg funktioner</h3>'+customChecks+'</div>'+
-        '<div id="f5Options" style="display:none;margin-top:16px">'+
-          '<div style="color:var(--muted);font-size:12px;margin-bottom:8px"><b>F5 VIP:</b> vælg selv hvilke roller og kanaler der skal have <b>F5</b> foran navnet.</div>'+
-          '<div class="grid two">'+
-            '<div><b>Roller</b>'+
-              '<div><label><input type="checkbox" data-prefix-role="owner"> Ejer</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-role="admin"> Admin</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-role="moderator"> Moderator</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-role="support"> Support</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-role="vip"> VIP</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-role="member"> Medlem</label></div>'+
-            '</div>'+
-            '<div><b>Kanaler</b>'+
-              '<div><label><input type="checkbox" data-prefix-channel="velkommen"> velkommen</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-channel="regler"> regler</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-channel="verification"> verification</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-channel="chat"> chat</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-channel="support"> support</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-channel="logs"> logs</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-channel="vipchat"> vip-chat</label></div>'+
-              '<div><label><input type="checkbox" data-prefix-channel="staffchat"> staff-chat</label></div>'+
-            '</div>'+
-          '</div>'+
-        '</div>'+
         '<div class="actions" style="margin-top:18px"><button type="button" class="btn primary" id="snTemplatePageApply">🚀 Opsæt denne skitse</button></div>'+
         '<div id="snTemplatePageResult" style="margin-top:12px"></div>'+
       '</div>';
