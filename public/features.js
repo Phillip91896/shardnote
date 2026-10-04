@@ -178,10 +178,6 @@
       const guilds=await apiCall("/api/bot/guilds");
       if(!guilds.length){
         document.getElementById("snFeatureGuildWrap").innerHTML='<span class="badge pending">Ingen server valgt</span>';
-        const templateGuild=document.getElementById("snTemplateGuild");
-        if(templateGuild) templateGuild.innerHTML='<option value="">Ingen server</option>';
-        const templateButton=document.getElementById("snApplyF5Template");
-        if(templateButton) templateButton.disabled=true;
         document.getElementById("snFeatureSettings").innerHTML='<div class="empty">Botten skal være tilføjet til mindst én Discord-server for at kunne konfigurere funktionerne. Selve funktionslisten ovenfor er stadig tilgængelig.</div>';
         return;
       }
@@ -192,52 +188,14 @@
       document.getElementById("snFeatureGuildWrap").innerHTML=
         '<select id="snFeatureGuild" class="feature-select" style="max-width:360px">'+guilds.map(function(g){return '<option value="'+esc(g.id)+'"'+(String(g.id)===String(selectedGuild)?" selected":"")+'>'+esc(g.name)+' · '+g.memberCount+' medlemmer</option>';}).join("")+'</select>';
 
-      document.getElementById("snTemplateGuild").innerHTML=
-        guilds.map(function(g){return '<option value="'+esc(g.id)+'"'+(String(g.id)===String(selectedGuild)?" selected":"")+'>'+esc(g.name)+' · '+g.memberCount+' medlemmer</option>';}).join("");
-
       document.getElementById("snFeatureGuild").addEventListener("change",function(){
         selectedGuild=this.value;
-        document.getElementById("snTemplateGuild").value=selectedGuild;
         localStorage.setItem("shardnote_feature_guild",selectedGuild);
         renderFeatureSettings(selectedGuild);
-      });
-
-      document.getElementById("snTemplateGuild").addEventListener("change",function(){
-        selectedGuild=this.value;
-        document.getElementById("snFeatureGuild").value=selectedGuild;
-        localStorage.setItem("shardnote_feature_guild",selectedGuild);
-        renderFeatureSettings(selectedGuild);
-      });
-
-      document.getElementById("snApplyF5Template").addEventListener("click",async function(){
-        const guildId=document.getElementById("snTemplateGuild").value;
-        const resultEl=document.getElementById("snTemplateResult");
-        if(!guildId){
-          if(resultEl) resultEl.innerHTML='<span class="badge pending">Vælg en Discord-server først.</span>';
-          return;
-        }
-        if(!confirm("F5 VIP-skitsen opretter manglende roller, kategorier og kanaler og konfigurerer ShardNote. Eksisterende ting med samme navn slettes ikke. Fortsæt?")) return;
-        const button=this;
-        button.disabled=true;
-        button.textContent="⏳ Sætter Discord-serveren op…";
-        if(resultEl) resultEl.innerHTML="";
-        try{
-          const response=await apiCall("/api/bot/guilds/"+encodeURIComponent(guildId)+"/templates/f5-vip",{method:"POST",headers:{"Content-Type":"application/json"},body:"{}"});
-          const r=response.result || {};
-          if(resultEl){
-            resultEl.innerHTML='<div class="badge open">✅ F5 VIP er sat op</div><div style="color:var(--muted);font-size:12px;margin-top:7px">'+
-              esc(String(r.createdRoles || 0))+' nye roller · '+esc(String((r.channels||[]).length))+' skabelonkanaler behandlet</div>';
-          }
-          await renderFeatureSettings(guildId);
-        }catch(error){
-          if(resultEl) resultEl.innerHTML='<div class="badge closed">'+esc(error.message)+'</div>';
-        }finally{
-          button.disabled=false;
-          button.textContent="🚀 Opsæt F5 VIP på serveren";
-        }
       });
 
       await renderFeatureSettings(selectedGuild);
+
     }catch(error){
       document.getElementById("snFeatureGuildWrap").innerHTML='<span class="badge pending">Kunne ikke hente servere</span>';
       document.getElementById("snFeatureSettings").innerHTML='<div class="empty">'+esc(error.message)+'</div>';
