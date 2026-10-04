@@ -151,6 +151,8 @@ async function loadTickets(){
           '<option value="admins" '+((!t.handler||t.handler==="admins")?"selected":"")+'>👑 Admins</option>'+
         '</select></td><td><span class="badge '+t.status+'">'+t.status+'</span></td><td>'+t.priority+'</td><td>'+
         '<button class="btn small ticket-cycle" data-ticket-id="'+t.id+'" data-ticket-status="'+t.status+'">Skift status</button> '+
+        '<button class="btn small" onclick="openTicketReply('+t.id+')">Svar</button> '+
+        (currentUser?.role==="admin" ? '<button class="btn small" onclick="aiTicketReply('+t.id+')">🤖 AI svar</button> ' : '')+
         '<button class="btn small danger ticket-delete" data-ticket-id="'+t.id+'">Slet</button>'+
       '</td></tr>';
     }).join("")+
@@ -158,6 +160,24 @@ async function loadTickets(){
   document.querySelectorAll(".ticket-handler").forEach(function(el){el.addEventListener("change",function(){setTicketHandler(this.dataset.ticketHandler,this.value);});});
   document.querySelectorAll(".ticket-cycle").forEach(function(el){el.addEventListener("click",function(){cycleTicket(this.dataset.ticketId,this.dataset.ticketStatus);});});
   document.querySelectorAll(".ticket-delete").forEach(function(el){el.addEventListener("click",function(){deleteTicket(this.dataset.ticketId);});});
+}
+async function openTicketReply(id){
+  try{
+    const messages=await api("/api/tickets/"+id+"/messages");
+    const lines=messages.length ? messages.map(m=>((m.authorRole==="admin"?"👑 Admin":m.authorRole==="ai"?"🤖 AI":"👤 Kunde")+": "+m.content)).join("\n\n") : "Ingen svar endnu.";
+    const reply=prompt("Ticket #"+id+"\n\n"+lines+"\n\nSkriv dit svar:");
+    if(!reply || !reply.trim()) return;
+    await api("/api/tickets/"+id+"/reply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:reply.trim()})});
+    toast("✅ Svar sendt");
+    loadTickets();
+  }catch(e){toast(e.message)}
+}
+async function aiTicketReply(id){
+  try{
+    await api("/api/tickets/"+id+"/ai-reply",{method:"POST"});
+    toast("🤖 AI-svar sendt");
+    loadTickets();
+  }catch(e){toast(e.message)}
 }
 async function newTicket(){
   const title=prompt("Ticket titel:");
