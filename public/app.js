@@ -870,7 +870,7 @@ function showLanding(){
       </button>
     </div>
 
-    <div style="font-size:12px;color:var(--muted);margin:6px auto 18px">Den lange funktionsliste er fjernet fra forsiden. Klik på en pakke for at åbne detaljerne.</div>
+    <div style="font-size:12px;color:var(--muted);margin:6px auto 18px">Køb først en ShardNote-pakke, få din serial key, og brug den ved oprettelsen af din konto for at få adgang.</div>
 
     <div class="actions" style="justify-content:center">
       <button class="btn primary" type="button" onclick="showRegister()">Opret konto og betal</button>
@@ -941,12 +941,13 @@ function showRegister(preferredPlan="member"){
   box.innerHTML=`<div class="login-card">
     <div class="brand" style="padding:0 0 20px"><div class="brand-mark">S</div><span>ShardNote</span></div>
     <h1>Opret konto</h1>
-    <p>Opret din egen ShardNote-konto. Din valgte pakke bruges til betalingen bagefter.</p>
+    <p>Har du købt ShardNote? Indtast serial key'en du fik efter købet. Key'en aktiverer din pakke med det samme.</p>
     <form onsubmit="register(event)">
       <div class="field"><label>Navn</label><input id="registerName" required maxlength="80" autocomplete="name" placeholder="Dit navn"></div>
       <div class="field" style="margin-top:12px"><label>Email</label><input id="registerEmail" type="email" required autocomplete="email" placeholder="din@email.dk"></div>
       <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="registerPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="Mindst 8 tegn"></div>
-      <button class="btn primary" style="width:100%;margin-top:16px">Opret konto</button>
+      <div class="field" style="margin-top:12px"><label>Serial key</label><input id="registerSerialKey" required autocomplete="off" placeholder="SN-XXXXXX-XXXXXX-XXXXXX"></div>
+      <button class="btn primary" style="width:100%;margin-top:16px">Aktivér key og opret konto</button>
       <div id="registerError" style="color:var(--red);font-size:12px;margin-top:10px"></div>
     </form>
     <div style="text-align:center;margin-top:18px;color:var(--muted);font-size:12px">
@@ -982,7 +983,8 @@ async function register(e){
       body:JSON.stringify({
         name:document.getElementById("registerName").value,
         email:document.getElementById("registerEmail").value,
-        password:document.getElementById("registerPassword").value
+        password:document.getElementById("registerPassword").value,
+        serialKey:document.getElementById("registerSerialKey").value
       })
     });
 
@@ -990,8 +992,8 @@ async function register(e){
     if(!r.ok) throw new Error(data.error||"Kunne ikke oprette konto.");
 
     currentUser=data.user;
-    toast("Konto oprettet");
-    showPaywall();
+    toast("✅ Key aktiveret — konto oprettet");
+    unlockDashboard();
   }catch(err){
     error.textContent=err.message;
   }
