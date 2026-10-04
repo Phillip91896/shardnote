@@ -2085,6 +2085,11 @@ function createBot({ state, db, log, createTicket, setReady }) {
     setReady(true);
 
     try {
+      if (client.user && client.user.username !== "ShardNote Bot") {
+        await client.user.setUsername("ShardNote Bot");
+        console.log("[ShardNote] Discord bot username set to ShardNote Bot.");
+      }
+
       // Keep global commands in sync and also register them directly in each
       // server so they appear immediately after the bot is added.
       await client.application.commands.set(commands);
