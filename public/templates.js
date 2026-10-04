@@ -2,10 +2,9 @@
   const TEMPLATE_PAGE="templates";
   const TEMPLATE_TITLE="Discord-skitser";
   let selectedGuild=localStorage.getItem("shardnote_template_guild") || "";
-  let selectedTemplate=localStorage.getItem("shardnote_selected_template") || "f5-vip";
+  let selectedTemplate=localStorage.getItem("shardnote_selected_template") || "fivem-vip";
 
   const TEMPLATES=[
-    {key:"f5-vip",icon:"⭐",name:"F5 VIP",desc:"VIP/F5-server med staff, VIP, tickets og community.",features:["AutoMod","Invite filter","Levels / XP","Economy","Anti-raid"]},
     {key:"fivem-vip",icon:"🚓",name:"FiveM VIP",desc:"FiveM VIP-server med VIP-område, tickets, staff og gaming.",features:["AutoMod","Invite filter","Levels / XP","Economy","Anti-raid"]},
     {key:"fivem-esx",icon:"🚔",name:"FiveM ESX",desc:"ESX-server med jobs, whitelist, Politi, EMS og staff.",features:["AutoMod","Invite filter","Anti-raid","Tickets"]},
     {key:"fivem-rp",icon:"🎭",name:"FiveM RP",desc:"Roleplay-server med RP-info, fraktioner og support.",features:["AutoMod","Invite filter","Levels / XP","Anti-raid"]},
@@ -56,7 +55,7 @@
       const active=card.dataset.templateKey===key;
       card.style.borderColor=active?"rgba(109,93,252,.9)":"";
       card.style.boxShadow=active?"0 0 0 2px rgba(109,93,252,.18)":"";
-      card.setAttribute("aria-pressed",active?"true":"false");
+      card.setAttribute("aria-pressed",active?"true":"");
     });
     const cfg=TEMPLATES.find(function(x){return x.key===key;});
     const title=document.getElementById("selectedTemplateTitle");
@@ -68,7 +67,7 @@
     if(apply) apply.textContent="🚀 Opsæt "+((cfg&&cfg.name)||"denne skitse");
     const custom=document.getElementById("customFeatures");
     if(custom) custom.style.display=key==="custom"?"block":"none";
-    if(f5) f5.style.display=key==="f5-vip"?"block":"none";
+    if(f5) f5.style.display="none";
     const result=document.getElementById("snTemplatePageResult");
     if(result) result.innerHTML="";
   }
@@ -124,10 +123,10 @@
       '</div>'+
       '<div class="feature-grid">'+cards+'</div>'+
       '<div class="card" style="margin-top:18px">'+
-        '<div class="section-title"><div><h2 id="selectedTemplateTitle">⭐ F5 VIP</h2><span id="selectedTemplateDesc">Vælg en skitse ovenfor.</span></div><div class="badge open">Valgt skitse</div></div>'+
+        '<div class="section-title"><div><h2 id="selectedTemplateTitle">🚓 FiveM VIP</h2><span id="selectedTemplateDesc">Vælg en skitse ovenfor.</span></div><div class="badge open">Valgt skitse</div></div>'+
         '<div class="field"><label>Discord-server</label><select id="snTemplatePageGuild"></select></div>'+
         '<div id="customFeatures" style="display:none;margin-top:16px"><h3 style="margin-bottom:4px">🧰 Vælg funktioner</h3>'+customChecks+'</div>'+
-        '<div id="f5Options" style="margin-top:16px">'+
+        '<div id="f5Options" style="display:none;margin-top:16px">'+
           '<div style="color:var(--muted);font-size:12px;margin-bottom:8px"><b>F5 VIP:</b> vælg selv hvilke roller og kanaler der skal have <b>F5</b> foran navnet.</div>'+
           '<div class="grid two">'+
             '<div><b>Roller</b>'+
