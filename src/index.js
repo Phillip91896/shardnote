@@ -2597,7 +2597,7 @@ body.locked > .app{display:none}
       Din serial key er bundet til én bestemt Discord-server og rolle. Du kan også bruge <b>/redeem</b> direkte i Discord.
     </p>
     <div class="form-grid">
-      <div class="field"><label>Serial key</label><input id="storeRedeemKey" placeholder="SN-XXXXXX-XXXXXX-XXXXXX"></div>
+      <div class="field"><label>Serial key</label><input id="storeRedeemKey" placeholder="XXXXX-XXXXX-XXXXX-XXXXX"></div>
       <div class="field"><label>Discord server-ID</label><input id="storeRedeemGuildId" placeholder="Server-ID"></div>
       <div class="field"><label>Discord bruger-ID</label><input id="storeRedeemDiscordUserId" placeholder="Dit Discord bruger-ID"></div>
     </div>
@@ -2733,7 +2733,7 @@ body.locked > .app{display:none}
     <div class="section-title"><div><h2>🔑 Serial Keys</h2><span>Kun administratorer · generér nøgler til Discord-roller</span></div></div>
     <div class="form-grid">
       <div class="field"><label>Key type</label><select id="serialType" onchange="toggleSerialType()"><option value="account">Website access</option><option value="discord">Discord role</option></select></div>
-      <div class="field"><label>ShardNote-pakke</label><select id="serialAccessPlan"><option value="member">Member</option><option value="member_plus">Member Plus</option><option value="member_pro">Member Pro</option><option value="member_premium">Member Premium</option></select></div>
+      <div class="field"><label>ShardNote-pakke</label><select id="serialAccessPlan"><option value="member">Member</option><option value="member_plus">Member Plus</option><option value="member_pro">Member Pro</option></select></div>
       <div class="field"><label>Server</label><select id="serialGuild" onchange="loadSerialRoles()" disabled><option value="">Vælg server</option></select></div>
       <div class="field"><label>Discord-rolle</label><select id="serialRole" disabled><option value="">Vælg rolle</option></select></div>
       <div class="field"><label>Produktnavn</label><input id="serialProduct" maxlength="120" value="ShardNote Access"></div>
@@ -2749,7 +2749,7 @@ body.locked > .app{display:none}
   <div class="card" style="margin-bottom:18px">
     <div class="section-title"><div><h2>🛒 Store / Redeem</h2><span>Indtast en key for at få Discord-rollen.</span></div></div>
     <div class="form-grid">
-      <div class="field"><label>Serial key</label><input id="redeemKey" placeholder="SN-XXXXXX-XXXXXX-XXXXXX"></div>
+      <div class="field"><label>Serial key</label><input id="redeemKey" placeholder="XXXXX-XXXXX-XXXXX-XXXXX"></div>
       <div class="field"><label>Server-ID</label><input id="redeemGuildId" placeholder="Discord server-ID"></div>
       <div class="field"><label>Discord bruger-ID</label><input id="redeemDiscordUserId" placeholder="Discord bruger-ID"></div>
     </div>
