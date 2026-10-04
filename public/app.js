@@ -332,7 +332,7 @@ async function loadLogs(){
 async function loadUsers(){
   try{
     const users=await api("/api/admin/users");
-    const planNames={member:"Member",member_plus:"Member Plus",member_pro:"Member Pro",member_premium:"Member Premium"};
+    const planNames={member:"Member",member_plus:"Member Plus",member_pro:"Member Pro"};
     document.getElementById("userList").innerHTML=users.map(u=>{
       const roleButton=u.id!==currentUser?.id
         ? `<button class="btn small" onclick="toggleUserRole(${u.id},'${u.role}')">${u.role==="admin"?"Gør til member":"Gør til admin"}</button>`
@@ -610,7 +610,7 @@ async function loadSerialKeysList(){
           const max=Number(row.maxUses||1);
           const expired=row.expiresAt && new Date(row.expiresAt).getTime()<=Date.now();
           const status=row.revoked?"Tilbagekaldt":(expired?"Udløbet":(used>=max?"Brugt op":"Aktiv"));
-          const typeLabel=row.accessPlan ? "Website · "+({member:"Member",member_plus:"Member Plus",member_pro:"Member Pro",member_premium:"Member Premium"}[row.accessPlan]||row.accessPlan) : "Discord role";
+          const typeLabel=row.accessPlan ? "Website · "+({member:"Member",member_plus:"Member Plus",member_pro:"Member Pro",}[row.accessPlan]||row.accessPlan) : "Discord role";
           return '<tr><td>'+escapeHtml(row.productName||"")+
             '</td><td>'+escapeHtml(typeLabel)+
             '</td><td><code>…'+escapeHtml(row.keyLast4||"")+
@@ -965,7 +965,7 @@ function showRegister(preferredPlan="member"){
       <div class="field"><label>Navn</label><input id="registerName" required maxlength="80" autocomplete="name" placeholder="Dit navn"></div>
       <div class="field" style="margin-top:12px"><label>Email</label><input id="registerEmail" type="email" required autocomplete="email" placeholder="din@email.dk"></div>
       <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="registerPassword" type="password" required minlength="8" autocomplete="new-password" placeholder="Mindst 8 tegn"></div>
-      <div class="field" style="margin-top:12px"><label>Serial key</label><input id="registerSerialKey" required autocomplete="off" placeholder="SN-XXXXXX-XXXXXX-XXXXXX"></div>
+      <div class="field" style="margin-top:12px"><label>Serial key</label><input id="registerSerialKey" required autocomplete="off" placeholder="XXXXX-XXXXX-XXXXX-XXXXX"></div>
       <button class="btn primary" style="width:100%;margin-top:16px">Aktivér key og opret konto</button>
       <div id="registerError" style="color:var(--red);font-size:12px;margin-top:10px"></div>
     </form>
