@@ -724,6 +724,108 @@ function createBot({ state, db, log, createTicket, setReady }) {
       departmentSections.push(await ensureDepartmentSection(department));
     }
 
+    const panelByChannel = {
+      "ticket-panel": { title: "🎫 Support tickets", description: "Har du brug for hjælp? Tryk på knappen for at oprette en privat ticket.", customId: "ticket_create:support", label: "🎫 Opret support-ticket" },
+      "support": { title: "🎫 Support", description: "Få hjælp fra vores supportteam via en privat ticket.", customId: "ticket_create:support", label: "🎫 Opret support-ticket" },
+      "support-room-1": { title: "🎫 Support room 1", description: "Brug dette område til support. Opret en privat ticket, hvis sagen kræver staff.", customId: "ticket_create:support", label: "🎫 Opret support-ticket" },
+      "support-room-2": { title: "🎫 Support room 2", description: "Brug dette område til support. Opret en privat ticket, hvis sagen kræver staff.", customId: "ticket_create:support", label: "🎫 Opret support-ticket" },
+      "support-room-3": { title: "🎫 Support room 3", description: "Brug dette område til support. Opret en privat ticket, hvis sagen kræver staff.", customId: "ticket_create:support", label: "🎫 Opret support-ticket" },
+      "bug-reports": { title: "🐞 Fejlrapporter", description: "Har du fundet en fejl? Tryk herunder og opret en privat fejlrapport-ticket.", customId: "ticket_create:bug", label: "🐞 Opret fejlrapport" },
+      "player-reports": { title: "🚨 Player reports", description: "Rapportér en spiller. Din sag bliver oprettet som en privat ticket til staff.", customId: "ticket_create:report", label: "🚨 Opret player report" },
+      "ban-appeals": { title: "⚖️ Ban appeals", description: "Vil du anke en straf? Opret en privat ticket til staff.", customId: "ticket_create:appeal", label: "⚖️ Opret ban appeal" },
+      "whitelist": { title: "📝 Whitelist", description: "Tryk herunder for at oprette en privat whitelist-ticket.", customId: "ticket_create:whitelist", label: "📝 Start whitelist" },
+      "whitelist-application": { title: "📝 Whitelist ansøgning", description: "Start din whitelist-ansøgning. Den bliver til en privat ticket.", customId: "ticket_create:whitelist", label: "📝 Opret whitelist-ticket" },
+      "application-status": { title: "📋 Ansøgningsstatus", description: "Har du spørgsmål til din ansøgning? Opret en privat ticket.", customId: "ticket_create:application", label: "📋 Opret ansøgnings-ticket" },
+      "application": { title: "📋 Ansøgninger", description: "Start din ansøgning som en privat ticket til staff.", customId: "ticket_create:application", label: "📋 Start ansøgning" },
+      "how-to-join": { title: "🚀 Sådan kommer du ind", description: "Læs serverens information og brug ticket-systemet, hvis du har brug for hjælp.", customId: "ticket_create:support", label: "🎫 Få hjælp" },
+      "server-info": { title: "ℹ️ Server information", description: "Her finder du serverinformation. Har du spørgsmål, kan du åbne en support-ticket.", customId: "ticket_create:support", label: "🎫 Få hjælp" },
+      "forslag": { title: "💡 Forslag", description: "Her kan communityet dele forslag og idéer.", customId: null, label: null },
+      "suggestions": { title: "💡 Suggestions", description: "Her kan communityet dele forslag og idéer.", customId: null, label: null }
+    };
+
+    const genericIntro = {
+      "velkommen": ["👋 Velkommen", "Velkommen til serveren! Læs reglerne og brug de relevante kanaler nedenfor."],
+      "regler": ["📜 Regler", "Læs reglerne, før du deltager på serveren."],
+      "job-info": ["👮 Job information", "Her samles information om serverens jobs og krav."],
+      "police-info": ["🚓 Police information", "Information, nyheder og procedurer for Police-afdelingen."],
+      "police-announcements": ["🚓 Police announcements", "Vigtige meddelelser til Police-afdelingen."],
+      "police-chat": ["🚓 Police chat", "Intern Police-kommunikation."],
+      "police-duty": ["🚓 Police duty", "Brug kanalen til vagt/duty-status og intern koordinering."],
+      "police-training": ["🚓 Police training", "Træning, undervisning og evaluering af Police."],
+      "ems-info": ["🚑 EMS information", "Information og procedurer for EMS."],
+      "ems-announcements": ["🚑 EMS announcements", "Vigtige meddelelser til EMS."],
+      "ems-chat": ["🚑 EMS chat", "Intern EMS-kommunikation."],
+      "ems-duty": ["🚑 EMS duty", "Duty-status og koordinering for EMS."],
+      "ems-training": ["🚑 EMS training", "Træning og undervisning for EMS."],
+      "doj-info": ["⚖️ DOJ information", "Information og procedurer for DOJ."],
+      "court-cases": ["⚖️ Court cases", "Interne sager og retssagsrelateret koordinering."],
+      "doj-chat": ["⚖️ DOJ chat", "Intern DOJ-kommunikation."],
+      "legal-help": ["⚖️ Legal help", "Juridiske spørgsmål og intern hjælp."],
+      "mechanic-info": ["🔧 Mechanic information", "Information for mekanikerteamet."],
+      "mechanic-chat": ["🔧 Mechanic chat", "Intern Mechanic-kommunikation."],
+      "mechanic-jobs": ["🔧 Mechanic jobs", "Jobopslag og opgaver for mekanikerteamet."],
+      "mechanic-announcements": ["🔧 Mechanic announcements", "Vigtige meddelelser til Mechanic."],
+      "logs": ["📋 Logs", "ShardNote logger vigtige hændelser her."],
+      "staff-chat": ["🔒 Staff chat", "Privat staff-kommunikation."],
+      "clips": ["🎬 Clips", "Del clips, highlights og videoer."],
+      "chat": ["💬 Chat", "Community-chat."],
+      "fraktioner": ["🏴 Fraktioner", "Information og koordinering for serverens fraktioner."],
+      "rp-info": ["🎭 RP information", "Information om serverens RP og regler."],
+      "wipe-info": ["💥 Wipe info", "Wipe-datoer og vigtig information."],
+      "raid-info": ["⚔️ Raid info", "Raid-relateret information og regler."],
+      "team-finder": ["👥 Team finder", "Find spillere til dit hold."],
+      "trade": ["💰 Trade", "Handler og bytte mellem medlemmer."],
+      "memes": ["😂 Memes", "Del serverens bedste memes."],
+      "game-chat": ["🎮 Game chat", "Snak om spil og gaming."],
+      "find-et-game": ["🎮 Find et game", "Find andre at spille med."],
+      "bot-commands": ["🤖 Bot commands", "Brug ShardNote-commands her."],
+      "stream-live": ["📺 Stream live", "Live-notifikationer og stream-opdateringer."],
+      "stream-info": ["📺 Stream info", "Information om streams og tider."],
+      "showcase": ["🎨 Showcase", "Vis dine projekter og kreationer."],
+      "feedback": ["📝 Feedback", "Send feedback til serveren."],
+      "samarbejde": ["🤝 Samarbejde", "Find andre til samarbejde."],
+      "fan-art": ["🎨 Fan art", "Del fan art og kreativt indhold."],
+      "events": ["🎉 Events", "Serverevents og aktiviteter."]
+    };
+
+    async function seedTemplateChannel(channel, baseName) {
+      if (!channel?.isTextBased?.()) return;
+      const panel = panelByChannel[baseName];
+      const intro = genericIntro[baseName];
+      const needle = panel?.title || intro?.[0] || config.name;
+      if (await hasPanel(channel, needle)) return;
+
+      const embed = new EmbedBuilder()
+        .setTitle(panel?.title || intro?.[0] || ("📌 " + baseName))
+        .setDescription(panel?.description || intro?.[1] || ("Kanal til " + baseName + " på " + config.name + "."))
+        .setColor(0x6d5dfc);
+
+      if (panel?.customId) {
+        await channel.send({
+          embeds: [embed],
+          components: [
+            new ActionRowBuilder().addComponents(
+              new ButtonBuilder().setCustomId(panel.customId).setLabel(panel.label).setStyle(ButtonStyle.Primary)
+            )
+          ]
+        }).catch(() => {});
+      } else {
+        await channel.send({embeds:[embed]}).catch(() => {});
+      }
+    }
+
+    for (const channel of textChannels) {
+      const base = channel.name.replace(/^F5 /, "");
+      await seedTemplateChannel(channel, base);
+    }
+
+    for (const section of departmentSections) {
+      for (const channel of section.channels) {
+        const base = channel.name.replace(/^F5 /, "");
+        await seedTemplateChannel(channel, base);
+      }
+    }
+
     const byBase = name => textChannels.find(c=>c.name.replace(/^F5 /,"")===name);
     const welcome = byBase("velkommen") || textChannels[0];
     const logs = byBase("logs") || textChannels.find(c=>c.name.includes("log")) || textChannels[0];
@@ -902,30 +1004,75 @@ function createBot({ state, db, log, createTicket, setReady }) {
     );
   }
 
+  async function openTemplateTicket(interaction, type = "support") {
+    const ticketTypes = {
+      support: { title: "Support", label: "Support", description: "Beskriv dit spørgsmål eller problem, så hjælper supporten dig." },
+      bug: { title: "Fejlrapport", label: "Fejlrapport", description: "Beskriv fejlen, hvad du gjorde, og hvad du forventede skulle ske." },
+      report: { title: "Player report", label: "Player report", description: "Beskriv spilleren, hændelsen og vedhæft dokumentation, hvis du har det." },
+      appeal: { title: "Ban appeal", label: "Ban appeal", description: "Beskriv hvorfor din straf bør vurderes igen." },
+      whitelist: { title: "Whitelist ansøgning", label: "Whitelist", description: "Din ansøgning oprettes som en privat ticket til whitelist-teamet." },
+      application: { title: "Ansøgning", label: "Ansøgning", description: "Din ansøgning oprettes som en privat ticket til staff." }
+    };
+    const info = ticketTypes[type] || ticketTypes.support;
+    const safeTitle = info.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 28) || "support";
+    const existing = interaction.guild.channels.cache.find(channel =>
+      channel.name.startsWith("ticket-") && channel.permissionOverwrites.cache.has(interaction.user.id)
+    );
+    if (existing) {
+      return interaction.reply({ content: "Du har allerede en åben ticket: " + existing, ephemeral: true });
+    }
+
+    const ticket = createTicket
+      ? await createTicket({
+          title: info.title,
+          user: interaction.user.tag,
+          status: "open",
+          priority: type === "bug" || type === "report" ? "high" : "normal",
+          guildId: interaction.guild.id
+        })
+      : { id: Date.now(), title: info.title };
+
+    const channel = await createTicketChannel(interaction.guild, interaction.user, safeTitle);
+    if (db) {
+      await db.query(
+        "UPDATE public.tickets SET guild_id=$1, user_id=$2, channel_id=$3 WHERE id=$4",
+        [interaction.guild.id, interaction.user.id, channel.id, ticket.id]
+      ).catch(() => {});
+    }
+
+    const controls = new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("ticket_claim:" + ticket.id).setLabel("Claim").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId("ticket_close:" + ticket.id).setLabel("Luk ticket").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("ticket_transcript:" + ticket.id).setLabel("Transcript").setStyle(ButtonStyle.Primary)
+    );
+
+    await channel.send({
+      embeds: [
+        new EmbedBuilder()
+          .setTitle("🎫 " + info.label + " #" + ticket.id)
+          .setDescription("Hej <@" + interaction.user.id + ">\n\n" + info.description)
+          .addFields({ name: "Type", value: info.label, inline: true })
+          .setColor(0x6d5dfc)
+      ],
+      components: [controls]
+    });
+
+    await sendGuildLog(
+      interaction.guild,
+      "Ny " + info.label,
+      interaction.user.tag + " oprettede ticket #" + ticket.id + " (" + info.label + ")",
+      "system"
+    );
+
+    return interaction.reply({ content: "✅ " + info.label + " oprettet: " + channel, ephemeral: true });
+  }
+
   async function handleFeatureButton(interaction) {
     if (!interaction.guild) return interaction.reply({ content: "Denne knap virker kun i en server.", ephemeral: true });
 
-    if (interaction.customId === "ticket_create") {
-      const channel = await createTicketChannel(interaction.guild, interaction.user, "support");
-      const ticket = createTicket
-        ? await createTicket({ title: "Support", user: interaction.user.tag, status: "open", priority: "normal", guildId: interaction.guild.id })
-        : { id: Date.now() };
-      if (db) {
-        await db.query(
-          "UPDATE public.tickets SET guild_id=$1, user_id=$2, channel_id=$3 WHERE id=$4",
-          [interaction.guild.id, interaction.user.id, channel.id, ticket.id]
-        ).catch(() => {});
-      }
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("ticket_claim:" + ticket.id).setLabel("Claim").setStyle(ButtonStyle.Secondary),
-        new ButtonBuilder().setCustomId("ticket_close:" + ticket.id).setLabel("Luk ticket").setStyle(ButtonStyle.Danger),
-        new ButtonBuilder().setCustomId("ticket_transcript:" + ticket.id).setLabel("Transcript").setStyle(ButtonStyle.Primary)
-      );
-      await channel.send({
-        embeds: [new EmbedBuilder().setTitle("🎫 Ticket #" + ticket.id).setDescription("Hej <@" + interaction.user.id + "> — skriv her, så hjælper supporten dig.").setColor(0x6d5dfc)],
-        components: [row]
-      });
-      return interaction.reply({ content: "✅ Ticket oprettet: " + channel, ephemeral: true });
+    if (interaction.customId === "ticket_create" || interaction.customId.startsWith("ticket_create:")) {
+      const type = interaction.customId.split(":")[1] || "support";
+      return openTemplateTicket(interaction, type);
     }
 
     if (interaction.customId.startsWith("ticket_close:")) {
