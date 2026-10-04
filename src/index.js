@@ -2470,7 +2470,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 .table{width:100%;border-collapse:collapse}.table th,.table td{padding:12px 8px;border-bottom:1px solid #22222e;text-align:left;font-size:13px}.table th{color:var(--muted);font-weight:600}.badge{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:700}.badge.open{background:rgba(66,211,146,.12);color:var(--green)}.badge.pending{background:rgba(244,201,93,.12);color:var(--yellow)}.badge.closed{background:rgba(255,102,120,.12);color:var(--red)}.log-category{border:1px solid var(--border);border-radius:12px;background:#0e0e16;margin-bottom:10px;overflow:hidden}.log-category summary{cursor:pointer;list-style:none;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-weight:700}.log-category summary::-webkit-details-marker{display:none}.log-category summary b{background:#1c1b2b;padding:4px 8px;border-radius:999px;font-size:11px;color:var(--muted)}.log-category-body{padding:0 12px 12px}.log-category-intro{padding:10px 12px;margin-bottom:12px;border:1px dashed var(--border);border-radius:10px;color:var(--muted);font-size:12px}.log-category summary{user-select:none}.log-category-body{overflow:auto}
 .activity{display:grid;gap:11px}.activity-item{display:flex;gap:11px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #22222e}.activity-item:last-child{border:0}.activity-icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:#1c1b2b}.activity-item b{font-size:13px}.activity-item small{display:block;color:var(--muted);margin-top:3px}
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:grid;gap:7px}.field label{font-size:12px;color:var(--muted)}.field input,.field textarea,.field select{width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none}.field textarea{min-height:120px;resize:vertical}.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent)}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:12px}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:12px}.spot-layout{display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:18px}.spot-preview{display:grid;place-items:center;min-height:420px;background:#0b0b11;border:1px solid var(--border);border-radius:14px;padding:18px}.spot-canvas{max-width:100%;height:auto;border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.3);display:block}.spot-help{color:var(--muted);font-size:12px;line-height:1.5}@media(max-width:900px){.spot-layout{grid-template-columns:1fr}}
 .switch-row{display:flex;align-items:center;justify-content:space-between;padding:15px 0;border-bottom:1px solid #22222e}.switch{width:48px;height:26px;border-radius:99px;background:#292936;padding:3px;transition:.2s}.switch i{display:block;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}.switch.on{background:var(--accent)}.switch.on i{transform:translateX(22px)}.feature-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.feature-card{background:#0e0e16;border:1px solid var(--border);border-radius:14px;padding:16px}.feature-card h3{margin:0 0 7px;font-size:14px}.feature-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}.feature-status{display:inline-flex;margin-top:10px;padding:5px 8px;border-radius:999px;background:rgba(66,211,146,.12);color:var(--green);font-size:11px;font-weight:800}.feature-command{display:inline-block;margin-top:10px;font-size:11px;color:var(--accent2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.feature-select{min-height:42px}.feature-save{position:sticky;bottom:12px;z-index:3}@media(max-width:1050px){.feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.feature-grid{grid-template-columns:1fr}}
 
 body.locked > .app{display:none}
@@ -2488,6 +2488,7 @@ body.locked > .app{display:none}
   <div class="brand"><div class="brand-mark">S</div><span>ShardNote</span></div>
   <nav class="nav">
     <button class="active" data-page="dashboard"><span class="icon">⌂</span><span>Dashboard</span></button>
+    <button data-page="spot"><span class="icon">🎨</span><span>Mit spot</span></button>
     <button data-page="tickets"><span class="icon">🎫</span><span>Tickets</span></button>
     <button data-page="messages"><span class="icon">✉</span><span>Beskeder</span></button>
     <button data-page="commands"><span class="icon">⌘</span><span>Commands</span></button>
@@ -2522,6 +2523,41 @@ body.locked > .app{display:none}
   <div class="grid two" style="margin-top:18px">
     <div class="card"><div class="section-title"><h2>Seneste tickets</h2><button class="btn small" data-button-label="dashboardSeeAll" onclick="navigate('tickets')">Se alle</button></div><div id="dashTickets"></div></div>
     <div class="card"><div class="section-title"><h2>Aktivitet</h2><button class="btn small" onclick="navigate('logs')">Alle logs</button></div><div id="dashLogs" class="activity"></div></div>
+  </div>
+</section>
+
+<section class="page" id="page-spot">
+  <div class="card" style="margin-bottom:18px">
+    <div class="section-title">
+      <div><h2>🎨 Mit spot</h2><span>Lav dit eget billede direkte inde på ShardNote.</span></div>
+    </div>
+    <p class="spot-help" style="margin:0">Du kan skrive tekst, vælge størrelse og farver og hente billedet som PNG. Det bliver lavet lokalt i din browser.</p>
+  </div>
+
+  <div class="spot-layout">
+    <div class="card">
+      <div class="section-title"><div><h2>Opret billede</h2><span>Dit billede ændres med det samme.</span></div></div>
+      <div class="form-grid">
+        <div class="field"><label>Titel</label><input id="spotTitle" maxlength="60" value="ShardNote"></div>
+        <div class="field"><label>Undertekst</label><input id="spotSubtitle" maxlength="90" value="Mit spot"></div>
+        <div class="field"><label>Bredde</label><input id="spotWidth" type="number" min="300" max="2400" value="1200"></div>
+        <div class="field"><label>Højde</label><input id="spotHeight" type="number" min="300" max="1600" value="630"></div>
+        <div class="field"><label>Baggrund</label><input id="spotBackground" type="color" value="#11111b" style="height:44px;padding:4px"></div>
+        <div class="field"><label>Tekstfarve</label><input id="spotTextColor" type="color" value="#ffffff" style="height:44px;padding:4px"></div>
+        <div class="field"><label>Accentfarve</label><input id="spotAccent" type="color" value="#6d28d9" style="height:44px;padding:4px"></div>
+        <div class="field"><label>Rundede hjørner</label><select id="spotRadius"><option value="0">Ingen</option><option value="24" selected>24 px</option><option value="40">40 px</option><option value="60">60 px</option></select></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" type="button" onclick="renderSpotImage()">🔄 Opdater</button>
+        <button class="btn" type="button" onclick="downloadSpotImage()">⬇ Hent PNG</button>
+      </div>
+      <div class="spot-help" style="margin-top:12px">Tip: Brug en kort titel og en lille undertekst, så billedet også ser godt ud som banner eller opslag.</div>
+    </div>
+
+    <div class="card">
+      <div class="section-title"><div><h2>Forhåndsvisning</h2><span>Sådan bliver dit billede gemt.</span></div></div>
+      <div class="spot-preview"><canvas id="spotCanvas" class="spot-canvas" width="1200" height="630"></canvas></div>
+    </div>
   </div>
 </section>
 

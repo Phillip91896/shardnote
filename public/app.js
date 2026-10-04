@@ -1,5 +1,5 @@
-const pages = ["dashboard","tickets","messages","commands","features","templates","upgrades","store","music","settings","logs","admin"];
-const titles = {dashboard:"Dashboard",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord-skitser",upgrades:"Opgraderinger",store:"Store",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
+const pages = ["dashboard","spot","tickets","messages","commands","features","templates","upgrades","store","music","settings","logs","admin"];
+const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord-skitser",upgrades:"Opgraderinger",store:"Store",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true,buttonLabels:{}};
 
 async function addBotToDiscord(){
@@ -31,7 +31,7 @@ function navigate(page){
   document.querySelectorAll(".nav button").forEach(b=>b.classList.toggle("active",b.dataset.page===page));
   const title=document.getElementById("pageTitle");
   if(title) title.textContent=titles[page] || page;
-  if(page==="tickets") loadTickets();
+  if(page==="spot") setTimeout(renderSpotImage,0);\n  if(page==="tickets") loadTickets();
   if(page==="messages") loadMessages();
   if(page==="upgrades") loadUpgradeIdeas();
   if(page==="store") loadStorePage();
@@ -39,6 +39,66 @@ function navigate(page){
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
   if(page==="admin"){ loadUsers(); loadDatabaseSummary(); loadIpCenter(); loadSerialGuilds(); loadSerialKeysList(); }
+}
+
+
+function renderSpotImage(){
+  const canvas=document.getElementById("spotCanvas");
+  if(!canvas) return;
+  const title=document.getElementById("spotTitle")?.value || "ShardNote";
+  const subtitle=document.getElementById("spotSubtitle")?.value || "";
+  const width=Math.max(300,Math.min(2400,Number(document.getElementById("spotWidth")?.value||1200)));
+  const height=Math.max(300,Math.min(1600,Number(document.getElementById("spotHeight")?.value||630)));
+  const bg=document.getElementById("spotBackground")?.value || "#11111b";
+  const textColor=document.getElementById("spotTextColor")?.value || "#ffffff";
+  const accent=document.getElementById("spotAccent")?.value || "#6d28d9";
+  const radius=Math.max(0,Number(document.getElementById("spotRadius")?.value||0));
+  canvas.width=width; canvas.height=height;
+  const ctx=canvas.getContext("2d");
+  ctx.clearRect(0,0,width,height);
+
+  function roundedRect(x,y,w,h,r){
+    r=Math.min(r,w/2,h/2);
+    ctx.beginPath();
+    ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r);
+    ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath();
+  }
+  ctx.save();
+  if(radius){roundedRect(0,0,width,height,radius);ctx.clip();}
+  ctx.fillStyle=bg;ctx.fillRect(0,0,width,height);
+  const grad=ctx.createLinearGradient(0,0,width,height);
+  grad.addColorStop(0,accent);
+  grad.addColorStop(1,"rgba(0,0,0,0)");
+  ctx.globalAlpha=.34;ctx.fillStyle=grad;ctx.fillRect(0,0,width,height);
+  ctx.globalAlpha=1;
+  ctx.fillStyle=accent;ctx.fillRect(0,height-10,width,10);
+
+  const pad=Math.round(width*.075);
+  ctx.fillStyle=textColor;
+  ctx.textAlign="left";
+  ctx.textBaseline="middle";
+  const titleSize=Math.max(34,Math.min(110,width*.075));
+  ctx.font="800 "+titleSize+"px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+  ctx.fillText(title,pad,height*.46);
+  if(subtitle){
+    const subSize=Math.max(18,Math.min(48,width*.032));
+    ctx.font="500 "+subSize+"px system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif";
+    ctx.globalAlpha=.82;
+    ctx.fillText(subtitle,pad,height*.58);
+    ctx.globalAlpha=1;
+  }
+  ctx.restore();
+}
+function downloadSpotImage(){
+  renderSpotImage();
+  const canvas=document.getElementById("spotCanvas");
+  if(!canvas) return;
+  const a=document.createElement("a");
+  const safe=(document.getElementById("spotTitle")?.value||"shardnote").trim().replace(/[^a-z0-9-_]+/gi,"-").replace(/^-|-$/g,"").toLowerCase()||"shardnote";
+  a.download=safe+".png";
+  a.href=canvas.toDataURL("image/png");
+  a.click();
+  toast("✅ Billedet er hentet");
 }
 
 async function api(url, options){
@@ -1045,7 +1105,7 @@ window.startSubscription=startSubscription;
 window.checkBillingStatus=checkBillingStatus;
 window.login=login;
 window.register=register;
-window.addBotToDiscord=addBotToDiscord;
+window.addBotToDiscord=addBotToDiscord;\nwindow.renderSpotImage=renderSpotImage;\nwindow.downloadSpotImage=downloadSpotImage;
 window.unlockLogs=unlockLogs;
 window.lockLogs=lockLogs;
 window.loadLogCategory=loadLogCategory;
