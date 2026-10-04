@@ -1657,11 +1657,11 @@ app.get("/api/stats", async (req, res) => {
       linkedGuildIds = linked.rows.map(row => String(row.guild_id));
     }
 
-    const linkedGuilds = discordReady
-      ? (req.user?.role === "admin"
-          ? [...client.guilds.cache.values()]
-          : [...client.guilds.cache.values()].filter(guild => linkedGuildIds.includes(String(guild.id))))
-      : [];
+    const botReady = typeof client.isReady === "function" ? client.isReady() : discordReady;
+    const cachedGuilds = botReady ? [...client.guilds.cache.values()] : [];
+    const linkedGuilds = req.user?.role === "admin"
+      ? cachedGuilds
+      : cachedGuilds.filter(guild => linkedGuildIds.includes(String(guild.id)));
 
     let openTickets = req.user?.role === "admin"
       ? state.tickets.filter(t => t.status !== "closed").length
@@ -1674,7 +1674,7 @@ app.get("/api/stats", async (req, res) => {
     }
 
     res.json({
-      botOnline: linkedGuilds.length > 0,
+      botOnline: botReady,
       servers: linkedGuilds.length,
       users: req.user?.role === "admin" ? linkedGuilds.reduce((total, guild) => total + (guild.memberCount || 0), 0) : null,
       tickets: openTickets,
