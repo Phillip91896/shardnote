@@ -1,5 +1,5 @@
-const pages = ["dashboard","tickets","messages","commands","features","templates","upgrades","music","settings","logs","admin"];
-const titles = {dashboard:"Dashboard",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord-skitser",upgrades:"Opgraderinger",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
+const pages = ["dashboard","tickets","messages","commands","features","templates","upgrades","store","music","settings","logs","admin"];
+const titles = {dashboard:"Dashboard",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord-skitser",upgrades:"Opgraderinger",store:"Store",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true,buttonLabels:{}};
 
 async function addBotToDiscord(){
@@ -34,10 +34,11 @@ function navigate(page){
   if(page==="tickets") loadTickets();
   if(page==="messages") loadMessages();
   if(page==="upgrades") loadUpgradeIdeas();
+  if(page==="store") loadStorePage();
   if(page==="commands") loadCommands();
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
-  if(page==="admin"){ loadUsers(); loadDatabaseSummary(); loadIpCenter(); }
+  if(page==="admin"){ loadUsers(); loadDatabaseSummary(); loadIpCenter(); loadSerialGuilds(); loadSerialKeysList(); }
 }
 
 async function api(url, options){
@@ -485,6 +486,133 @@ async function loadIpOverview(){
     if(e.message.includes("IP-adressecenteret er låst")) renderIpLocked();
     else toast(e.message);
   }
+}
+
+
+async function loadStorePage(){
+  const result=document.getElementById("storeRedeemResult");
+  if(result) result.textContent="";
+}
+
+async function redeemStoreSerialKey(){
+  const result=document.getElementById("storeRedeemResult");
+  if(result) result.textContent="";
+  try{
+    const data=await api("/api/serial-keys/redeem",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        key:document.getElementById("storeRedeemKey").value.trim(),
+        guildId:document.getElementById("storeRedeemGuildId").value.trim(),
+        discordUserId:document.getElementById("storeRedeemDiscordUserId").value.trim()
+      })
+    });
+    if(result) result.innerHTML='<span class="badge open">✅ '+escapeHtml(data.productName)+' · '+escapeHtml(data.roleName)+' · '+escapeHtml(data.guildName)+'</span>';
+    toast("✅ Rolle givet");
+  }catch(e){
+    if(result) result.innerHTML='<span class="badge closed">'+escapeHtml(e.message)+'</span>';
+  }
+}
+
+async function redeemSerialKey(){
+  const result=document.getElementById("redeemResult");
+  if(result) result.textContent="";
+  try{
+    const data=await api("/api/serial-keys/redeem",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        key:document.getElementById("redeemKey").value.trim(),
+        guildId:document.getElementById("redeemGuildId").value.trim(),
+        discordUserId:document.getElementById("redeemDiscordUserId").value.trim()
+      })
+    });
+    if(result) result.innerHTML='<span class="badge open">✅ '+escapeHtml(data.productName)+' · '+escapeHtml(data.roleName)+'</span>';
+    toast("✅ Rolle givet");
+  }catch(e){
+    if(result) result.innerHTML='<span class="badge closed">'+escapeHtml(e.message)+'</span>';
+  }
+}
+
+async function loadSerialGuilds(){
+  try{
+    const guilds=await api("/api/bot/guilds");
+    const select=document.getElementById("serialGuild");
+    if(!select) return;
+    select.innerHTML='<option value="">Vælg server</option>'+guilds.map(g=>'<option value="'+escapeHtml(g.id)+'">'+escapeHtml(g.name)+'</option>').join("");
+    await loadSerialRoles();
+  }catch(e){toast(e.message);}
+}
+
+async function loadSerialRoles(){
+  const guildId=document.getElementById("serialGuild")?.value;
+  const select=document.getElementById("serialRole");
+  if(!select) return;
+  if(!guildId){
+    select.innerHTML='<option value="">Vælg rolle</option>';
+    return;
+  }
+  try{
+    const data=await api("/api/bot/guilds/"+encodeURIComponent(guildId)+"/settings");
+    const roles=(data.roles||[]).filter(r=>!r.managed);
+    select.innerHTML='<option value="">Vælg rolle</option>'+roles.map(r=>'<option value="'+escapeHtml(r.id)+'">'+escapeHtml(r.name)+'</option>').join("");
+  }catch(e){toast(e.message);}
+}
+
+async function generateSerialKeys(){
+  try{
+    const data=await api("/api/admin/serial-keys/generate",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        guildId:document.getElementById("serialGuild").value,
+        roleId:document.getElementById("serialRole").value,
+        productName:document.getElementById("serialProduct").value,
+        quantity:Number(document.getElementById("serialQuantity").value||1),
+        maxUses:Number(document.getElementById("serialMaxUses").value||1),
+        expiresAt:document.getElementById("serialExpiresAt").value||""
+      })
+    });
+    const node=document.getElementById("serialGenerated");
+    node.style.display="block";
+    node.textContent=data.keys.join("\n");
+    await loadSerialKeysList();
+    toast("✅ "+data.keys.length+" serial key(s) genereret");
+  }catch(e){toast(e.message);}
+}
+
+async function loadSerialKeysList(){
+  const host=document.getElementById("serialKeyList");
+  if(!host) return;
+  try{
+    const rows=await api("/api/admin/serial-keys");
+    host.innerHTML=rows.length
+      ? '<div class="table-wrap"><table class="table"><thead><tr><th>Produkt</th><th>Key</th><th>Brug</th><th>Status</th><th>Oprettet</th><th></th></tr></thead><tbody>'+
+        rows.map(function(row){
+          const used=Number(row.uses||0);
+          const max=Number(row.maxUses||1);
+          const expired=row.expiresAt && new Date(row.expiresAt).getTime()<=Date.now();
+          const status=row.revoked?"Tilbagekaldt":(expired?"Udløbet":(used>=max?"Brugt op":"Aktiv"));
+          return '<tr><td>'+escapeHtml(row.productName||"")+
+            '</td><td><code>…'+escapeHtml(row.keyLast4||"")+
+            '</code></td><td>'+used+'/'+max+
+            '</td><td><span class="badge '+(status==="Aktiv"?"open":"closed")+'">'+status+
+            '</span></td><td>'+new Date(row.createdAt).toLocaleString("da-DK")+
+            '</td><td>'+(!row.revoked&&used<max&&!expired?'<button class="btn small danger" onclick="revokeSerialKey('+row.id+')">Tilbagekald</button>':"")+
+            '</td></tr>';
+        }).join("")+
+        '</tbody></table></div>'
+      : '<div class="empty">Ingen serial keys endnu.</div>';
+  }catch(e){toast(e.message);}
+}
+
+async function revokeSerialKey(id){
+  if(!confirm("Tilbagekald denne serial key? Den kan derefter ikke bruges.")) return;
+  try{
+    await api("/api/admin/serial-keys/"+id+"/revoke",{method:"PATCH"});
+    await loadSerialKeysList();
+    toast("✅ Serial key tilbagekaldt");
+  }catch(e){toast(e.message);}
 }
 
 async function loadDatabaseSummary(){
