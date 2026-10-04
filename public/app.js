@@ -1,5 +1,5 @@
-const pages = ["dashboard","tickets","messages","commands","music","settings","logs","admin"];
-const titles = {dashboard:"Dashboard",tickets:"Tickets",messages:"Beskeder",commands:"Commands",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
+const pages = ["dashboard","tickets","messages","commands","features","templates","upgrades","music","settings","logs","admin"];
+const titles = {dashboard:"Dashboard",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord-skitser",upgrades:"Opgraderinger",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true,buttonLabels:{}};
 
 async function addBotToDiscord(){
@@ -33,6 +33,7 @@ function navigate(page){
   if(title) title.textContent=titles[page] || page;
   if(page==="tickets") loadTickets();
   if(page==="messages") loadMessages();
+  if(page==="upgrades") loadUpgradeIdeas();
   if(page==="commands") loadCommands();
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
@@ -89,6 +90,44 @@ async function cycleTicket(id,status){
 async function deleteTicket(id){
   if(!confirm("Slet denne ticket?")) return;
   await api("/api/tickets/"+id,{method:"DELETE"});toast("Ticket slettet");loadTickets();loadStats();
+}
+
+async function submitUpgradeIdea(){
+  const area=document.getElementById("upgradeArea")?.value || "Website / Bot";
+  const title=document.getElementById("upgradeTitle")?.value.trim();
+  const description=document.getElementById("upgradeDescription")?.value.trim();
+  const result=document.getElementById("upgradeResult");
+  if(!title){if(result)result.innerHTML='<div class="badge closed">Skriv en titel.</div>';return;}
+  if(description.length<10){if(result)result.innerHTML='<div class="badge closed">Beskriv idéen lidt mere.</div>';return;}
+  try{
+    const ticket=await api("/api/upgrade-ideas",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({area,title,description})
+    });
+    document.getElementById("upgradeTitle").value="";
+    document.getElementById("upgradeDescription").value="";
+    if(result)result.innerHTML='<div class="badge open">✅ Idé sendt som ticket #'+escapeHtml(String(ticket.id))+'</div>';
+    loadStats();
+    loadUpgradeIdeas();
+  }catch(e){
+    if(result)result.innerHTML='<div class="badge closed">'+escapeHtml(e.message)+'</div>';
+  }
+}
+async function loadUpgradeIdeas(){
+  try{
+    const tickets=await api("/api/tickets");
+    const upgrades=tickets.filter(t=>String(t.category||"") === "upgrade");
+    const box=document.getElementById("upgradeIdeasList");
+    if(box){
+      box.innerHTML=upgrades.length
+        ? upgrades.slice(0,10).map(t=>'<div class="activity-item"><div class="activity-icon">🚀</div><div><b>#'+escapeHtml(String(t.id))+' — '+escapeHtml(t.title)+'</b><small>'+escapeHtml(t.status)+' · '+new Date(t.createdAt).toLocaleString("da-DK")+'</small></div></div>').join("")
+        : '<div class="empty">Du har ikke sendt nogen opgraderingsidéer endnu.</div>';
+    }
+  }catch(e){
+    const box=document.getElementById("upgradeIdeasList");
+    if(box)box.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';
+  }
 }
 
 async function loadMessages(){
