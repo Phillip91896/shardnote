@@ -534,12 +534,28 @@ async function redeemSerialKey(){
   }
 }
 
+function toggleSerialType(){
+  const type=document.getElementById("serialType")?.value || "account";
+  const isAccount=type==="account";
+  const plan=document.getElementById("serialAccessPlan");
+  const guild=document.getElementById("serialGuild");
+  const role=document.getElementById("serialRole");
+  if(plan) plan.disabled=!isAccount;
+  if(guild) guild.disabled=isAccount;
+  if(role) role.disabled=isAccount;
+  if(isAccount){
+    if(guild) guild.value="";
+    if(role) role.innerHTML='<option value="">Ikke nødvendig for konto-key</option>';
+  }
+}
+
 async function loadSerialGuilds(){
   try{
     const guilds=await api("/api/bot/guilds");
     const select=document.getElementById("serialGuild");
     if(!select) return;
     select.innerHTML='<option value="">Vælg server</option>'+guilds.map(g=>'<option value="'+escapeHtml(g.id)+'">'+escapeHtml(g.name)+'</option>').join("");
+    toggleSerialType();
     await loadSerialRoles();
   }catch(e){toast(e.message);}
 }
@@ -567,6 +583,7 @@ async function generateSerialKeys(){
       body:JSON.stringify({
         guildId:document.getElementById("serialGuild").value,
         roleId:document.getElementById("serialRole").value,
+        accessPlan:document.getElementById("serialType").value==="account" ? document.getElementById("serialAccessPlan").value : "",
         productName:document.getElementById("serialProduct").value,
         quantity:Number(document.getElementById("serialQuantity").value||1),
         maxUses:Number(document.getElementById("serialMaxUses").value||1),
@@ -587,13 +604,15 @@ async function loadSerialKeysList(){
   try{
     const rows=await api("/api/admin/serial-keys");
     host.innerHTML=rows.length
-      ? '<div class="table-wrap"><table class="table"><thead><tr><th>Produkt</th><th>Key</th><th>Brug</th><th>Status</th><th>Oprettet</th><th></th></tr></thead><tbody>'+
+      ? '<div class="table-wrap"><table class="table"><thead><tr><th>Produkt</th><th>Type</th><th>Key</th><th>Brug</th><th>Status</th><th>Oprettet</th><th></th></tr></thead><tbody>'+
         rows.map(function(row){
           const used=Number(row.uses||0);
           const max=Number(row.maxUses||1);
           const expired=row.expiresAt && new Date(row.expiresAt).getTime()<=Date.now();
           const status=row.revoked?"Tilbagekaldt":(expired?"Udløbet":(used>=max?"Brugt op":"Aktiv"));
+          const typeLabel=row.accessPlan ? "Website · "+({member:"Member",member_plus:"Member Plus",member_pro:"Member Pro",member_premium:"Member Premium"}[row.accessPlan]||row.accessPlan) : "Discord role";
           return '<tr><td>'+escapeHtml(row.productName||"")+
+            '</td><td>'+escapeHtml(typeLabel)+
             '</td><td><code>…'+escapeHtml(row.keyLast4||"")+
             '</code></td><td>'+used+'/'+max+
             '</td><td><span class="badge '+(status==="Aktiv"?"open":"closed")+'">'+status+
