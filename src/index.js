@@ -2470,6 +2470,7 @@ body.locked > .app{display:none}
     <button data-page="features"><span class="icon">🧩</span><span>Bot-funktioner</span></button>
     <button data-page="templates"><span class="icon">🧱</span><span>Discord-skitser</span></button>
     <button data-page="upgrades"><span class="icon">🚀</span><span>Opgraderinger</span></button>
+    <button data-page="store"><span class="icon">🛒</span><span>Store</span>
     <button data-page="music"><span class="icon">♫</span><span>Musik</span></button>
     <button data-page="settings"><span class="icon">⚙</span><span>Indstillinger</span></button>
     <button data-page="logs"><span class="icon">◷</span><span>Logs</span></button>
@@ -2561,6 +2562,35 @@ body.locked > .app{display:none}
   <div class="card" style="margin-top:18px">
     <div class="section-title"><div><h2>📋 Dine opgraderingsidéer</h2><span>Seneste idéer sendt fra din konto.</span></div></div>
     <div id="upgradeIdeasList"><div class="empty">Indlæser…</div></div>
+  </div>
+</section>
+
+<section class="page" id="page-store">
+  <div class="card" style="margin-bottom:18px">
+    <div class="section-title">
+      <div><h2>🛒 ShardNote Store</h2><span>Redeem en serial key for en Discord-rolle</span></div>
+    </div>
+    <p style="color:var(--muted);line-height:1.6">
+      Din serial key er bundet til én bestemt Discord-server og rolle. Du kan også bruge <b>/redeem</b> direkte i Discord.
+    </p>
+    <div class="form-grid">
+      <div class="field"><label>Serial key</label><input id="storeRedeemKey" placeholder="SN-XXXXXX-XXXXXX-XXXXXX"></div>
+      <div class="field"><label>Discord server-ID</label><input id="storeRedeemGuildId" placeholder="Server-ID"></div>
+      <div class="field"><label>Discord bruger-ID</label><input id="storeRedeemDiscordUserId" placeholder="Dit Discord bruger-ID"></div>
+    </div>
+    <div class="actions">
+      <button class="btn primary" onclick="redeemStoreSerialKey()">✅ Aktivér key</button>
+    </div>
+    <div id="storeRedeemResult" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card">
+    <div class="section-title"><div><h2>Sådan fungerer det</h2><span>3 simple trin</span></div></div>
+    <div class="activity">
+      <div class="activity-item"><div class="activity-icon">1</div><div><b>Få din serial key</b><small>Du får en key fra ShardNote Store eller en administrator.</small></div></div>
+      <div class="activity-item"><div class="activity-icon">2</div><div><b>Indtast den</b><small>Brug formularen her eller kommandoen <code>/redeem</code> i Discord.</small></div></div>
+      <div class="activity-item"><div class="activity-icon">3</div><div><b>Få rollen</b><small>ShardNote kontrollerer nøglen og giver rollen automatisk.</small></div></div>
+    </div>
   </div>
 </section>
 
@@ -2688,6 +2718,7 @@ body.locked > .app{display:none}
     </div>
     <div class="actions"><button class="btn primary" onclick="generateSerialKeys()">🔑 Generér serial keys</button></div>
     <pre id="serialGenerated" style="display:none;margin-top:14px;white-space:pre-wrap;word-break:break-all;background:#0b0b11;border:1px solid var(--border);padding:12px;border-radius:10px"></pre>
+    <div id="serialKeyList" style="margin-top:16px"></div>
   </div>
 
   <div class="card" style="margin-bottom:18px">
