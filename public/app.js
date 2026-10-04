@@ -1334,7 +1334,7 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
       localStorage.setItem("shardnote_language",current);
       translatePage();
       updateBillingDurationLabels();
-      if(typeof loadCommands==="function" setTimeout(()=>{try{loadCommands()}catch(e){}},0);
+      if(typeof loadCommands==="function") setTimeout(()=>{try{loadCommands()}catch(e){}},0);
       if(typeof loadSettings==="function") setTimeout(()=>{try{applyButtonLabels();translatePage()}catch(e){}},0);
     });
     wrap.appendChild(select);
