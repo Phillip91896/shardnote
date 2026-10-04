@@ -94,6 +94,18 @@ async function initDatabase() {
   `);
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS public.ticket_messages (
+      id BIGSERIAL PRIMARY KEY,
+      ticket_id BIGINT NOT NULL REFERENCES public.tickets(id) ON DELETE CASCADE,
+      author_user_id BIGINT,
+      author_name VARCHAR(160) NOT NULL,
+      author_role VARCHAR(30) NOT NULL DEFAULT 'user',
+      content TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS messages (
       id BIGSERIAL PRIMARY KEY,
       channel VARCHAR(80) NOT NULL,
@@ -1753,6 +1765,36 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
+async function generateTicketAiReply(ticket, messages) {
+  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
+  if (!apiKey) throw new Error("AI er ikke konfigureret. Tilføj OPENAI_API_KEY i Render.");
+  const model = String(process.env.OPENAI_MODEL || "gpt-6-luna").trim();
+  const transcript = messages.slice(-20).map(m => (m.authorRole === "admin" ? "Admin" : m.authorRole === "ai" ? "AI" : "Kunde") + ": " + m.content).join("\n");
+  const prompt = [
+    "Du er Shardnote Bot supportassistent.",
+    "Svar kort, venligt og konkret på kundens supportticket.",
+    "Du må ikke opfinde funktioner, priser eller løfter. Hvis du mangler oplysninger, så sig det og foreslå kontakt til en administrator.",
+    "Svar på dansk, medmindre kunden skriver på et andet sprog.",
+    "",
+    "Ticket: " + String(ticket.title || ""),
+    "Beskrivelse: " + String(ticket.description || ""),
+    "",
+    "Samtale:",
+    transcript || "(ingen tidligere beskeder)"
+  ].join("\n");
+
+  const response = await fetch("https://api.openai.com/v1/responses", {
+    method: "POST",
+    headers: {"Content-Type":"application/json","Authorization":"Bearer " + apiKey},
+    body: JSON.stringify({model, input: prompt, max_output_tokens: 500})
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error?.message || "AI-svar kunne ikke genereres.");
+  const text = data.output_text || (data.output || []).flatMap(item => item.content || []).map(item => item.text || "").join("").trim();
+  if (!text) throw new Error("AI returnerede ikke et svar.");
+  return text.slice(0, 4000);
+}
+
 app.get("/api/tickets", async (req, res) => {
   try {
     if (db) {
@@ -1861,6 +1903,77 @@ app.patch("/api/tickets/:id", async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Ticket kunne ikke opdateres." });
+  }
+});
+
+app.get("/api/tickets/:id/messages", async (req, res) => {
+  try {
+    if (!db) return res.json([]);
+    const check = await db.query(
+      "SELECT id FROM public.tickets WHERE id = $1 AND (owner_user_id = $2 OR $3 = TRUE) LIMIT 1",
+      [req.params.id, req.user.id, req.user.role === "admin"]
+    );
+    if (!check.rowCount) return res.status(404).json({ error: "Ticket not found" });
+    const result = await db.query(
+      'SELECT id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 200',
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Ticketbeskeder kunne ikke hentes." });
+  }
+});
+
+app.post("/api/tickets/:id/reply", async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: "Database er nødvendig." });
+    const content = String(req.body?.content || "").trim().slice(0, 4000);
+    if (!content) return res.status(400).json({ error: "Skriv et svar." });
+    const check = await db.query(
+      "SELECT id FROM public.tickets WHERE id = $1 AND (owner_user_id = $2 OR $3 = TRUE) LIMIT 1",
+      [req.params.id, req.user.id, req.user.role === "admin"]
+    );
+    if (!check.rowCount) return res.status(404).json({ error: "Ticket not found" });
+    const role = req.user.role === "admin" ? "admin" : "user";
+    const authorName = req.user.name || req.user.email || "Bruger";
+    const result = await db.query(
+      'INSERT INTO public.ticket_messages (ticket_id, author_user_id, author_name, author_role, content) VALUES ($1,$2,$3,$4,$5) RETURNING id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt"',
+      [req.params.id, req.user.id, authorName, role, content]
+    );
+    await db.query("UPDATE public.tickets SET status = 'pending' WHERE id = $1 AND status <> 'closed'", [req.params.id]);
+    log("ticket", "Ticket #" + req.params.id + " received a " + role + " reply", req.user.id);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Svar kunne ikke sendes." });
+  }
+});
+
+app.post("/api/tickets/:id/ai-reply", requireAdmin, async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: "Database er nødvendig." });
+    const ticketResult = await db.query(
+      'SELECT id, title, description FROM public.tickets WHERE id = $1 LIMIT 1',
+      [req.params.id]
+    );
+    const ticket = ticketResult.rows[0];
+    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+    const messagesResult = await db.query(
+      'SELECT author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 200',
+      [ticket.id]
+    );
+    const answer = await generateTicketAiReply(ticket, messagesResult.rows);
+    const result = await db.query(
+      'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4) RETURNING id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt"',
+      [ticket.id, "Shardnote Bot AI", "ai", answer]
+    );
+    await db.query("UPDATE public.tickets SET status = 'pending', handler = 'ai' WHERE id = $1", [ticket.id]);
+    log("ticket", "AI replied to ticket #" + ticket.id, req.user.id);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error("[Shardnote Bot] Ticket AI failed:", error);
+    res.status(500).json({ error: error.message || "AI-svar kunne ikke genereres." });
   }
 });
 
