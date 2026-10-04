@@ -37,7 +37,7 @@ function navigate(page){
   if(page==="commands") loadCommands();
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
-  if(page==="admin"){ loadUsers(); loadDatabaseSummary(); }
+  if(page==="admin"){ loadUsers(); loadDatabaseSummary(); loadIpCenter(); }
 }
 
 async function api(url, options){
@@ -381,7 +381,7 @@ async function banUser(id,type){
     });
     toast(type==="ip"?"✅ IP-ban oprettet":"✅ Bruger bannet");
     loadUsers();
-    if(result?.bannedIp) loadLogs();
+    if(document.getElementById("ipContent")?.style.display==="block") loadIpOverview();
   }catch(e){toast(e.message)}
 }
 
@@ -392,6 +392,99 @@ async function unbanUser(id){
     toast("✅ Ban fjernet");
     loadUsers();
   }catch(e){toast(e.message)}
+}
+
+
+function renderIpLocked(){
+  const content=document.getElementById("ipContent");
+  const panel=document.getElementById("ipLockPanel");
+  if(content) content.style.display="none";
+  if(panel) panel.style.display="block";
+  const input=document.getElementById("ipPassword");
+  if(input) input.value="";
+  const error=document.getElementById("ipUnlockError");
+  if(error) error.textContent="";
+}
+
+async function unlockIpCenter(){
+  const password=document.getElementById("ipPassword").value;
+  document.getElementById("ipUnlockError").textContent="";
+  try{
+    await api("/api/ip/unlock",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({password})});
+    document.getElementById("ipLockPanel").style.display="none";
+    document.getElementById("ipContent").style.display="block";
+    await loadIpOverview();
+    toast("IP-adresser er åbnet i 15 minutter");
+  }catch(e){
+    document.getElementById("ipUnlockError").textContent=e.message;
+  }
+}
+
+async function lockIpCenter(){
+  try{await api("/api/ip/lock",{method:"POST"});}catch(e){}
+  renderIpLocked();
+  toast("IP-adresser låst");
+}
+
+async function loadIpCenter(){
+  try{
+    await loadIpOverview();
+  }catch(e){}
+}
+
+async function loadIpOverview(){
+  try{
+    const data=await api("/api/ip/overview");
+    const loginRows=data.loginHistory||[];
+    const banRows=data.bannedIps||[];
+    const distinct=data.distinctIps||[];
+
+    const distinctNode=document.getElementById("ipDistinctList");
+    if(distinctNode){
+      distinctNode.innerHTML=distinct.length
+        ? distinct.map(function(ip){return '<span class="badge open" style="margin:3px">'+escapeHtml(ip)+'</span>';}).join("")
+        : '<div class="empty">Ingen gemte IP-adresser endnu.</div>';
+    }
+
+    const loginNode=document.getElementById("ipLoginList");
+    if(loginNode){
+      loginNode.innerHTML=loginRows.length
+        ? '<div class="table-wrap"><table class="table"><thead><tr><th>Tid</th><th>Bruger</th><th>Resultat</th><th>IP-adresse</th><th>Browser/enhed</th></tr></thead><tbody>'+
+          loginRows.map(function(item){
+            return '<tr><td>'+new Date(item.createdAt).toLocaleString("da-DK")+
+              '</td><td>'+escapeHtml(item.userName||item.userEmail||"Ukendt")+
+              '</td><td><span class="badge '+(item.success?"open":"closed")+'">'+(item.success?"Succes":"Fejlet")+
+              '</span></td><td><code>'+escapeHtml(item.ipAddress||"Ukendt")+
+              '</code></td><td title="'+escapeHtml(item.userAgent||"")+'">'+escapeHtml(item.userAgent||"Ukendt")+
+              '</td></tr>';
+          }).join("")+
+          '</tbody></table></div>'
+        : '<div class="empty">Ingen login-IP\'er endnu.</div>';
+    }
+
+    const banNode=document.getElementById("ipBanList");
+    if(banNode){
+      banNode.innerHTML=banRows.length
+        ? '<div class="table-wrap"><table class="table"><thead><tr><th>Bruger</th><th>Email</th><th>IP-adresse</th><th>Bannet</th></tr></thead><tbody>'+
+          banRows.map(function(item){
+            return '<tr><td>'+escapeHtml(item.name||"Ukendt")+
+              '</td><td>'+escapeHtml(item.email||"Ukendt")+
+              '</td><td><code>'+escapeHtml(item.ipAddress||"Ukendt")+
+              '</code></td><td>'+(item.bannedAt?new Date(item.bannedAt).toLocaleString("da-DK"):"Ukendt")+
+              '</td></tr>';
+          }).join("")+
+          '</tbody></table></div>'
+        : '<div class="empty">Ingen aktive IP-bans.</div>';
+    }
+
+    const panel=document.getElementById("ipLockPanel");
+    const content=document.getElementById("ipContent");
+    if(panel) panel.style.display="none";
+    if(content) content.style.display="block";
+  }catch(e){
+    if(e.message.includes("IP-adressecenteret er låst")) renderIpLocked();
+    else toast(e.message);
+  }
 }
 
 async function loadDatabaseSummary(){
