@@ -730,12 +730,12 @@ function createBot({ state, db, log, createTicket, setReady }) {
           PermissionFlagsBits.ManageMessages
         ])
       ];
-      const category = await ensureCategory(department.name, deptOverwrites);
+      const category = await ensureCategory(localizeTemplateName(department.name), deptOverwrites);
       const channels = [];
       for (const base of department.channels || []) {
         channels.push(await ensureText(
           department.key + "_" + base.toLowerCase().replace(/[^a-z0-9]+/g,""),
-          base,
+          localizeTemplateName(base),
           category,
           deptOverwrites
         ));
