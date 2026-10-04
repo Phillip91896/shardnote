@@ -227,6 +227,11 @@ const commands = [
     description: "Restore a ShardNote backup.",
     options: [{ type: 11, name: "file", description: "Backup JSON", required: true }]
   },
+  {
+    name: "redeem",
+    description: "Redeem a ShardNote serial key for a Discord role.",
+    options: [{ type: 3, name: "key", description: "Your ShardNote serial key", required: true }]
+  },
   { name: "music-join", description: "Join your current voice channel." },
   { name: "music-leave", description: "Leave the current voice channel." }
 ];
@@ -2044,6 +2049,69 @@ function createBot({ state, db, log, createTicket, setReady }) {
         await interaction.guild.channels.create({ name: channel.name, type: channel.type, reason: "ShardNote restore" }).then(() => channelCount++).catch(() => {});
       }
       await interaction.reply("♻️ Restore færdig: " + roleCount + " roller og " + channelCount + " kanaler.");
+      return true;
+    }
+
+    if (command === "redeem") {
+      if (!db) {
+        await interaction.reply({ content: "Database kræves.", ephemeral: true });
+        return true;
+      }
+
+      const key = interaction.options.getString("key", true).trim().toUpperCase();
+      const hash = require("crypto").createHash("sha256").update(key).digest("hex");
+      const result = await db.query(
+        'SELECT id, product_name AS "productName", guild_id AS "guildId", role_id AS "roleId", max_uses AS "maxUses", uses, expires_at AS "expiresAt", revoked FROM public.serial_keys WHERE key_hash = $1 LIMIT 1',
+        [hash]
+      );
+      const item = result.rows[0];
+
+      if (!item) {
+        await interaction.reply({ content: "❌ Serial key findes ikke.", ephemeral: true });
+        return true;
+      }
+      if (item.revoked) {
+        await interaction.reply({ content: "❌ Denne serial key er tilbagekaldt.", ephemeral: true });
+        return true;
+      }
+      if (String(item.guildId) !== String(interaction.guild.id)) {
+        await interaction.reply({ content: "❌ Denne serial key er lavet til en anden Discord-server.", ephemeral: true });
+        return true;
+      }
+      if (item.expiresAt && new Date(item.expiresAt).getTime() <= Date.now()) {
+        await interaction.reply({ content: "❌ Denne serial key er udløbet.", ephemeral: true });
+        return true;
+      }
+      if (item.uses >= item.maxUses) {
+        await interaction.reply({ content: "❌ Denne serial key er allerede brugt op.", ephemeral: true });
+        return true;
+      }
+
+      const role = interaction.guild.roles.cache.get(item.roleId);
+      if (!role) {
+        await interaction.reply({ content: "❌ Rollen findes ikke længere på serveren.", ephemeral: true });
+        return true;
+      }
+      if (!role.editable) {
+        await interaction.reply({ content: "❌ Jeg kan ikke give denne rolle. Flyt rollen under ShardNote-bottens rolle.", ephemeral: true });
+        return true;
+      }
+
+      await interaction.member.roles.add(role, "ShardNote serial key redemption");
+      const used = await db.query(
+        'UPDATE public.serial_keys SET uses = uses + 1, last_redeemed_by = $1, last_redeemed_at = NOW() WHERE id = $2 AND uses < max_uses RETURNING uses',
+        [interaction.user.id, item.id]
+      );
+      if (!used.rowCount) {
+        await interaction.reply({ content: "❌ Denne serial key blev brugt op lige før. Kontakt en administrator.", ephemeral: true });
+        return true;
+      }
+
+      log("security", "Discord serial key redeemed by " + interaction.user.tag + " for " + role.name);
+      await interaction.reply({
+        content: "✅ Serial key godkendt! Du har fået rollen **" + role.name + "**.",
+        ephemeral: true
+      });
       return true;
     }
 
