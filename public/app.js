@@ -935,6 +935,7 @@ function showPaywall(){
     <div id="paymentError" style="color:var(--red);font-size:12px;margin-top:12px"></div>
   </div>`;
   if(!box.parentElement) document.body.appendChild(box);
+  updateBillingDurationLabels();
   watchPayment();
 }
 function showLogin(){
@@ -1159,8 +1160,8 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
   });
 
   const EXTRA_TRANSLATIONS = {
-    "DANISH_ONLY":["Vælg din ShardNote-pakke","Vælg først hvor længe abonnementet skal løbe.","Abonnementsperiode","1 måned","3 måneder","12 måneder","Betalingen gentages efter den valgte periode: hver 1., 3. eller 12. måned.","Log ud","Din adgangskode","Dit navn","Mindst 8 tegn","Serial key","Aktivér key og opret konto","Har du allerede en konto?","Har du ikke en konto?","Opret konto","Log ind","Log ind på dit ShardNote-kontrolpanel.","Indtast serial key'en du fik efter købet. Key'en aktiverer din pakke med det samme.","Jeg har en serial key","Jeg har allerede en konto","Grundpakken","Se alle funktioner →","10 dage gratis","Alle funktioner + AI","Tickets og support-håndtering","Commands og grundlæggende botstyring","Standard moderation","Velkomstbeskeder","Forslag og Polls","Verification og Role panel","Flere bot- og serverfunktioner","Avancerede serverindstillinger","AI-kanaler kan vælges og gemmes fra dashboardet","Aktivitet","Send besked","Kør command","Gem ændringer","Opdater","Lås","Slet","Ingen beskeder endnu.","Ingen tickets endnu.","Skift status","Slet denne ticket?","Ticket titel:","Besked gemt","Ticket slettet","Bruger oprettet","Bruger slettet","Admin-adgang givet","Admin-adgang fjernet","Member Pro givet","Member Plus givet","Member givet","Tilbagekald","Tilbagekaldt","Udløbet","Brugt op","Aktiv","Ingen serial keys endnu.","Ingen aktive IP-bans.","Ingen gemte IP-adresser endnu.","Database-overblik","Supabase forbundet","Midlertidig hukommelse","Oprettet","Type","Hændelse","Tid","Bruger","Resultat","Browser/enhed","Succes","Fejlet","Ukendt","Henter logs…","Åbner…","Ingen logs i denne kategori endnu.","Ingen login-logs endnu.","Køb først en ShardNote-pakke, få din serial key, og brug den ved oprettelsen af din konto for at få adgang.","Jeg har købt denne pakke"],
-    "EN":["Choose your ShardNote plan","First choose how long the subscription should run.","Subscription period","1 month","3 months","12 months","Payment repeats after the selected period: every 1, 3, or 12 months.","Log out","Your password","Your name","At least 8 characters","Serial key","Activate key and create account","Already have an account?","Don't have an account?","Create account","Log in","Log in to your ShardNote control panel.","Enter the serial key you received after purchase. The key activates your package immediately.","I have a serial key","I already have an account","The basic package","See all features →","10 days free","All features + AI","Tickets and support handling","Commands and basic bot control","Standard moderation","Welcome messages","Suggestions and Polls","Verification and Role panel","More bot and server features","Advanced server settings","AI channels can be selected and saved from the dashboard","Activity","Send message","Run command","Save changes","Refresh","Lock","Delete","No messages yet.","No tickets yet.","Change status","Ticket title:","Message saved","Ticket deleted","User created","User deleted","Admin access granted","Admin access removed","Member Pro granted","Member Plus granted","Member granted","Revoke","Revoked","Expired","Used up","Active","No serial keys yet.","No active IP bans.","No stored IP addresses yet.","Database overview","Supabase connected","Temporary memory","Created","Type","Event","Time","User","Result","Browser/device","Success","Failed","Unknown","Loading logs…","Opening…","No logs in this category yet.","No login logs yet.","Buy a ShardNote package first, receive your serial key, and use it when creating your account to get access.","I bought this package"]
+    "DANISH_ONLY":["Vælg din ShardNote-pakke","Vælg først hvor længe abonnementet skal løbe.","Abonnementsperiode","1 måned","3 måneder","12 måneder","Betalingen gentages efter den valgte periode: hver 1., 3. eller 12. måned.","Log ud","Din adgangskode","Dit navn","Mindst 8 tegn","Serial key","Aktivér key og opret konto","Har du allerede en konto?","Har du ikke en konto?","Opret konto","Log ind","Log ind på dit ShardNote-kontrolpanel.","Indtast serial key'en du fik efter købet. Key'en aktiverer din pakke med det samme.","Jeg har en serial key","Jeg har allerede en konto","Grundpakken","Se alle funktioner →","10 dage gratis","Alle funktioner + AI","Tickets og support-håndtering","Commands og grundlæggende botstyring","Standard moderation","Velkomstbeskeder","Forslag og Polls","Verification og Role panel","Flere bot- og serverfunktioner","Avancerede serverindstillinger","AI-kanaler kan vælges og gemmes fra dashboardet","Aktivitet","Send besked","Kør command","Gem ændringer","Opdater","Lås","Slet","Ingen beskeder endnu.","Ingen tickets endnu.","Skift status","Slet denne ticket?","Ticket titel:","Besked gemt","Ticket slettet","Bruger oprettet","Bruger slettet","Admin-adgang givet","Admin-adgang fjernet","Member Pro givet","Member Plus givet","Member givet","Tilbagekald","Tilbagekaldt","Udløbet","Brugt op","Aktiv","Ingen serial keys endnu.","Ingen aktive IP-bans.","Ingen gemte IP-adresser endnu.","Database-overblik","Supabase forbundet","Midlertidig hukommelse","Oprettet","Type","Hændelse","Tid","Bruger","Resultat","Browser/enhed","Succes","Fejlet","Ukendt","Henter logs…","Åbner…","Ingen logs i denne kategori endnu.","Ingen login-logs endnu.","Køb først en ShardNote-pakke, få din serial key, og brug den ved oprettelsen af din konto for at få adgang.","Jeg har købt denne pakke","Vælg server","Vælg rolle","Ikke nødvendig for konto-key","Vælg en server","Produktnavn","Antal keys","Brug pr. key","Udløbsdato (valgfri)","Generér serial keys","Redeem key","Server-ID","Discord bruger-ID"],
+    "EN":["Choose your ShardNote plan","First choose how long the subscription should run.","Subscription period","1 month","3 months","12 months","Payment repeats after the selected period: every 1, 3, or 12 months.","Log out","Your password","Your name","At least 8 characters","Serial key","Activate key and create account","Already have an account?","Don't have an account?","Create account","Log in","Log in to your ShardNote control panel.","Enter the serial key you received after purchase. The key activates your package immediately.","I have a serial key","I already have an account","The basic package","See all features →","10 days free","All features + AI","Tickets and support handling","Commands and basic bot control","Standard moderation","Welcome messages","Suggestions and Polls","Verification and Role panel","More bot and server features","Advanced server settings","AI channels can be selected and saved from the dashboard","Activity","Send message","Run command","Save changes","Refresh","Lock","Delete","No messages yet.","No tickets yet.","Change status","Ticket title:","Message saved","Ticket deleted","User created","User deleted","Admin access granted","Admin access removed","Member Pro granted","Member Plus granted","Member granted","Revoke","Revoked","Expired","Used up","Active","No serial keys yet.","No active IP bans.","No stored IP addresses yet.","Database overview","Supabase connected","Temporary memory","Created","Type","Event","Time","User","Result","Browser/device","Success","Failed","Unknown","Loading logs…","Opening…","No logs in this category yet.","No login logs yet.","Buy a ShardNote package first, receive your serial key, and use it when creating your account to get access.","I bought this package","Select server","Select role","Not required for account key","Select a server","Product name","Number of keys","Uses per key","Expiration date (optional)","Generate serial keys","Redeem key","Server ID","Discord user ID"]
   };
   Object.entries(EXTRA_TRANSLATIONS.DANISH_ONLY).forEach((da,i)=>{
     const en=EXTRA_TRANSLATIONS.EN[i];
@@ -1235,11 +1236,21 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
     const title=document.getElementById("pageTitle");
     if(title && titles[pageKey]) title.textContent=translateValue(titles[pageKey]==="Admin-panel"?"Admin-panel":titles[pageKey]);
     document.querySelectorAll("body *").forEach(el=>{
-      if(["SCRIPT","STYLE","SELECT","OPTION"].includes(el.tagName)) return;
+      if(["SCRIPT","STYLE"].includes(el.tagName)) return;
       [...el.childNodes].forEach(translateNode);
     });
     translateAttributes(document);
     document.title="ShardNote — "+translateValue("Discord Control Center");
+  }
+
+  function updateBillingDurationLabels(){
+    const select=document.getElementById("billingMonths");
+    if(!select) return;
+    const english=current==="en";
+    const labels=english
+      ? ["1 month — Member €2.67 · Plus €4.68 · Pro €6.99","3 months — Member €8.01 · Plus €14.04 · Pro €20.97","12 months — Member €32.04 · Plus €56.16 · Pro €83.88"]
+      : ["1 måned — Member 2,67 € · Plus 4,68 € · Pro 6,99 €","3 måneder — Member 8,01 € · Plus 14,04 € · Pro 20,97 €","12 måneder — Member 32,04 € · Plus 56,16 € · Pro 83,88 €"];
+    [...select.options].forEach((opt,i)=>{if(labels[i]) opt.textContent=labels[i];});
   }
 
   function installPicker(){
@@ -1262,7 +1273,8 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
       current=select.value;
       localStorage.setItem("shardnote_language",current);
       translatePage();
-      if(typeof loadCommands==="function") setTimeout(()=>{try{loadCommands()}catch(e){}},0);
+      updateBillingDurationLabels();
+      if(typeof loadCommands==="function" setTimeout(()=>{try{loadCommands()}catch(e){}},0);
       if(typeof loadSettings==="function") setTimeout(()=>{try{applyButtonLabels();translatePage()}catch(e){}},0);
     });
     wrap.appendChild(select);
