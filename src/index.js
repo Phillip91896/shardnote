@@ -1241,7 +1241,7 @@ app.get("/api/stats", async (req, res) => {
     res.json({
       botOnline: linkedGuilds.length > 0,
       servers: linkedGuilds.length,
-      users: linkedGuilds.reduce((total, guild) => total + (guild.memberCount || 0), 0),
+      users: req.user?.role === "admin" ? linkedGuilds.reduce((total, guild) => total + (guild.memberCount || 0), 0) : null,
       tickets: openTickets,
       commands: client.dashboardCommands?.length || 0,
       uptime: Math.floor((Date.now() - startedAt) / 1000),
