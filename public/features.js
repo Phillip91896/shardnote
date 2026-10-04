@@ -132,7 +132,6 @@
             await renderFeatureSettings(selectedGuild);
           }catch(error){if(typeof window.toast==="function")window.toast(error.message);}
         });
-        document.getElementById("snFeature_ai_enabled").addEventListener("click",function(){this.classList.toggle("on");});
       }
 
 
