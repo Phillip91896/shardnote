@@ -1927,7 +1927,7 @@ body.locked > .app{display:none}
   <div class="grid stats">
     <div class="card"><div class="stat-title">BOT STATUS</div><div class="stat-value" id="statBot">—</div><div class="stat-foot">Live connection</div></div>
     <div class="card"><div class="stat-title">SERVERE</div><div class="stat-value" id="statServers">0</div><div class="stat-foot">Discord servers</div></div>
-    <div class="card"><div class="stat-title">BRUGERE</div><div class="stat-value" id="statUsers">0</div><div class="stat-foot">Members</div></div>
+    <div class="card" id="statUsersCard"><div class="stat-title">BRUGERE</div><div class="stat-value" id="statUsers">0</div><div class="stat-foot">Members</div></div>
     <div class="card"><div class="stat-title">ÅBNE TICKETS</div><div class="stat-value" id="statTickets">0</div><div class="stat-foot">Needs attention</div></div>
   </div>
   <div class="grid two" style="margin-top:18px">
