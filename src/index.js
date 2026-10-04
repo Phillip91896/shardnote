@@ -1028,6 +1028,54 @@ app.post("/api/register", async (req, res) => {
     res.status(500).json({ error: "Kontoen kunne ikke oprettes." });
   }
 });
+app.post("/api/license/redeem", requireAuth, async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: "Database er nødvendig." });
+    const key = String(req.body?.key || "").trim().toUpperCase();
+    if (!key) return res.status(400).json({ error: "Indtast din license key." });
+
+    const hash = hashSerialKey(key);
+    await db.query("BEGIN");
+    try {
+      const result = await db.query(
+        'SELECT id, product_name AS "productName", access_plan AS "accessPlan", max_uses AS "maxUses", uses, expires_at AS "expiresAt", revoked FROM public.serial_keys WHERE key_hash = $1 FOR UPDATE',
+        [hash]
+      );
+      const item = result.rows[0];
+      if (!item) throw Object.assign(new Error("License key findes ikke."), { statusCode: 404 });
+      if (item.revoked) throw Object.assign(new Error("Denne license key er tilbagekaldt."), { statusCode: 400 });
+      if (!item.accessPlan || !["member","member_plus","member_pro"].includes(item.accessPlan)) {
+        throw Object.assign(new Error("Denne key er ikke en Shardnote Bot-license key."), { statusCode: 400 });
+      }
+      if (item.expiresAt && new Date(item.expiresAt).getTime() <= Date.now()) {
+        throw Object.assign(new Error("Denne license key er udløbet."), { statusCode: 400 });
+      }
+      if (item.uses >= item.maxUses) throw Object.assign(new Error("Denne license key er allerede brugt op."), { statusCode: 400 });
+
+      await db.query(
+        "UPDATE public.users SET plan = $1, subscription_status = 'active', trial_used = TRUE WHERE id = $2",
+        [item.accessPlan, req.user.id]
+      );
+      const used = await db.query(
+        "UPDATE public.serial_keys SET uses = uses + 1, last_redeemed_by = $1, last_redeemed_at = NOW() WHERE id = $2 AND uses < max_uses RETURNING id",
+        [String(req.user.id), item.id]
+      );
+      if (!used.rowCount) throw Object.assign(new Error("Denne license key blev brugt op lige før."), { statusCode: 409 });
+
+      await db.query("COMMIT");
+      log("billing", "License redeemed by user #" + req.user.id + " (" + item.accessPlan + ")", req.user.id);
+      res.json({ ok: true, productName: item.productName, plan: item.accessPlan });
+    } catch (error) {
+      await db.query("ROLLBACK");
+      if (error.statusCode) return res.status(error.statusCode).json({ error: error.message });
+      throw error;
+    }
+  } catch (error) {
+    console.error("[Shardnote Bot] License redeem failed:", error);
+    res.status(500).json({ error: "License kunne ikke aktiveres." });
+  }
+});
+
 app.post("/api/logout", (req, res) => {
   const sid = parseCookies(req).Shardnote Bot_session;
   if (sid) {
@@ -1659,7 +1707,7 @@ app.use("/api", (req, res, next) => {
   if (["/login", "/register", "/logout", "/me"].includes(req.path) || req.path === "/health") return next();
   requireAuth(req,res,async()=>{
     try{
-      if(["/billing/create-checkout","/billing/status","/billing/portal"].some(path=>req.path.startsWith(path))) return next();
+      if(["/billing/create-checkout","/billing/status","/billing/portal","/license/redeem"].some(path=>req.path.startsWith(path))) return next();
       if(!hasPaidAccess(req.user))return res.status(402).json({requiresSubscription:true,error:"Et aktivt Shardnote Bot-abonnement kræves."});
       next();
     }catch(error){console.error(error);res.status(500).json({error:"Adgangskontrol kunne ikke gennemføres."});}
