@@ -105,7 +105,6 @@ async function newTicket(){
   toast(handler==="ai"?"🤖 Ticket oprettet til AI":handler==="admins"?"👑 Ticket oprettet til Admins":"🎫 Ticket oprettet");
   loadTickets();loadStats();
 }
-}
 async function setTicketHandler(id,handler){
   try{
     await api("/api/tickets/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({handler})});
