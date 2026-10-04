@@ -227,8 +227,8 @@ async function loadCommands(){
   const available=document.querySelector("#page-commands .card:nth-child(2) .section-title h2");
   if(title) title.textContent=danish?"Kommandocenter":"Command Center";
   if(label) label.textContent=danish?"Kommando":"Command";
-  if(available) available.textContent=danish?"Tilgængelige commands":"Tilgængelige commands";
-  document.getElementById("commandCount").textContent=(danish?commands.length+" commands":commands.length+" commands");
+  if(available) available.textContent=danish?"Tilgængelige commands":"Available commands";
+  document.getElementById("commandCount").textContent=commands.length+" "+(danish?"commands":"commands");
   document.getElementById("commandList").innerHTML=commands.map(c=>{
     const description=danish?(DANISH_COMMAND_DESCRIPTIONS[c.name]||c.description):c.description;
     return `<div class="activity-item"><div class="activity-icon">⌘</div><div><b>${escapeHtml(c.usage)}</b><small>${escapeHtml(description)}</small></div></div>`;
@@ -680,12 +680,13 @@ function unlockDashboard(){
   loadStats();
 }
 
-async function startSubscription(plan="member"){
+async function startSubscription(plan="member",months=1){
   try{
+    const selectedMonths=[1,3,12].includes(Number(months)) ? Number(months) : 1;
     const r=await fetch("/api/billing/create-checkout",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({plan})
+      body:JSON.stringify({plan,months:selectedMonths})
     });
     const data=await r.json();
     if(!r.ok) throw new Error(data.error||"Betalingssiden kunne ikke åbnes.");
@@ -915,13 +916,21 @@ function showPaywall(){
   box.innerHTML=`<div class="login-card" style="text-align:center">
     <div class="brand" style="justify-content:center;padding:0 0 16px"><div class="brand-mark">S</div><span>ShardNote</span></div>
     <h1>Vælg din ShardNote-pakke</h1>
-    <p>Du får <b>10 dage gratis</b>. Vælg Member til <b>2,67 €</b> eller Member Plus til <b>4,68 € pr. måned</b>.</p>
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px">
-      <button class="btn primary" onclick="startSubscription('member')">Member · 2,67 €</button>
-      <button class="btn primary" onclick="startSubscription('member_plus')">Member Plus · 4,68 €</button>
-      <button class="btn primary" onclick="startSubscription('member_pro')">Member Pro · 6,99 €</button>
+    <p>Du får <b>10 dage gratis</b>. Vælg først hvor længe abonnementet skal løbe.</p>
+    <div class="field" style="text-align:left;margin-top:14px">
+      <label>Abonnementsperiode</label>
+      <select id="billingMonths" style="width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none">
+        <option value="1">1 måned — Member 2,67 € · Plus 4,68 € · Pro 6,99 €</option>
+        <option value="3">3 måneder — Member 8,01 € · Plus 14,04 € · Pro 20,97 €</option>
+        <option value="12">12 måneder — Member 32,04 € · Plus 56,16 € · Pro 83,88 €</option>
+      </select>
     </div>
-    <div style="font-size:12px;color:var(--muted);margin-top:12px">Når betalingen er godkendt, gemmes din pakke automatisk på kontoen. Næste gang du logger ind, går du direkte ind på dashboardet.</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px">
+      <button class="btn primary" onclick="startSubscription('member',Number(document.getElementById('billingMonths').value))">Member</button>
+      <button class="btn primary" onclick="startSubscription('member_plus',Number(document.getElementById('billingMonths').value))">Member Plus</button>
+      <button class="btn primary" onclick="startSubscription('member_pro',Number(document.getElementById('billingMonths').value))">Member Pro</button>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-top:12px">Betalingen gentages efter den valgte periode: hver 1., 3. eller 12. måned.</div>
     <button class="btn small" style="margin-top:18px" onclick="logout()">Log ud</button>
     <div id="paymentError" style="color:var(--red);font-size:12px;margin-top:12px"></div>
   </div>`;
@@ -1147,6 +1156,15 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
   Object.keys(LANGS).forEach((lang, index)=>{
     dict[lang]={};
     keys.forEach(key=>{ dict[lang][key]=P[key][index] || P[key][0]; });
+  });
+
+  const EXTRA_TRANSLATIONS = {
+    "DANISH_ONLY":["Vælg din ShardNote-pakke","Vælg først hvor længe abonnementet skal løbe.","Abonnementsperiode","1 måned","3 måneder","12 måneder","Betalingen gentages efter den valgte periode: hver 1., 3. eller 12. måned.","Log ud","Din adgangskode","Dit navn","Mindst 8 tegn","Serial key","Aktivér key og opret konto","Har du allerede en konto?","Har du ikke en konto?","Opret konto","Log ind","Log ind på dit ShardNote-kontrolpanel.","Indtast serial key'en du fik efter købet. Key'en aktiverer din pakke med det samme.","Jeg har en serial key","Jeg har allerede en konto","Grundpakken","Se alle funktioner →","10 dage gratis","Alle funktioner + AI","Tickets og support-håndtering","Commands og grundlæggende botstyring","Standard moderation","Velkomstbeskeder","Forslag og Polls","Verification og Role panel","Flere bot- og serverfunktioner","Avancerede serverindstillinger","AI-kanaler kan vælges og gemmes fra dashboardet","Aktivitet","Send besked","Kør command","Gem ændringer","Opdater","Lås","Slet","Ingen beskeder endnu.","Ingen tickets endnu.","Skift status","Slet denne ticket?","Ticket titel:","Besked gemt","Ticket slettet","Bruger oprettet","Bruger slettet","Admin-adgang givet","Admin-adgang fjernet","Member Pro givet","Member Plus givet","Member givet","Tilbagekald","Tilbagekaldt","Udløbet","Brugt op","Aktiv","Ingen serial keys endnu.","Ingen aktive IP-bans.","Ingen gemte IP-adresser endnu.","Database-overblik","Supabase forbundet","Midlertidig hukommelse","Oprettet","Type","Hændelse","Tid","Bruger","Resultat","Browser/enhed","Succes","Fejlet","Ukendt","Henter logs…","Åbner…","Ingen logs i denne kategori endnu.","Ingen login-logs endnu.","Køb først en ShardNote-pakke, få din serial key, og brug den ved oprettelsen af din konto for at få adgang.","Jeg har købt denne pakke"],
+    "EN":["Choose your ShardNote plan","First choose how long the subscription should run.","Subscription period","1 month","3 months","12 months","Payment repeats after the selected period: every 1, 3, or 12 months.","Log out","Your password","Your name","At least 8 characters","Serial key","Activate key and create account","Already have an account?","Don't have an account?","Create account","Log in","Log in to your ShardNote control panel.","Enter the serial key you received after purchase. The key activates your package immediately.","I have a serial key","I already have an account","The basic package","See all features →","10 days free","All features + AI","Tickets and support handling","Commands and basic bot control","Standard moderation","Welcome messages","Suggestions and Polls","Verification and Role panel","More bot and server features","Advanced server settings","AI channels can be selected and saved from the dashboard","Activity","Send message","Run command","Save changes","Refresh","Lock","Delete","No messages yet.","No tickets yet.","Change status","Ticket title:","Message saved","Ticket deleted","User created","User deleted","Admin access granted","Admin access removed","Member Pro granted","Member Plus granted","Member granted","Revoke","Revoked","Expired","Used up","Active","No serial keys yet.","No active IP bans.","No stored IP addresses yet.","Database overview","Supabase connected","Temporary memory","Created","Type","Event","Time","User","Result","Browser/device","Success","Failed","Unknown","Loading logs…","Opening…","No logs in this category yet.","No login logs yet.","Buy a ShardNote package first, receive your serial key, and use it when creating your account to get access.","I bought this package"]
+  };
+  Object.entries(EXTRA_TRANSLATIONS.DANISH_ONLY).forEach((da,i)=>{
+    const en=EXTRA_TRANSLATIONS.EN[i];
+    if(en){ dict.da[en]=da; dict.en[da]=en; }
   });
 
   const styles = document.createElement("style");
