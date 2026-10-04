@@ -95,7 +95,13 @@
       const r=response.result||{};
       if(result)result.innerHTML='<div class="badge open">✅ '+esc(r.name||selectedTemplate)+' er sat op</div>'+
         '<div style="color:var(--muted);font-size:12px;margin-top:8px">'+esc(String(r.createdRoles||0))+' nye roller · '+esc(String((r.channels||[]).length))+' kanaler behandlet</div>';
-    }catch(error){if(result)result.innerHTML='<div class="badge closed">'+esc(error.message)+'</div>';}
+    }catch(error){
+      if(result){
+        const permissionError=String(error.message||"").includes("mangler rettighederne");
+        result.innerHTML='<div class="badge closed">'+esc(error.message)+'</div>'+
+          (permissionError ? '<div style="margin-top:10px"><button type="button" class="btn small" onclick="addBotToDiscord()">🔐 Opdater bot-rettigheder</button></div>' : '');
+      }
+    }
     finally{button.disabled=false;button.textContent="🚀 Opsæt denne skitse";}
   }
   async function renderPage(){
