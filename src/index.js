@@ -164,6 +164,19 @@ async function initDatabase() {
   `);
 
   await db.query(`
+    ALTER TABLE public.login_audit
+      ADD COLUMN IF NOT EXISTS ip_encrypted TEXT
+  `);
+
+  await db.query(`
+    ALTER TABLE public.users
+      ADD COLUMN IF NOT EXISTS banned_ip_hash TEXT,
+      ADD COLUMN IF NOT EXISTS banned_ip_encrypted TEXT
+  `);
+
+  await migrateProtectedIpData();
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS public.account_settings (
       user_id BIGINT PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
       prefix VARCHAR(5) NOT NULL DEFAULT '!',
@@ -367,6 +380,94 @@ function log(type, message, ownerUserId = null) {
 
 const sessions = new Map();
 const logsUnlocks = new Map();
+const ipUnlocks = new Map();
+
+function getIpEncryptionKey() {
+  const secret = String(process.env.IP_ENCRYPTION_KEY || "").trim();
+  if (!secret) throw new Error("IP_ENCRYPTION_KEY is not configured.");
+  return crypto.createHash("sha256").update(secret).digest();
+}
+
+function normalizeIp(ip) {
+  return String(ip || "").trim().replace(/^::ffff:/, "");
+}
+
+function encryptIp(ip) {
+  const normalized = normalizeIp(ip);
+  if (!normalized) return null;
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv("aes-256-gcm", getIpEncryptionKey(), iv);
+  const encrypted = Buffer.concat([cipher.update(normalized, "utf8"), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return [iv.toString("hex"), tag.toString("hex"), encrypted.toString("hex")].join(".");
+}
+
+function decryptIp(value) {
+  if (!value) return null;
+  try {
+    const [ivHex, tagHex, encryptedHex] = String(value).split(".");
+    if (!ivHex || !tagHex || !encryptedHex) return null;
+    const decipher = crypto.createDecipheriv(
+      "aes-256-gcm",
+      getIpEncryptionKey(),
+      Buffer.from(ivHex, "hex")
+    );
+    decipher.setAuthTag(Buffer.from(tagHex, "hex"));
+    return decipher.update(Buffer.from(encryptedHex, "hex")).toString("utf8") + decipher.final("utf8");
+  } catch {
+    return null;
+  }
+}
+
+function hashIp(ip) {
+  const normalized = normalizeIp(ip);
+  if (!normalized) return null;
+  return crypto.createHmac("sha256", getIpEncryptionKey()).update(normalized).digest("hex");
+}
+
+async function migrateProtectedIpData() {
+  if (!db) return;
+
+  while (true) {
+    const result = await db.query(
+      `SELECT id, host(ip_address) AS ip
+       FROM public.login_audit
+       WHERE ip_address IS NOT NULL AND (ip_encrypted IS NULL OR ip_encrypted = '')
+       ORDER BY id ASC
+       LIMIT 500`
+    );
+    if (!result.rowCount) break;
+    for (const row of result.rows) {
+      const encrypted = encryptIp(row.ip);
+      if (!encrypted) continue;
+      await db.query(
+        "UPDATE public.login_audit SET ip_encrypted = $1, ip_address = NULL WHERE id = $2",
+        [encrypted, row.id]
+      );
+    }
+  }
+
+  while (true) {
+    const result = await db.query(
+      `SELECT id, host(banned_ip) AS ip
+       FROM public.users
+       WHERE banned_ip IS NOT NULL
+       ORDER BY id ASC
+       LIMIT 500`
+    );
+    if (!result.rowCount) break;
+    for (const row of result.rows) {
+      const encrypted = encryptIp(row.ip);
+      const hash = hashIp(row.ip);
+      await db.query(
+        `UPDATE public.users
+         SET banned_ip_encrypted = $1, banned_ip_hash = $2, banned_ip = NULL
+         WHERE id = $3`,
+        [encrypted, hash, row.id]
+      );
+    }
+  }
+}
 
 function getSessionId(req) {
   return parseCookies(req).shardnote_session;
@@ -389,43 +490,13 @@ function getClientIp(req) {
 
 const geoCache = new Map();
 
-async function lookupIpLocation(ip) {
-  if (!ip || ip === "127.0.0.1" || ip === "::1" || ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("172.16.")) {
-    return { country: null, city: null };
-  }
-
-  if (geoCache.has(ip)) return geoCache.get(ip);
-
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1200);
-
-  try {
-    const response = await fetch(`https://ipapi.co/${encodeURIComponent(ip)}/json/`, {
-      signal: controller.signal,
-      headers: { "User-Agent": "ShardNote/1.0" }
-    });
-
-    if (!response.ok) return { country: null, city: null };
-
-    const data = await response.json();
-    const location = {
-      country: data.country_name || data.country || null,
-      city: data.city || null
-    };
-
-    geoCache.set(ip, location);
-    return location;
-  } catch {
-    return { country: null, city: null };
-  } finally {
-    clearTimeout(timeout);
-  }
+async function lookupIpLocation() {
+  return { country: null, city: null };
 }
 
 async function recordLoginAudit({ req, user, success, eventType }) {
   const ipAddress = getClientIp(req);
-  const userAgent = String(req.headers["user-agent"] || "").slice(0, 1000);
-  const location = await lookupIpLocation(ipAddress);
+  const ipEncrypted = ipAddress ? encryptIp(ipAddress) : null;
 
   const item = {
     id: Date.now() + Math.random(),
@@ -434,25 +505,25 @@ async function recordLoginAudit({ req, user, success, eventType }) {
     userEmail: user?.email || null,
     eventType,
     success: !!success,
-    ipAddress,
-    userAgent,
-    country: location.country,
-    city: location.city,
+    ipEncrypted,
+    userAgent: String(req.headers["user-agent"] || "").slice(0, 1000),
+    country: null,
+    city: null,
     createdAt: new Date().toISOString()
   };
 
   if (db) {
     await db.query(
       `INSERT INTO public.login_audit
-       (user_id, user_name, user_email, event_type, success, ip_address, user_agent, country, city)
-       VALUES ($1, $2, $3, $4, $5, NULLIF($6, '')::inet, $7, $8, $9)`,
+       (user_id, user_name, user_email, event_type, success, ip_address, ip_encrypted, user_agent, country, city)
+       VALUES ($1, $2, $3, $4, $5, NULL, $6, $7, $8, $9)`,
       [
         item.userId,
         item.userName,
         item.userEmail,
         item.eventType,
         item.success,
-        "",
+        item.ipEncrypted,
         item.userAgent,
         item.country,
         item.city
@@ -704,8 +775,7 @@ app.post("/api/login", async (req, res) => {
                 subscription_current_period_end AS "subscriptionCurrentPeriodEnd",
                 banned,
                 ban_type AS "banType",
-                host(banned_ip) AS "bannedIp",
-                banned_at AS "bannedAt"
+                     banned_at AS "bannedAt"
          FROM users WHERE email = $1 LIMIT 1`,
         [email]
       );
@@ -755,9 +825,10 @@ app.post("/api/login", async (req, res) => {
 
     if (db) {
       const ip = getClientIp(req);
+      const ipHash = hashIp(ip);
       const ipBan = await db.query(
-        "SELECT 1 FROM public.users WHERE banned = TRUE AND ban_type = 'ip' AND banned_ip = $1::inet LIMIT 1",
-        [ip]
+        "SELECT 1 FROM public.users WHERE banned = TRUE AND ban_type = 'ip' AND banned_ip_hash = $1 LIMIT 1",
+        [ipHash]
       );
       if (ip && ipBan.rowCount) {
         await recordLoginAudit({ req, user, success: false, eventType: "ip_ban_blocked" });
@@ -825,9 +896,10 @@ app.post("/api/register", async (req, res) => {
 
       const clientIp = getClientIp(req);
       if (clientIp) {
+        const ipHash = hashIp(clientIp);
         const ipBan = await db.query(
-          "SELECT 1 FROM public.users WHERE banned = TRUE AND ban_type = 'ip' AND banned_ip = $1::inet LIMIT 1",
-          [clientIp]
+          "SELECT 1 FROM public.users WHERE banned = TRUE AND ban_type = 'ip' AND banned_ip_hash = $1 LIMIT 1",
+          [ipHash]
         );
         if (ipBan.rowCount) return res.status(403).json({ error: "Denne IP-adresse er bannet." });
       }
@@ -851,7 +923,8 @@ app.post("/api/register", async (req, res) => {
         return res.status(409).json({ error: "Der findes allerede en konto med den email." });
       }
       const clientIp = getClientIp(req);
-      if (clientIp && state.users.some(u => u.banned && u.banType === "ip" && u.bannedIp === clientIp)) {
+      const ipHash = hashIp(clientIp);
+      if (clientIp && state.users.some(u => u.banned && u.banType === "ip" && u.bannedIpHash === ipHash)) {
         return res.status(403).json({ error: "Denne IP-adresse er bannet." });
       }
 
@@ -894,7 +967,11 @@ app.post("/api/register", async (req, res) => {
 
 app.post("/api/logout", (req, res) => {
   const sid = parseCookies(req).shardnote_session;
-  if (sid) sessions.delete(sid);
+  if (sid) {
+    sessions.delete(sid);
+    logsUnlocks.delete(sid);
+    ipUnlocks.delete(sid);
+  }
   res.setHeader("Set-Cookie", "shardnote_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
   res.json({ ok: true });
 });
@@ -980,7 +1057,6 @@ app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
            id, name, email, role, plan,
            banned,
            ban_type AS "banType",
-           host(banned_ip) AS "bannedIp",
            banned_at AS "bannedAt",
            created_at AS "createdAt"
          FROM users ORDER BY id ASC`
@@ -1170,14 +1246,14 @@ app.patch("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res
 
       if (banType === "ip") {
         const loginIp = await db.query(
-          `SELECT host(ip_address) AS ip
+          `SELECT ip_encrypted
            FROM public.login_audit
-           WHERE user_id = $1 AND success = TRUE AND ip_address IS NOT NULL
+           WHERE user_id = $1 AND success = TRUE AND ip_encrypted IS NOT NULL
            ORDER BY created_at DESC
            LIMIT 1`,
           [id]
         );
-        bannedIp = loginIp.rows[0]?.ip || null;
+        bannedIp = decryptIp(loginIp.rows[0]?.ip_encrypted);
         if (!bannedIp) return res.status(400).json({ error: "Der er ingen registreret IP-adresse for denne bruger endnu. Brugeren skal logge ind mindst én gang først." });
       }
 
@@ -1185,10 +1261,17 @@ app.patch("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res
         `UPDATE public.users
          SET banned = TRUE,
              ban_type = $1,
-             banned_ip = CASE WHEN $1 = 'ip' THEN $2::inet ELSE NULL END,
+             banned_ip = NULL,
+             banned_ip_hash = CASE WHEN $1 = 'ip' THEN $2 ELSE NULL END,
+             banned_ip_encrypted = CASE WHEN $1 = 'ip' THEN $3 ELSE NULL END,
              banned_at = NOW()
-         WHERE id = $3`,
-        [banType, bannedIp, id]
+         WHERE id = $4`,
+        [
+          banType,
+          banType === "ip" ? hashIp(bannedIp) : null,
+          banType === "ip" ? encryptIp(bannedIp) : null,
+          id
+        ]
       );
     } else {
       const target = state.users.find(u => Number(u.id) === id);
@@ -1196,12 +1279,14 @@ app.patch("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res
       userEmail = target.email;
       if (banType === "ip") {
         const audit = state.loginAudit.find(item => Number(item.userId) === id && item.success && item.ipAddress);
-        bannedIp = audit?.ipAddress || null;
+        bannedIp = decryptIp(audit?.ipEncrypted) || null;
         if (!bannedIp) return res.status(400).json({ error: "Der er ingen registreret IP-adresse for denne bruger endnu." });
       }
       target.banned = true;
       target.banType = banType;
-      target.bannedIp = banType === "ip" ? bannedIp : null;
+      target.bannedIp = null;
+      target.bannedIpHash = banType === "ip" ? hashIp(bannedIp) : null;
+      target.bannedIpEncrypted = banType === "ip" ? encryptIp(bannedIp) : null;
       target.bannedAt = new Date().toISOString();
     }
 
@@ -1210,7 +1295,7 @@ app.patch("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res
     }
 
     log("security", `Admin ${req.user.email} banned ${userEmail} (${banType})`);
-    res.json({ ok: true, banType, bannedIp });
+    res.json({ ok: true, banType });
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Brugeren kunne ikke bannes." });
@@ -1225,7 +1310,7 @@ app.patch("/api/admin/users/:id/unban", requireAuth, requireAdmin, async (req, r
 
     if (db) {
       const result = await db.query(
-        "UPDATE public.users SET banned = FALSE, ban_type = NULL, banned_ip = NULL, banned_at = NULL WHERE id = $1 RETURNING id, email",
+        "UPDATE public.users SET banned = FALSE, ban_type = NULL, banned_ip = NULL, banned_ip_hash = NULL, banned_ip_encrypted = NULL, banned_at = NULL WHERE id = $1 RETURNING id, email",
         [id]
       );
       if (!result.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
@@ -1698,6 +1783,113 @@ app.patch("/api/settings", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+app.post("/api/ip/unlock", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const accessCode = String(req.body.password || "");
+    const configuredCode = String(process.env.IP_ACCESS_CODE || "");
+    if (!accessCode) return res.status(400).json({ error: "IP-kode mangler." });
+    if (!configuredCode) return res.status(503).json({ error: "IP-koden er ikke konfigureret endnu." });
+
+    const providedHash = crypto.createHash("sha256").update(accessCode).digest();
+    const configuredHash = crypto.createHash("sha256").update(configuredCode).digest();
+    const valid = crypto.timingSafeEqual(providedHash, configuredHash);
+    if (!valid) return res.status(401).json({ error: "Forkert IP-kode." });
+
+    const sid = getSessionId(req);
+    ipUnlocks.set(sid, Date.now() + 15 * 60 * 1000);
+    log("security", `IP-adressecenter låst op af ${req.user.email}`);
+    res.json({ ok: true, expiresInSeconds: 900 });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke låse IP-adresserne op." });
+  }
+});
+
+app.post("/api/ip/lock", requireAuth, requireAdmin, (req, res) => {
+  const sid = getSessionId(req);
+  if (sid) ipUnlocks.delete(sid);
+  res.json({ ok: true });
+});
+
+app.get("/api/ip/overview", requireAuth, requireAdmin, requireIpAccess, async (req, res) => {
+  try {
+    if (db) {
+      const [auditResult, banResult] = await Promise.all([
+        db.query(
+          `SELECT
+             id,
+             user_id AS "userId",
+             user_name AS "userName",
+             user_email AS "userEmail",
+             event_type AS "eventType",
+             success,
+             ip_encrypted AS "ipEncrypted",
+             user_agent AS "userAgent",
+             created_at AS "createdAt"
+           FROM public.login_audit
+           ORDER BY created_at DESC
+           LIMIT 500`
+        ),
+        db.query(
+          `SELECT
+             id,
+             name,
+             email,
+             banned_at AS "bannedAt",
+             banned_ip_encrypted AS "ipEncrypted"
+           FROM public.users
+           WHERE banned = TRUE AND ban_type = 'ip' AND banned_ip_encrypted IS NOT NULL
+           ORDER BY banned_at DESC NULLS LAST, id ASC`
+        )
+      ]);
+
+      const loginHistory = auditResult.rows.map(row => ({
+        id: row.id,
+        userId: row.userId,
+        userName: row.userName,
+        userEmail: row.userEmail,
+        eventType: row.eventType,
+        success: !!row.success,
+        ipAddress: decryptIp(row.ipEncrypted),
+        userAgent: row.userAgent || "",
+        createdAt: row.createdAt
+      }));
+      const bannedIps = banResult.rows.map(row => ({
+        id: row.id,
+        name: row.name,
+        email: row.email,
+        ipAddress: decryptIp(row.ipEncrypted),
+        bannedAt: row.bannedAt
+      }));
+      const distinctIps = [...new Set(
+        [...loginHistory.map(item => item.ipAddress), ...bannedIps.map(item => item.ipAddress)].filter(Boolean)
+      )];
+      return res.json({ loginHistory, bannedIps, distinctIps });
+    }
+
+    const loginHistory = state.loginAudit.map(item => ({
+      ...item,
+      ipAddress: decryptIp(item.ipEncrypted)
+    }));
+    const bannedIps = state.users
+      .filter(u => u.banned && u.banType === "ip" && u.bannedIpEncrypted)
+      .map(u => ({
+        id: u.id,
+        name: u.name,
+        email: u.email,
+        ipAddress: decryptIp(u.bannedIpEncrypted),
+        bannedAt: u.bannedAt
+      }));
+    const distinctIps = [...new Set(
+      [...loginHistory.map(item => item.ipAddress), ...bannedIps.map(item => item.ipAddress)].filter(Boolean)
+    )];
+    res.json({ loginHistory, bannedIps, distinctIps });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente de beskyttede IP-adresser." });
+  }
+});
+
 app.post("/api/logs/unlock", requireAuth, requireAdmin, async (req, res) => {
   try {
     const accessCode = String(req.body.password || "");
@@ -1733,6 +1925,26 @@ function requireLogsAccess(req, res, next) {
     return res.status(423).json({
       locked: true,
       error: "Logs er låst. Indtast din admin-adgangskode for at åbne dem."
+    });
+  }
+  next();
+}
+
+function hasIpAccess(req) {
+  const sid = getSessionId(req);
+  const expiresAt = sid ? ipUnlocks.get(sid) : 0;
+  if (!expiresAt || expiresAt <= Date.now()) {
+    if (sid) ipUnlocks.delete(sid);
+    return false;
+  }
+  return true;
+}
+
+function requireIpAccess(req, res, next) {
+  if (!hasIpAccess(req)) {
+    return res.status(423).json({
+      locked: true,
+      error: "IP-adressecenteret er låst. Indtast den særlige IP-kode."
     });
   }
   next();
@@ -1804,7 +2016,7 @@ app.get("/api/logs", requireAuth, requireAdmin, requireLogsAccess, async (req, r
              user_email AS "userEmail",
              event_type AS "eventType",
              success,
-             host(ip_address) AS "ipAddress",
+             NULL AS "ipAddress",
              user_agent AS "userAgent",
              country,
              city,
