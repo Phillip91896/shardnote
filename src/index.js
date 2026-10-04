@@ -8,7 +8,7 @@ const Stripe = require("stripe");
 const app = express();
 const PORT = process.env.PORT || 3000;
 const stripe = process.env.STRIPE_SECRET_KEY ? new Stripe(process.env.STRIPE_SECRET_KEY) : null;
-const PUBLIC_SITE_URL = String(process.env.PUBLIC_SITE_URL || "https://Shardnote Bot-mxj3.onrender.com").replace(/\/$/, "");
+const PUBLIC_SITE_URL = String(process.env.PUBLIC_SITE_URL || "https://shardnote-mxj3.onrender.com").replace(/\/$/, "");
 
 app.set("trust proxy", 1);
 
@@ -1728,21 +1728,13 @@ app.use("/api", (req, res, next) => {
 
 app.get("/api/stats", async (req, res) => {
   try {
-    let linkedGuildIds = [];
-    if (db && req.user?.role !== "admin") {
-      const linked = await db.query("SELECT guild_id FROM public.account_guilds WHERE user_id = $1", [req.user.id]);
-      linkedGuildIds = linked.rows.map(row => String(row.guild_id));
-    }
-
     const botReady = typeof client.isReady === "function" ? client.isReady() : discordReady;
-    const cachedGuilds = botReady ? [...client.guilds.cache.values()] : [];
-    const linkedGuilds = req.user?.role === "admin"
-      ? cachedGuilds
-      : cachedGuilds.filter(guild => linkedGuildIds.includes(String(guild.id)));
+    const linkedGuilds = botReady ? [...client.guilds.cache.values()] : [];
 
     let openTickets = req.user?.role === "admin"
       ? state.tickets.filter(t => t.status !== "closed").length
       : state.tickets.filter(t => t.ownerUserId === req.user.id && t.status !== "closed").length;
+
     if (db) {
       const result = req.user?.role === "admin"
         ? await db.query("SELECT COUNT(*)::int AS count FROM public.tickets WHERE status <> 'closed'")
@@ -1750,10 +1742,15 @@ app.get("/api/stats", async (req, res) => {
       openTickets = result.rows[0].count;
     }
 
+    const memberCount = linkedGuilds.reduce(
+      (total, guild) => total + Number(guild.memberCount || 0),
+      0
+    );
+
     res.json({
       botOnline: botReady,
       servers: linkedGuilds.length,
-      users: req.user?.role === "admin" ? linkedGuilds.reduce((total, guild) => total + (guild.memberCount || 0), 0) : null,
+      users: memberCount,
       tickets: openTickets,
       commands: client.dashboardCommands?.length || 0,
       uptime: Math.floor((Date.now() - startedAt) / 1000),
