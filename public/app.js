@@ -126,9 +126,8 @@ async function loadStats(){
     document.getElementById("statServers").textContent=s.servers;
     const usersCard=document.getElementById("statUsersCard");
     if(usersCard){
-      const isAdmin=currentUser?.role==="admin";
-      usersCard.style.display=isAdmin?"":"none";
-      if(isAdmin) document.getElementById("statUsers").textContent=s.users ?? 0;
+      usersCard.style.display="";
+      document.getElementById("statUsers").textContent=s.users ?? 0;
     }
     document.getElementById("statTickets").textContent=s.tickets;
     document.getElementById("statusText").textContent=s.botOnline?"Discord connected":"Web mode";
