@@ -79,13 +79,39 @@ async function loadStats(){
 
 async function loadTickets(){
   const tickets=await api("/api/tickets");
-  document.getElementById("ticketList").innerHTML=tickets.length?`<table class="table"><thead><tr><th>ID</th><th>Titel</th><th>Bruger</th><th>Status</th><th>Prioritet</th><th>Handlinger</th></tr></thead><tbody>${tickets.map(t=>`<tr><td>#${t.id}</td><td>${escapeHtml(t.title)}</td><td>${escapeHtml(t.user)}</td><td><span class="badge ${t.status}">${t.status}</span></td><td>${t.priority}</td><td><button class="btn small" onclick="cycleTicket('${t.id}','${t.status}')">Skift status</button> <button class="btn small danger" onclick="deleteTicket('${t.id}')">Slet</button></td></tr>`).join("")}</tbody></table>`:'<div class="empty">Ingen tickets endnu.</div>';
+  document.getElementById("ticketList").innerHTML=tickets.length?
+    '<table class="table"><thead><tr><th>ID</th><th>Titel</th><th>Bruger</th><th>Behandler</th><th>Status</th><th>Prioritet</th><th>Handlinger</th></tr></thead><tbody>'+
+    tickets.map(function(t){
+      return '<tr><td>#'+t.id+'</td><td>'+escapeHtml(t.title)+'</td><td>'+escapeHtml(t.user)+'</td><td>'+
+        '<select class="ticket-handler" data-ticket-handler="'+t.id+'">'+
+          '<option value="ticket" '+(t.handler==="ticket"?"selected":"")+'>🎫 Ticket</option>'+
+          '<option value="ai" '+(t.handler==="ai"?"selected":"")+'>🤖 AI</option>'+
+          '<option value="admins" '+((!t.handler||t.handler==="admins")?"selected":"")+'>👑 Admins</option>'+
+        '</select></td><td><span class="badge '+t.status+'">'+t.status+'</span></td><td>'+t.priority+'</td><td>'+
+        '<button class="btn small ticket-cycle" data-ticket-id="'+t.id+'" data-ticket-status="'+t.status+'">Skift status</button> '+
+        '<button class="btn small danger ticket-delete" data-ticket-id="'+t.id+'">Slet</button>'+
+      '</td></tr>';
+    }).join("")+
+    '</tbody></table>' : '<div class="empty">Ingen tickets endnu.</div>';
+  document.querySelectorAll(".ticket-handler").forEach(function(el){el.addEventListener("change",function(){setTicketHandler(this.dataset.ticketHandler,this.value);});});
+  document.querySelectorAll(".ticket-cycle").forEach(function(el){el.addEventListener("click",function(){cycleTicket(this.dataset.ticketId,this.dataset.ticketStatus);});});
+  document.querySelectorAll(".ticket-delete").forEach(function(el){el.addEventListener("click",function(){deleteTicket(this.dataset.ticketId);});});
 }
 async function newTicket(){
   const title=prompt("Ticket titel:");
   if(!title) return;
-  await api("/api/tickets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,user:"Dashboard user",priority:"normal"})});
-  toast("Ticket oprettet");loadTickets();loadStats();
+  const handler=document.getElementById("ticketHandlerDefault")?.value || "admins";
+  await api("/api/tickets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,user:"Dashboard user",priority:"normal",handler})});
+  toast(handler==="ai"?"🤖 Ticket oprettet til AI":handler==="admins"?"👑 Ticket oprettet til Admins":"🎫 Ticket oprettet");
+  loadTickets();loadStats();
+}
+}
+async function setTicketHandler(id,handler){
+  try{
+    await api("/api/tickets/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({handler})});
+    toast(handler==="ai"?"🤖 AI valgt":handler==="admins"?"👑 Admins valgt":"🎫 Ticket valgt");
+    loadTickets();
+  }catch(e){toast(e.message)}
 }
 async function cycleTicket(id,status){
   const next={open:"pending",pending:"closed",closed:"open"}[status];
