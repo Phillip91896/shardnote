@@ -328,22 +328,31 @@ function createBot({ state, db, log, createTicket, setReady }) {
       "fivem-vip": {
         name: "FiveM VIP",
         roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem"],
-        categories: ["📌 INFORMATION","🚓 FIVEM","🎫 SUPPORT","🎟️ TICKETS","⭐ VIP","🔒 STAFF","🔊 VOICE"],
-        channels: ["velkommen","regler","server-info","jobs","support","ticket-panel","vip-chat","staff-chat","logs","clips","Fælles","VIP Lounge"],
+        extraRoles: ["Support Lead","Supporter","Trial Supporter","Whitelist Team","Application Team","Event Team","Content Creator","Server Tester","Whitelisted","Business Owner"],
+        categories: ["📌 INFORMATION","🚓 FIVEM","📝 APPLICATIONS","🎫 SUPPORT","🎟️ TICKETS","⭐ VIP","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","server-info","how-to-join","whitelist","application-status","support","ticket-panel","bug-reports","player-reports","ban-appeals","waiting-for-support","support-room-1","support-room-2","support-room-3","vip-chat","staff-chat","logs","clips","Fælles","VIP Lounge"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
       },
       "fivem-esx": {
         name: "FiveM ESX",
         roles: ["Ejer","Admin","Developer","Moderator","Support","Politi","EMS","Medlem"],
-        categories: ["📌 INFORMATION","🚓 FIVEM","👮 JOBS","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
-        channels: ["velkommen","regler","server-info","whitelist","job-info","politi","ems","support","ticket-panel","forslag","logs","Fælles","Staff"],
+        extraRoles: ["Support Lead","Supporter","Trial Supporter","Whitelist Team","Application Team","Staff Interview Team","Event Team","Content Creator","Server Tester","Whitelisted","Civilian","Business Owner","Gang Leader","Gang Member"],
+        departments: [
+          { key:"police", name:"🚓 POLICE", roles:["Cadet","Officer","Senior Officer","Sergeant","Lieutenant","Captain","Assistant Chief","Chief"], channels:["police-info","police-announcements","police-chat","police-duty","police-training"] },
+          { key:"ems", name:"🚑 EMS", roles:["Trainee","Paramedic","Senior Paramedic","Supervisor","Chief"], channels:["ems-info","ems-announcements","ems-chat","ems-duty","ems-training"] },
+          { key:"doj", name:"⚖️ DOJ", roles:["Lawyer","Judge","Chief Justice"], channels:["doj-info","court-cases","doj-chat","legal-help"] },
+          { key:"mechanic", name:"🔧 MECHANIC", roles:["Trainee Mechanic","Mechanic","Senior Mechanic","Shop Manager"], channels:["mechanic-info","mechanic-chat","mechanic-jobs","mechanic-announcements"] }
+        ],
+        categories: ["📌 INFORMATION","🚓 FIVEM","📝 APPLICATIONS","👮 JOBS","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","server-info","how-to-join","whitelist","whitelist-application","application-status","job-info","support","ticket-panel","bug-reports","player-reports","ban-appeals","waiting-for-support","support-room-1","support-room-2","support-room-3","forslag","logs","Fælles","Staff"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:false, economy_enabled:false, anti_raid_enabled:true, lockdown:false }
       },
       "fivem-rp": {
         name: "FiveM RP",
         roles: ["Ejer","Admin","Moderator","Support","Kriminel","Civil","Medlem"],
-        categories: ["📌 INFORMATION","🚓 RP","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
-        channels: ["velkommen","regler","server-info","rp-info","fraktioner","chat","support","ticket-panel","forslag","logs","Fælles","RP Voice"],
+        extraRoles: ["Support Lead","Supporter","Trial Supporter","Whitelist Team","Application Team","Event Team","Content Creator","Business Owner","Gang Leader","Gang Member","Whitelisted"],
+        categories: ["📌 INFORMATION","🚓 RP","📝 APPLICATIONS","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","server-info","how-to-join","whitelist-application","application-status","rp-info","fraktioner","chat","support","ticket-panel","bug-reports","player-reports","ban-appeals","waiting-for-support","support-room-1","support-room-2","support-room-3","forslag","logs","Fælles","RP Voice"],
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:false, anti_raid_enabled:true, lockdown:false }
       },
       "rust": {
@@ -510,6 +519,14 @@ function createBot({ state, db, log, createTicket, setReady }) {
       permissions: permissionsForRole(roleKey(base))
     }));
 
+    const extraRoleSpecs = (config.extraRoles || []).map((base,index) => ({
+      key: roleKey(base),
+      name: selectedPrefixRole(base),
+      color: [0x1abc9c,0x2ecc71,0x3498db,0x9b59b6,0xe67e22,0x95a5a6][index % 6],
+      hoist: false,
+      permissions: permissionsForRole(roleKey(base))
+    }));
+
     const roles = {};
     let createdRoles = 0;
     let existingRoles = 0;
@@ -531,6 +548,48 @@ function createBot({ state, db, log, createTicket, setReady }) {
       roles[spec.key] = role;
     }
 
+    for (const spec of extraRoleSpecs) {
+      let role = guild.roles.cache.find(r => r.name === spec.name);
+      if (!role) {
+        role = await guild.roles.create({
+          name: spec.name,
+          color: spec.color,
+          hoist: spec.hoist,
+          mentionable: false,
+          permissions: spec.permissions,
+          reason: "ShardNote Discord-skitse supportgruppe: " + config.name
+        });
+        createdRoles++;
+      } else {
+        existingRoles++;
+      }
+      roles[spec.key] = role;
+    }
+
+    const departmentRoleSets = {};
+    for (const department of (config.departments || [])) {
+      departmentRoleSets[department.key] = [];
+      for (const base of department.roles) {
+        const key = department.key + "_" + roleKey(base);
+        let role = guild.roles.cache.find(r => r.name === base);
+        if (!role) {
+          role = await guild.roles.create({
+            name: base,
+            color: 0x5865f2,
+            hoist: false,
+            mentionable: false,
+            permissions: permissionsForRole(roleKey(base)),
+            reason: "ShardNote Discord-skitse department: " + department.name
+          });
+          createdRoles++;
+        } else {
+          existingRoles++;
+        }
+        roles[key] = role;
+        departmentRoleSets[department.key].push(role);
+      }
+    }
+
     const roleList = Object.values(roles);
     const ownerRole = roles.owner;
     const adminRole = roles.admin;
@@ -543,6 +602,44 @@ function createBot({ state, db, log, createTicket, setReady }) {
       .map(r => roles[r.key]?.id)
       .filter(Boolean);
     const memberRoleIds = roleList.map(r=>r.id);
+    const departmentStaffIds = [...new Set([
+      ...staffRoleIds,
+      ...Object.values(departmentRoleSets).flat().map(list => list.map(r => r.id)).flat()
+    ])];
+
+    async function ensureDepartmentSection(department) {
+      const allowedIds = [
+        ...staffRoleIds,
+        ...(departmentRoleSets[department.key] || []).map(r => r.id)
+      ];
+      const deptOverwrites = [
+        overwrite(guild.roles.everyone.id, [], [PermissionFlagsBits.ViewChannel]),
+        ...allowedIds.map(id => overwrite(id, [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.SendMessages
+        ])),
+        overwrite(botId, [
+          PermissionFlagsBits.ViewChannel,
+          PermissionFlagsBits.ReadMessageHistory,
+          PermissionFlagsBits.SendMessages,
+          PermissionFlagsBits.ManageChannels,
+          PermissionFlagsBits.ManageMessages
+        ])
+      ];
+      const category = await ensureCategory(department.name, deptOverwrites);
+      const channels = [];
+      for (const base of department.channels || []) {
+        channels.push(await ensureText(
+          department.key + "_" + base.toLowerCase().replace(/[^a-z0-9]+/g,""),
+          base,
+          category,
+          deptOverwrites
+        ));
+      }
+      return { category, channels };
+    }
+
     const botId = guild.client.user.id;
     const overwrite = (id, allow = [], deny = []) => ({ id, allow, deny });
 
@@ -631,6 +728,11 @@ function createBot({ state, db, log, createTicket, setReady }) {
       textChannels.push(await ensureVoice(v.toLowerCase().replace(/[^a-z0-9]+/g,""),v,parent,voiceOverwrites));
     }
 
+    const departmentSections = [];
+    for (const department of (config.departments || [])) {
+      departmentSections.push(await ensureDepartmentSection(department));
+    }
+
     const byBase = name => textChannels.find(c=>c.name.replace(/^F5 /,"")===name);
     const welcome = byBase("velkommen") || textChannels[0];
     const logs = byBase("logs") || textChannels.find(c=>c.name.includes("log")) || textChannels[0];
@@ -686,7 +788,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
       name: config.name,
       createdRoles,
       existingRoles,
-      roles: roleSpecs.map(r=>r.name),
+      roles: [...roleSpecs, ...extraRoleSpecs, ...Object.values(departmentRoleSets).flat().map(r=>({name:r.name}))].map(r=>r.name),
       categories: categories.map(c=>c.name),
       channels: textChannels.map(c=>c.name),
       features: config.features
