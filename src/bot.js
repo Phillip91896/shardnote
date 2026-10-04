@@ -2365,7 +2365,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
       try {
         const settings = await getGuildSettings(message.guild.id);
         const aiChannels = Array.isArray(settings.ai_channel_ids) ? settings.ai_channel_ids.map(String) : [];
-        if (settings.ai_enabled && aiChannels.includes(String(message.channel.id)) && await guildHasProAI(message.guild.id)) {
+        if (settings.ai_enabled && aiChannels.includes(String(message.channel.id)) && !message.content.startsWith(state.settings.prefix || "!") && await guildHasProAI(message.guild.id)) {
           await runDiscordAI(message);
         }
       } catch (error) {
