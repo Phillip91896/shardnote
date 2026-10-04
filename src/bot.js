@@ -597,10 +597,6 @@ function createBot({ state, db, log, createTicket, setReady }) {
       .filter(r => ["owner","admin","developer","moderator","support","coach"].includes(r.key))
       .map(r => roles[r.key]?.id)
       .filter(Boolean);
-    constRoleIds = roleSpecs
-      .filter(r => r.key === "muted")
-      .map(r => roles[r.key]?.id)
-      .filter(Boolean);
     const memberRoleIds = roleList.map(r=>r.id);
     const departmentStaffIds = [...new Set([
       ...staffRoleIds,
