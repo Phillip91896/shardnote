@@ -1575,6 +1575,7 @@ app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
     if(hasPaidAccess(req.user))return res.status(400).json({error:"Du har allerede adgang."});
 
     const requestedPlan=["member","member_plus","member_pro"].includes(req.body?.plan) ? req.body.plan : "member";
+    const requestedMonths=[1,3,12].includes(Number(req.body?.months)) ? Number(req.body.months) : 1;
     const planInfo={
       member:{amount:267,name:"ShardNote Member"},
       member_plus:{amount:468,name:"ShardNote Member Plus"},
@@ -1592,10 +1593,10 @@ app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
     const session=await stripe.checkout.sessions.create({
       mode:"subscription",
       customer:customerId,
-      line_items:[{price_data:{currency:"eur",unit_amount:planInfo.amount,recurring:{interval:"month"},product_data:{name:planInfo.name}},quantity:1}],
-      metadata:{user_id:String(req.user.id),plan:requestedPlan},
+      line_items:[{price_data:{currency:"eur",unit_amount:planInfo.amount*requestedMonths,recurring:{interval:"month",interval_count:requestedMonths},product_data:{name:planInfo.name+" · "+requestedMonths+" "+(requestedMonths===1?"month":"months")}},quantity:1}],
+      metadata:{user_id:String(req.user.id),plan:requestedPlan,months:String(requestedMonths)},
       subscription_data:{
-        metadata:{user_id:String(req.user.id),plan:requestedPlan},
+        metadata:{user_id:String(req.user.id),plan:requestedPlan,months:String(requestedMonths)},
         ...(firstTrial ? {trial_period_days:10} : {})
       },
       success_url:PUBLIC_SITE_URL+"/?payment=success",
@@ -1609,7 +1610,7 @@ app.post("/api/billing/create-checkout",requireAuth,async(req,res)=>{
       if(localUser)localUser.trialUsed=true;
     }
 
-    res.json({url:session.url,plan:requestedPlan});
+    res.json({url:session.url,plan:requestedPlan,months:requestedMonths});
   }catch(error){
     console.error("[ShardNote] Stripe checkout failed:",error);
     res.status(500).json({error:"Betalingssiden kunne ikke åbnes."});
@@ -1642,7 +1643,7 @@ app.use("/api", (req, res, next) => {
   requireAuth(req,res,async()=>{
     try{
       if(["/billing/create-checkout","/billing/status","/billing/portal"].some(path=>req.path.startsWith(path))) return next();
-      if(!hasPaidAccess(req.user))return res.status(402).json({requiresSubscription:true,error:"Et aktivt ShardNote-abonnement på 2 € pr. måned kræves."});
+      if(!hasPaidAccess(req.user))return res.status(402).json({requiresSubscription:true,error:"Et aktivt ShardNote-abonnement kræves."});
       next();
     }catch(error){console.error(error);res.status(500).json({error:"Adgangskontrol kunne ikke gennemføres."});}
   });
