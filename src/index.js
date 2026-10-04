@@ -1832,6 +1832,18 @@ app.post("/api/tickets", async (req, res) => {
       handler: req.body.handler
     });
     log("ticket", `Ticket #${ticket.id} created from dashboard`, req.user.id);
+    if (ticket.handler === "ai" && db && process.env.OPENAI_API_KEY) {
+      try {
+        const answer = await generateTicketAiReply(ticket, []);
+        await db.query(
+          'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4)',
+          [ticket.id, "Shardnote Bot AI", "ai", answer]
+        );
+        log("ticket", "AI automatically replied to ticket #" + ticket.id, req.user.id);
+      } catch (error) {
+        console.error("[Shardnote Bot] Automatic ticket AI failed:", error.message);
+      }
+    }
     res.status(201).json(ticket);
   } catch (error) {
     console.error(error);
@@ -1943,6 +1955,26 @@ app.post("/api/tickets/:id/reply", async (req, res) => {
     );
     await db.query("UPDATE public.tickets SET status = 'pending' WHERE id = $1 AND status <> 'closed'", [req.params.id]);
     log("ticket", "Ticket #" + req.params.id + " received a " + role + " reply", req.user.id);
+    if (role === "user") {
+      const ticketInfo = await db.query('SELECT id, title, description, handler FROM public.tickets WHERE id = $1 LIMIT 1', [req.params.id]);
+      const currentTicket = ticketInfo.rows[0];
+      if (currentTicket?.handler === "ai" && process.env.OPENAI_API_KEY) {
+        try {
+          const history = await db.query(
+            'SELECT author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 200',
+            [req.params.id]
+          );
+          const answer = await generateTicketAiReply(currentTicket, history.rows);
+          await db.query(
+            'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4)',
+            [req.params.id, "Shardnote Bot AI", "ai", answer]
+          );
+          log("ticket", "AI automatically replied to customer on ticket #" + req.params.id, req.user.id);
+        } catch (error) {
+          console.error("[Shardnote Bot] Automatic AI reply failed:", error.message);
+        }
+      }
+    }
     res.status(201).json(result.rows[0]);
   } catch (error) {
     console.error(error);
