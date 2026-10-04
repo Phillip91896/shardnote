@@ -1778,7 +1778,7 @@ app.post("/api/bot/guilds/:guildId/templates/:templateKey", requireAuth, require
       prefixRoles: cleanList(body.prefixRoles),
       prefixChannels: cleanList(body.prefixChannels)
     });
-    log("settings", "Discord-skitse F5 VIP blev kørt på " + guild.name, req.user?.id || null);
+    log("settings", "Discord-skitse blev kørt på " + guild.name, req.user?.id || null);
     res.json({
       ok: true,
       guild: { id: guild.id, name: guild.name },
