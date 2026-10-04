@@ -822,7 +822,7 @@ function showLanding(){
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px">'+
           data.excluded.map(function(item){return '<div style="background:#171722;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px;font-size:13px;color:var(--muted)">— '+item+'</div>';}).join("")+
         '</div>'+
-        '<div class="actions" style="justify-content:flex-end;margin-top:20px"><button class="btn primary" type="button" onclick="closePlanDetails();showRegister(\''+plan+'\')">Vælg '+data.name.replace("ShardNote ","")+'</button></div>'+
+        '<div class="actions" style="justify-content:flex-end;margin-top:20px"><button class="btn primary" type="button" onclick="closePlanDetails();showRegister(\''+plan+'\')">Jeg har købt denne pakke</button></div>'+
       '</div>';
 
     modal.addEventListener("click",function(event){
@@ -892,7 +892,7 @@ function showLanding(){
     <div style="font-size:12px;color:var(--muted);margin:6px auto 18px">Køb først en ShardNote-pakke, få din serial key, og brug den ved oprettelsen af din konto for at få adgang.</div>
 
     <div class="actions" style="justify-content:center">
-      <button class="btn primary" type="button" onclick="showRegister()">Opret konto og betal</button>
+      <button class="btn primary" type="button" onclick="showRegister()">Jeg har en serial key</button>
       <button class="btn" type="button" onclick="showLogin()">Jeg har allerede en konto</button>
     </div>
   </div>`;
