@@ -1105,7 +1105,7 @@ app.get("/api/bot/invite", requireAuth, (req, res) => {
   }
 
   const clientId = client.user.id;
-  const permissions = "274878221376";
+  const permissions = "8";
   const inviteUrl =
     "https://discord.com/oauth2/authorize" +
     `?client_id=${encodeURIComponent(clientId)}` +
