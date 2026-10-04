@@ -640,8 +640,8 @@ window.lockLogs=lockLogs;
 window.loadLogCategory=loadLogCategory;
 async function createUser(){
   try{
-    await api("/api/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("newUserName").value,email:document.getElementById("newUserEmail").value,password:document.getElementById("newUserPassword").value,role:document.getElementById("newUserRole").value})});
-    document.getElementById("newUserName").value="";document.getElementById("newUserEmail").value="";document.getElementById("newUserPassword").value="";
+    await api("/api/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({name:document.getElementById("newUserName").value,email:document.getElementById("newUserEmail").value,password:document.getElementById("newUserPassword").value,role:document.getElementById("newUserRole").value,plan:document.getElementById("newUserPlan")?.value||"member"})});
+    document.getElementById("newUserName").value="";document.getElementById("newUserEmail").value="";document.getElementById("newUserPassword").value="";if(document.getElementById("newUserPlan"))document.getElementById("newUserPlan").value="member";
     toast("Bruger oprettet");loadUsers();loadLogs();
   }catch(e){toast(e.message)}
 }
