@@ -567,8 +567,16 @@ function hashPassword(password) {
 }
 
 function generateSerialKey() {
-  const raw = crypto.randomBytes(18).toString("base64url").toUpperCase();
-  return "SN-" + raw.match(/.{1,6}/g).join("-");
+  const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  const parts = [];
+  for (let group = 0; group < 4; group++) {
+    let part = "";
+    for (let i = 0; i < 5; i++) {
+      part += alphabet[crypto.randomInt(0, alphabet.length)];
+    }
+    parts.push(part);
+  }
+  return parts.join("-");
 }
 
 function hashSerialKey(value) {
@@ -948,7 +956,7 @@ app.post("/api/register", async (req, res) => {
 
         if (!keyRow) throw Object.assign(new Error("Serial key findes ikke."), { statusCode: 400 });
         if (keyRow.revoked) throw Object.assign(new Error("Denne serial key er tilbagekaldt."), { statusCode: 400 });
-        if (!keyRow.accessPlan || !["member","member_plus","member_pro","member_premium"].includes(keyRow.accessPlan)) throw Object.assign(new Error("Denne serial key er ikke en ShardNote-konto-key."), { statusCode: 400 });
+        if (!keyRow.accessPlan || !["member","member_plus","member_pro"].includes(keyRow.accessPlan)) throw Object.assign(new Error("Denne serial key er ikke en ShardNote-konto-key."), { statusCode: 400 });
         if (keyRow.expiresAt && new Date(keyRow.expiresAt).getTime() <= Date.now()) throw Object.assign(new Error("Denne serial key er udløbet."), { statusCode: 400 });
         if (keyRow.uses >= keyRow.maxUses) throw Object.assign(new Error("Denne serial key er allerede brugt op."), { statusCode: 400 });
 
