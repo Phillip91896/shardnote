@@ -13,12 +13,11 @@ async function addBotToDiscord(){
   }
 }
 
-document.querySelectorAll(".nav button").forEach(btn=>{
-  btn.onclick = function(event){
-    event.preventDefault();
-    navigate(this.dataset.page);
-    return false;
-  };
+document.addEventListener("click",function(event){
+  const btn=event.target.closest(".nav button[data-page]");
+  if(!btn) return;
+  event.preventDefault();
+  navigate(btn.dataset.page);
 });
 
 function navigate(page){
@@ -1955,12 +1954,22 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
     return result;
   };
 
+  let translating=false;
+  let translationQueued=false;
   const observer=new MutationObserver((mutations)=>{
-    let should=false;
+    if(translating || translationQueued) return;
     for(const m of mutations){
-      if(m.type==="childList" || m.type==="characterData" || m.type==="attributes"){should=true;break;}
+      if(m.type==="childList" || m.type==="characterData" || m.type==="attributes"){
+        translationQueued=true;
+        requestAnimationFrame(()=>{
+          translationQueued=false;
+          if(translating) return;
+          translating=true;
+          try{translatePage();}finally{translating=false;}
+        });
+        break;
+      }
     }
-    if(should) requestAnimationFrame(translatePage);
   });
 
   function start(){
