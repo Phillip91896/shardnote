@@ -2521,6 +2521,46 @@ body.locked > .app{display:none}
 
 <section class="page" id="page-admin">
   <div class="card" style="margin-bottom:18px">
+    <div class="section-title">
+      <div><h2>🔐 IP-adressecenter</h2><span>Kun administratorer · kræver en separat IP-kode</span></div>
+      <div class="actions" style="margin:0">
+        <button class="btn small" onclick="loadIpOverview()">Opdater</button>
+        <button class="btn small danger" onclick="lockIpCenter()">🔒 Lås</button>
+      </div>
+    </div>
+
+    <div id="ipLockPanel">
+      <div class="empty">
+        <div style="font-size:34px;margin-bottom:10px">🛡️</div>
+        <b>IP-adressecenter er låst</b>
+        <div style="color:var(--muted);font-size:12px;margin:8px 0 15px">
+          IP-adresserne er krypteret i databasen og vises kun efter den separate IP-kode.
+        </div>
+        <div style="max-width:360px;margin:0 auto">
+          <input id="ipPassword" type="password" placeholder="IP-kode" style="width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none">
+          <button class="btn primary" style="margin-top:10px;width:100%" onclick="unlockIpCenter()">🔓 Åbn IP-adresser</button>
+          <div id="ipUnlockError" style="color:var(--red);font-size:12px;margin-top:10px"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="ipContent" style="display:none">
+      <div style="margin-bottom:14px">
+        <b>Registrerede IP-adresser</b>
+        <div id="ipDistinctList" style="margin-top:8px"></div>
+      </div>
+      <div style="margin-top:18px">
+        <b>Login-IP'er</b>
+        <div id="ipLoginList" style="margin-top:8px"></div>
+      </div>
+      <div style="margin-top:18px">
+        <b>Aktive IP-bans</b>
+        <div id="ipBanList" style="margin-top:8px"></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom:18px">
     <div class="section-title"><h2>Database-overblik</h2><span id="databaseStatus" class="badge pending">Tjekker…</span></div>
     <div id="databaseTables" class="activity"></div>
   </div>
