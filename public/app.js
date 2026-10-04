@@ -62,7 +62,12 @@ async function loadStats(){
     const s=await api("/api/stats");
     document.getElementById("statBot").textContent=s.botOnline?"Online":"Offline";
     document.getElementById("statServers").textContent=s.servers;
-    document.getElementById("statUsers").textContent=s.users;
+    const usersCard=document.getElementById("statUsersCard");
+    if(usersCard){
+      const isAdmin=currentUser?.role==="admin";
+      usersCard.style.display=isAdmin?"":"none";
+      if(isAdmin) document.getElementById("statUsers").textContent=s.users ?? 0;
+    }
     document.getElementById("statTickets").textContent=s.tickets;
     document.getElementById("statusText").textContent=s.botOnline?"Discord connected":"Web mode";
     document.getElementById("statusDot").className="dot "+(s.botOnline?"online":"");
