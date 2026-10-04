@@ -2724,9 +2724,11 @@ body.locked > .app{display:none}
   <div class="card" style="margin-bottom:18px">
     <div class="section-title"><div><h2>🔑 Serial Keys</h2><span>Kun administratorer · generér nøgler til Discord-roller</span></div></div>
     <div class="form-grid">
-      <div class="field"><label>Server</label><select id="serialGuild" onchange="loadSerialRoles()"><option value="">Vælg server</option></select></div>
-      <div class="field"><label>Discord-rolle</label><select id="serialRole"><option value="">Vælg rolle</option></select></div>
-      <div class="field"><label>Produktnavn</label><input id="serialProduct" maxlength="120" value="Discord Role"></div>
+      <div class="field"><label>Key type</label><select id="serialType" onchange="toggleSerialType()"><option value="account">Website access</option><option value="discord">Discord role</option></select></div>
+      <div class="field"><label>Sh​ardNote-pakke</label><select id="serialAccessPlan"><option value="member">Member</option><option value="member_plus">Member Plus</option><option value="member_pro">Member Pro</option><option value="member_premium">Member Premium</option></select></div>
+      <div class="field"><label>Server</label><select id="serialGuild" onchange="loadSerialRoles()" disabled><option value="">Vælg server</option></select></div>
+      <div class="field"><label>Discord-rolle</label><select id="serialRole" disabled><option value="">Vælg rolle</option></select></div>
+      <div class="field"><label>Produktnavn</label><input id="serialProduct" maxlength="120" value="ShardNote Access"></div>
       <div class="field"><label>Antal keys</label><input id="serialQuantity" type="number" min="1" max="100" value="1"></div>
       <div class="field"><label>Brug pr. key</label><input id="serialMaxUses" type="number" min="1" max="10000" value="1"></div>
       <div class="field"><label>Udløbsdato (valgfri)</label><input id="serialExpiresAt" type="datetime-local"></div>
