@@ -598,11 +598,6 @@ function createBot({ state, db, log, createTicket, setReady }) {
       .map(r => roles[r.key]?.id)
       .filter(Boolean);
     const memberRoleIds = roleList.map(r=>r.id);
-    const departmentStaffIds = [...new Set([
-      ...staffRoleIds,
-      ...Object.values(departmentRoleSets).flat().map(list => list.map(r => r.id)).flat()
-    ])];
-
     async function ensureDepartmentSection(department) {
       const allowedIds = [
         ...staffRoleIds,
