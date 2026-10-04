@@ -426,6 +426,105 @@ function createBot({ state, db, log, createTicket, setReady }) {
       }
     };
 
+
+    const SUPPORTED_TEMPLATE_LANGUAGES = [
+      "da","en","de","fr","es","it","nl","pt","sv","no","fi","pl","tr","ru","uk","ja","ko","zh"
+    ];
+
+    const TEMPLATE_LANGUAGE_NAMES = {
+      da: "Dansk", en: "English", de: "Deutsch", fr: "Français", es: "Español",
+      it: "Italiano", nl: "Nederlands", pt: "Português", sv: "Svenska", no: "Norsk",
+      fi: "Suomi", pl: "Polski", tr: "Türkçe", ru: "Русский", uk: "Українська",
+      ja: "日本語", ko: "한국어", zh: "中文"
+    };
+
+    const TEMPLATE_TRANSLATIONS = {
+      "da": {
+        "Ejer":"Ejer","Admin":"Admin","Developer":"Udvikler","Moderator":"Moderator","Support":"Support","VIP":"VIP","Medlem":"Medlem",
+        "Supportchef":"Supportchef","Support Lead":"Supportleder","Senior Supporter":"Senior Supporter","Supporter":"Supporter","Trial Supporter":"Prøve-supporter",
+        "Moderator Lead":"Moderatorleder","Whitelist Lead":"Whitelistleder","Whitelist Team":"Whitelist-team","Application Team":"Ansøgningsteam",
+        "Staff Interview Team":"Staff-interviewteam","Event Manager":"Eventleder","Event Team":"Eventteam","Content Creator":"Indholdsskaber",
+        "Media Team":"Medieteam","Server Tester":"Servertester","Developer Lead":"Udviklerleder","Whitelisted":"Whitelisted","Civilian":"Civilist",
+        "Business Owner":"Virksomhedsejer","Gang Leader":"Bandefører","Gang Member":"Bandemedlem","Politi":"Politi","EMS":"EMS",
+        "Kriminel":"Kriminel","Civil":"Civil","Ven":"Ven","Coach":"Coach","Spiller":"Spiller","Trial":"Prøvespiller","Subscriber":"Abonnent",
+        "Kunde":"Kunde","Creator":"Creator","Cadet":"Kadet","Officer":"Betjent","Senior Officer":"Seniorbetjent","Sergeant":"Sergent",
+        "Lieutenant":"Løjtnant","Captain":"Kaptajn","Assistant Chief":"Vicechef","Chief":"Chef","Trainee":"Trainee","Paramedic":"Paramediciner",
+        "Senior Paramedic":"Seniorparamediciner","Supervisor":"Supervisor","Lawyer":"Advokat","Judge":"Dommer","Chief Justice":"Højesteretsdommer",
+        "Trainee Mechanic":"Mekaniker-elev","Mechanic":"Mekaniker","Senior Mechanic":"Seniormekaniker","Shop Manager":"Værkstedschef",
+        "📌 INFORMATION":"📌 INFORMATION","💬 COMMUNITY":"💬 COMMUNITY","🎫 SUPPORT":"🎫 SUPPORT","🎟️ TICKETS":"🎟️ TICKETS","⭐ VIP":"⭐ VIP","🔒 STAFF":"🔒 STAFF","🔊 VOICE":"🔊 VOICE",
+        "📝 APPLICATIONS":"📝 ANSØGNINGER","👮 JOBS":"👮 JOBS","🚓 POLICE":"🚓 POLITI","🚑 EMS":"🚑 EMS","⚖️ DOJ":"⚖️ DOJ","🔧 MECHANIC":"🔧 MEKANIKER",
+        "🚓 RP":"🚓 RP","💬 COMMUNITY":"💬 COMMUNITY","👋 INFORMATION":"👋 INFORMATION","🎮 SPIL":"🎮 SPIL","🔊 VOICE":"🔊 VOICE",
+        "📌 INFORMATION":"📌 INFORMATION","⛏️ RUST":"⛏️ RUST","🎮 GAMING":"🎮 GAMING","🏆 CLAN":"🏆 CLAN","📺 STREAM":"📺 STREAM","🎨 CREATOR":"🎨 CREATOR","🛒 SHOP":"🛒 SHOP",
+        "velkommen":"velkommen","regler":"regler","verification":"verifikation","annonceringer":"annonceringer","chat":"chat","forslag":"forslag",
+        "support":"support","ticket-panel":"ticket-panel","vip-chat":"vip-chat","staff-chat":"staff-chat","logs":"logs","server-info":"server-info",
+        "how-to-join":"sådan-kommer-du-ind","whitelist":"whitelist","whitelist-application":"whitelist-ansøgning","application-status":"ansøgningsstatus",
+        "job-info":"job-info","bug-reports":"fejlrapporter","player-reports":"spiller-rapporter","ban-appeals":"ban-ankesager","clips":"clips","Fælles":"fælles","VIP Lounge":"vip-lounge",
+        "Support room 1":"support-rum-1","Support room 2":"support-rum-2","Support room 3":"support-rum-3","Support room 4":"support-rum-4","Support room 5":"support-rum-5",
+        "Afventer support":"afventer-support","Staff":"staff","RP Voice":"rp-voice","Fælles":"fælles","Gaming":"gaming","Chill":"chill","Rust Voice":"rust-voice"
+      },
+      "en": {
+        "Ejer":"Owner","Admin":"Admin","Developer":"Developer","Moderator":"Moderator","Support":"Support","VIP":"VIP","Medlem":"Member",
+        "Supportchef":"Support Manager","Support Lead":"Support Lead","Senior Supporter":"Senior Support","Supporter":"Supporter","Trial Supporter":"Trial Supporter",
+        "Moderator Lead":"Moderator Lead","Whitelist Lead":"Whitelist Lead","Whitelist Team":"Whitelist Team","Application Team":"Application Team",
+        "Staff Interview Team":"Staff Interview Team","Event Manager":"Event Manager","Event Team":"Event Team","Content Creator":"Content Creator",
+        "Media Team":"Media Team","Server Tester":"Server Tester","Developer Lead":"Developer Lead","Whitelisted":"Whitelisted","Civilian":"Civilian",
+        "Business Owner":"Business Owner","Gang Leader":"Gang Leader","Gang Member":"Gang Member","Politi":"Police","EMS":"EMS","Kriminel":"Criminal","Civil":"Civil",
+        "Ven":"Friend","Coach":"Coach","Spiller":"Player","Trial":"Trial","Subscriber":"Subscriber","Kunde":"Customer","Creator":"Creator",
+        "Cadet":"Cadet","Officer":"Officer","Senior Officer":"Senior Officer","Sergeant":"Sergeant","Lieutenant":"Lieutenant","Captain":"Captain","Assistant Chief":"Assistant Chief","Chief":"Chief",
+        "Trainee":"Trainee","Paramedic":"Paramedic","Senior Paramedic":"Senior Paramedic","Supervisor":"Supervisor","Lawyer":"Lawyer","Judge":"Judge","Chief Justice":"Chief Justice",
+        "Trainee Mechanic":"Trainee Mechanic","Mechanic":"Mechanic","Senior Mechanic":"Senior Mechanic","Shop Manager":"Shop Manager",
+        "📌 INFORMATION":"📌 INFORMATION","💬 COMMUNITY":"💬 COMMUNITY","🎫 SUPPORT":"🎫 SUPPORT","🎟️ TICKETS":"🎟️ TICKETS","⭐ VIP":"⭐ VIP","🔒 STAFF":"🔒 STAFF","🔊 VOICE":"🔊 VOICE",
+        "📝 APPLICATIONS":"📝 APPLICATIONS","👮 JOBS":"👮 JOBS","🚓 POLICE":"🚓 POLICE","🚑 EMS":"🚑 EMS","⚖️ DOJ":"⚖️ DOJ","🔧 MECHANIC":"🔧 MECHANIC",
+        "🚓 RP":"🚓 RP","👋 INFORMATION":"👋 INFORMATION","🎮 SPIL":"🎮 GAMING","⛏️ RUST":"⛏️ RUST","🎮 GAMING":"🎮 GAMING","🏆 CLAN":"🏆 CLAN","📺 STREAM":"📺 STREAM","🎨 CREATOR":"🎨 CREATOR","🛒 SHOP":"🛒 SHOP",
+        "velkommen":"welcome","regler":"rules","verification":"verification","annonceringer":"announcements","chat":"chat","forslag":"suggestions",
+        "support":"support","ticket-panel":"ticket-panel","vip-chat":"vip-chat","staff-chat":"staff-chat","logs":"logs","server-info":"server-info",
+        "how-to-join":"how-to-join","whitelist":"whitelist","whitelist-application":"whitelist-application","application-status":"application-status",
+        "job-info":"job-info","bug-reports":"bug-reports","player-reports":"player-reports","ban-appeals":"ban-appeals","clips":"clips","Fælles":"general","VIP Lounge":"vip-lounge",
+        "Support room 1":"support-room-1","Support room 2":"support-room-2","Support room 3":"support-room-3","Support room 4":"support-room-4","Support room 5":"support-room-5",
+        "Afventer support":"waiting-for-support","Staff":"staff","RP Voice":"rp-voice","Gaming":"gaming","Chill":"chill","Rust Voice":"rust-voice"
+      }
+    };
+
+    const EXTRA_LANGUAGE_TRANSLATIONS = {
+      de: {"Ejer":"Besitzer","Developer":"Entwickler","Moderator":"Moderator","Support":"Support","Medlem":"Mitglied","Supportchef":"Supportleiter","Supporter":"Support","Politi":"Polizei","Kriminel":"Krimineller","Civil":"Zivilist","vennegruppe":"Freundesgruppe","velkommen":"willkommen","regler":"regeln","support":"support","logs":"logs","chat":"chat","forslag":"vorschläge","server-info":"server-info","how-to-join":"so-kommt-man-rein","whitelist-application":"whitelist-bewerbung","application-status":"bewerbungsstatus","bug-reports":"fehlerberichte","player-reports":"spieler-meldungen","ban-appeals":"ban-einsprüche","Fælles":"allgemein","Afventer support":"support-wartet","VIP Lounge":"vip-lounge"},
+      fr: {"Ejer":"Propriétaire","Developer":"Développeur","Moderator":"Modérateur","Support":"Support","Medlem":"Membre","Supportchef":"Chef support","Supporter":"Support","Politi":"Police","Kriminel":"Criminel","Civil":"Civil","velkommen":"bienvenue","regler":"regles","support":"support","logs":"logs","chat":"chat","forslag":"suggestions","server-info":"infos-serveur","how-to-join":"comment-rejoindre","whitelist-application":"candidature-whitelist","application-status":"statut-candidature","bug-reports":"signalements-bugs","player-reports":"signalements-joueurs","ban-appeals":"recours-bannissement","Fælles":"general","Afventer support":"en-attente-support"},
+      es: {"Ejer":"Propietario","Developer":"Desarrollador","Moderator":"Moderador","Support":"Soporte","Medlem":"Miembro","Supportchef":"Jefe de soporte","Supporter":"Soporte","Politi":"Policía","Kriminel":"Criminal","Civil":"Civil","velkommen":"bienvenida","regler":"reglas","support":"soporte","logs":"registros","chat":"chat","forslag":"sugerencias","server-info":"info-servidor","how-to-join":"como-entrar","whitelist-application":"solicitud-whitelist","application-status":"estado-solicitud","bug-reports":"reportes-bugs","player-reports":"reportes-jugadores","ban-appeals":"apelaciones","Fælles":"general","Afventer support":"espera-soporte"},
+      it: {"Ejer":"Proprietario","Developer":"Sviluppatore","Moderator":"Moderatore","Support":"Supporto","Medlem":"Membro","Supportchef":"Responsabile supporto","Supporter":"Supporto","Politi":"Polizia","Kriminel":"Criminale","Civil":"Civile","velkommen":"benvenuto","regler":"regole","support":"supporto","logs":"log","chat":"chat","forslag":"suggerimenti","server-info":"info-server","how-to-join":"come-entrare","whitelist-application":"candidatura-whitelist","application-status":"stato-candidatura","bug-reports":"segnalazioni-bug","player-reports":"segnalazioni-giocatori","ban-appeals":"ricorsi-ban","Fælles":"generale","Afventer support":"attesa-supporto"},
+      nl: {"Ejer":"Eigenaar","Developer":"Ontwikkelaar","Moderator":"Moderator","Support":"Support","Medlem":"Lid","Supportchef":"Supportleider","Supporter":"Support","Politi":"Politie","Kriminel":"Crimineel","Civil":"Burger","velkommen":"welkom","regler":"regels","support":"support","logs":"logs","chat":"chat","forslag":"suggesties","server-info":"server-info","how-to-join":"zo-kom-je-binnen","whitelist-application":"whitelist-aanvraag","application-status":"aanvraagstatus","bug-reports":"bugmeldingen","player-reports":"speler-meldingen","ban-appeals":"ban-beroepen","Fælles":"algemeen","Afventer support":"wachten-op-support"},
+      pt: {"Ejer":"Dono","Developer":"Desenvolvedor","Moderator":"Moderador","Support":"Suporte","Medlem":"Membro","Supportchef":"Chefe de suporte","Supporter":"Suporte","Politi":"Polícia","Kriminel":"Criminoso","Civil":"Civil","velkommen":"bem-vindo","regler":"regras","support":"suporte","logs":"logs","chat":"chat","forslag":"sugestões","server-info":"info-servidor","how-to-join":"como-entrar","whitelist-application":"candidatura-whitelist","application-status":"estado-candidatura","bug-reports":"relatorios-bugs","player-reports":"relatorios-jogadores","ban-appeals":"recursos-ban","Fælles":"geral","Afventer support":"aguardar-suporte"},
+      sv: {"Ejer":"Ägare","Developer":"Utvecklare","Moderator":"Moderator","Support":"Support","Medlem":"Medlem","Supportchef":"Supportchef","Supporter":"Support","Politi":"Polis","Kriminel":"Kriminell","Civil":"Civil","velkommen":"välkommen","regler":"regler","support":"support","logs":"loggar","chat":"chatt","forslag":"förslag","server-info":"server-info","how-to-join":"så-gör-du","whitelist-application":"whitelist-ansökan","application-status":"ansökningsstatus","bug-reports":"buggrapporter","player-reports":"spelarrapporter","ban-appeals":"banöverklaganden","Fælles":"allmän","Afventer support":"väntar-på-support"},
+      no: {"Ejer":"Eier","Developer":"Utvikler","Moderator":"Moderator","Support":"Support","Medlem":"Medlem","Supportchef":"Supportleder","Supporter":"Support","Politi":"Politi","Kriminel":"Kriminell","Civil":"Sivil","velkommen":"velkommen","regler":"regler","support":"support","logs":"logger","chat":"chat","forslag":"forslag","server-info":"server-info","how-to-join":"slik-kommer-du-inn","whitelist-application":"whitelist-søknad","application-status":"søknadsstatus","bug-reports":"feilrapporter","player-reports":"spillerrapporter","ban-appeals":"anke","Fælles":"felles","Afventer support":"venter-på-support"},
+      fi: {"Ejer":"Omistaja","Developer":"Kehittäjä","Moderator":"Moderaattori","Support":"Tuki","Medlem":"Jäsen","Supportchef":"Tukipäällikkö","Supporter":"Tuki","Politi":"Poliisi","Kriminel":"Rikollinen","Civil":"Siviili","velkommen":"tervetuloa","regler":"saannot","support":"tuki","logs":"lokit","chat":"chat","forslag":"ehdotukset","server-info":"palvelin-info","how-to-join":"liittymisohje","whitelist-application":"whitelist-hakemus","application-status":"hakemuksen-tila","bug-reports":"vikailmoitukset","player-reports":"pelaajaraportit","ban-appeals":"bannivalitukset","Fælles":"yleinen","Afventer support":"odottaa-tukea"},
+      pl: {"Ejer":"Właściciel","Developer":"Deweloper","Moderator":"Moderator","Support":"Wsparcie","Medlem":"Członek","Supportchef":"Szef wsparcia","Supporter":"Wsparcie","Politi":"Policja","Kriminel":"Przestępca","Civil":"Cywil","velkommen":"witaj","regler":"zasady","support":"wsparcie","logs":"logi","chat":"czat","forslag":"sugestie","server-info":"info-serwera","how-to-join":"jak-dolaczyc","whitelist-application":"podanie-whitelist","application-status":"status-podania","bug-reports":"zgloszenia-bledow","player-reports":"zgloszenia-graczy","ban-appeals":"odwolania-od-bana","Fælles":"ogolny","Afventer support":"oczekuje-na-wsparcie"},
+      tr: {"Ejer":"Sahip","Developer":"Geliştirici","Moderator":"Moderatör","Support":"Destek","Medlem":"Üye","Supportchef":"Destek Şefi","Supporter":"Destek","Politi":"Polis","Kriminel":"Suçlu","Civil":"Sivil","velkommen":"hos-geldin","regler":"kurallar","support":"destek","logs":"loglar","chat":"sohbet","forslag":"öneriler","server-info":"sunucu-bilgisi","how-to-join":"katilim-rehberi","whitelist-application":"whitelist-basvurusu","application-status":"basvuru-durumu","bug-reports":"hata-bildirimleri","player-reports":"oyuncu-raporlari","ban-appeals":"ban-itirazlari","Fælles":"genel","Afventer support":"destek-bekliyor"},
+      ru: {"Ejer":"Владелец","Developer":"Разработчик","Moderator":"Модератор","Support":"Поддержка","Medlem":"Участник","Supportchef":"Руководитель поддержки","Supporter":"Поддержка","Politi":"Полиция","Kriminel":"Преступник","Civil":"Гражданский","velkommen":"приветствие","regler":"правила","support":"поддержка","logs":"логи","chat":"чат","forslag":"предложения","server-info":"информация-сервера","how-to-join":"как-войти","whitelist-application":"заявка-whitelist","application-status":"статус-заявки","bug-reports":"ошибки","player-reports":"жалобы-на-игроков","ban-appeals":"апелляции-банов","Fælles":"общий","Afventer support":"ожидание-поддержки"},
+      uk: {"Ejer":"Власник","Developer":"Розробник","Moderator":"Модератор","Support":"Підтримка","Medlem":"Учасник","Supportchef":"Керівник підтримки","Supporter":"Підтримка","Politi":"Поліція","Kriminel":"Злочинець","Civil":"Цивільний","velkommen":"привітання","regler":"правила","support":"підтримка","logs":"логи","chat":"чат","forslag":"пропозиції","server-info":"інфо-сервера","how-to-join":"як-увійти","whitelist-application":"заявка-whitelist","application-status":"статус-заявки","bug-reports":"помилки","player-reports":"скарги-гравців","ban-appeals":"апеляції-банів","Fælles":"загальний","Afventer support":"очікує-підтримку"},
+      ja: {"Ejer":"オーナー","Developer":"開発者","Moderator":"モデレーター","Support":"サポート","Medlem":"メンバー","Supportchef":"サポート責任者","Supporter":"サポーター","Politi":"警察","Kriminel":"犯罪者","Civil":"市民","velkommen":"ようこそ","regler":"ルール","support":"サポート","logs":"ログ","chat":"チャット","forslag":"提案","server-info":"サーバー情報","how-to-join":"参加方法","whitelist-application":"ホワイトリスト申請","application-status":"申請状況","bug-reports":"バグ報告","player-reports":"プレイヤー報告","ban-appeals":"BAN異議申立て","Fælles":"一般","Afventer support":"サポート待機"},
+      ko: {"Ejer":"소유자","Developer":"개발자","Moderator":"관리자","Support":"지원","Medlem":"멤버","Supportchef":"지원 책임자","Supporter":"지원팀","Politi":"경찰","Kriminel":"범죄자","Civil":"시민","velkommen":"환영","regler":"규칙","support":"지원","logs":"로그","chat":"채팅","forslag":"제안","server-info":"서버 정보","how-to-join":"참여 방법","whitelist-application":"화이트리스트 신청","application-status":"신청 상태","bug-reports":"버그 신고","player-reports":"플레이어 신고","ban-appeals":"차단 이의신청","Fælles":"일반","Afventer support":"지원 대기"},
+      zh: {"Ejer":"所有者","Developer":"开发者","Moderator":"版主","Support":"客服","Medlem":"成员","Supportchef":"客服主管","Supporter":"客服","Politi":"警察","Kriminel":"罪犯","Civil":"市民","velkommen":"欢迎","regler":"规则","support":"客服","logs":"日志","chat":"聊天","forslag":"建议","server-info":"服务器信息","how-to-join":"加入指南","whitelist-application":"白名单申请","application-status":"申请状态","bug-reports":"错误报告","player-reports":"玩家举报","ban-appeals":"封禁申诉","Fælles":"公共","Afventer support":"等待客服"}
+    };
+
+    const language = SUPPORTED_TEMPLATE_LANGUAGES.includes(String(options.language || "")) ? String(options.language) : "da";
+
+    function localizeTemplateName(value) {
+      const dict = TEMPLATE_TRANSLATIONS[language] || {};
+      const extra = EXTRA_LANGUAGE_TRANSLATIONS[language] || {};
+      const translated = Object.prototype.hasOwnProperty.call(dict, value) ? dict[value] : (Object.prototype.hasOwnProperty.call(extra, value) ? extra[value] : value);
+      return translated;
+    }
+
+    function localizeSlug(value) {
+      const translated = localizeTemplateName(value);
+      return String(translated)
+        .toLowerCase()
+        .replace(/æ/g,"ae")
+        .replace(/ø/g,"oe")
+        .replace(/å/g,"aa")
+        .replace(/[^a-z0-9а-яёіїєґ一-龯ぁ-んァ-ヶ가-힣]+/gi,"-")
+        .replace(/^-+|-+$/g,"")
+        .slice(0, 90) || "channel";
+    }
+
     let config = templates[templateKey];
     if (templateKey === "custom") {
       config = {
@@ -519,7 +618,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     const roleSpecs = config.roles.map((base,index) => ({
       key: roleKey(base),
-      name: selectedPrefixRole(base),
+      name: localizeTemplateName(selectedPrefixRole(base)),
       color: [0xf1c40f,0xe74c3c,0xe67e22,0x3498db,0x9b59b6,0x2ecc71,0x7f8c8d,0x1abc9c][index % 8],
       hoist: index < Math.min(5, config.roles.length),
       permissions: permissionsForRole(roleKey(base))
@@ -527,7 +626,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     const extraRoleSpecs = (config.extraRoles || []).map((base,index) => ({
       key: roleKey(base),
-      name: selectedPrefixRole(base),
+      name: localizeTemplateName(selectedPrefixRole(base)),
       color: [0x1abc9c,0x2ecc71,0x3498db,0x9b59b6,0xe67e22,0x95a5a6][index % 6],
       hoist: false,
       permissions: permissionsForRole(roleKey(base))
@@ -580,7 +679,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
         let role = guild.roles.cache.find(r => r.name === base);
         if (!role) {
           role = await guild.roles.create({
-            name: base,
+            name: localizeTemplateName(base),
             color: 0x5865f2,
             hoist: false,
             mentionable: false,
@@ -745,7 +844,8 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     const categories=[];
     for(let i=0;i<config.categories.length;i++) {
-      const name=config.categories[i];
+      const baseCategoryName=config.categories[i];
+      const name=localizeTemplateName(baseCategoryName);
       const overwrites = /SUPPORT|COMMUNITY|INFORMATION|FIVEM|RUST|GAMING|STREAM|CLAN|CREATOR|SHOP|CHAT|SPIL|RP|JOBS|VOICE/i.test(name) ? publicOverwrites : privateOverwrites;
       categories.push(await ensureCategory(name,overwrites));
     }
@@ -761,12 +861,12 @@ function createBot({ state, db, log, createTicket, setReady }) {
         [base.includes("support")||base.includes("ticket")?"support":null, base.includes("log")||base.includes("staff")?"staff":null, base.includes("vip")?"vip":null, base.includes("game")||base.includes("chat")||base.includes("clips")?"community":null].filter(Boolean),
         0
       );
-      textChannels.push(await ensureText(key,base,parent));
+      textChannels.push(await ensureText(key,localizeTemplateName(base),parent));
     }
     const voiceNames=config.channels.filter(x=>x==="Fælles"||x.includes("VC")||x.includes("Voice")||x.includes("Lounge"));
     for(const v of voiceNames){
       const parent=findCategory(["voice","spil","gaming","community"],categories.length-1);
-      textChannels.push(await ensureVoice(v.toLowerCase().replace(/[^a-z0-9]+/g,""),v,parent,voiceOverwrites));
+      textChannels.push(await ensureVoice(v.toLowerCase().replace(/[^a-z0-9]+/g,""),localizeTemplateName(v),parent,voiceOverwrites));
     }
 
     const departmentSections = [];
@@ -778,7 +878,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
     for (const name of (config.staffVoiceRooms || [])) {
       staffVoiceChannels.push(await ensureVoice(
         "staff_" + name.toLowerCase().replace(/[^a-z0-9]+/g,""),
-        name,
+        localizeTemplateName(name),
         findCategory(["support"], 0),
         staffVoiceOverwrites
       ));
@@ -788,7 +888,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
     if (config.waitingSupportVoice) {
       waitingSupportChannel = await ensureVoice(
         "waiting_support",
-        config.waitingSupportVoice,
+        localizeTemplateName(config.waitingSupportVoice),
         findCategory(["support"], 0),
         waitingSupportOverwrites
       );
@@ -885,13 +985,17 @@ function createBot({ state, db, log, createTicket, setReady }) {
     }
 
     for (const channel of textChannels) {
-      const base = channel.name.replace(/^F5 /, "");
+      const base = config.channels.find(candidate => {
+        const localized = localizeTemplateName(candidate);
+        return channel.name.replace(/^F5 /, "") === localized.replace(/^F5 /, "");
+      }) || channel.name.replace(/^F5 /, "");
       await seedTemplateChannel(channel, base);
     }
 
     for (const section of departmentSections) {
+      const department = (config.departments || []).find(item => item.name === section.category.name || localizeTemplateName(item.name) === section.category.name);
       for (const channel of section.channels) {
-        const base = channel.name.replace(/^F5 /, "");
+        const base = department?.channels?.find(candidate => localizeTemplateName(candidate) === channel.name) || channel.name;
         await seedTemplateChannel(channel, base);
       }
     }
