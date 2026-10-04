@@ -169,21 +169,6 @@
         '<div class="section-title"><div><h2>Alle bot-funktioner</h2><span>Her kan du se alt, ShardNote-botten kan. Dette er bot-funktionerne – ikke selve Discord-serveren.</span></div><div class="badge open">'+FEATURE_LIST.length+' funktioner</div></div>'+
         '<div class="feature-grid">'+cards+'</div>'+
       '</div>'+
-      '<div class="card" style="margin-bottom:18px;border-color:rgba(155,89,182,.35)">'+
-        '<div class="section-title"><div><h2>🧩 Discord-skitser</h2><span>Member Plus kan sætte en færdig Discord-struktur op med roller, kanaler, rettigheder og bot-funktioner.</span></div><div class="badge open">Member Plus</div></div>'+
-        '<div class="grid two">'+
-          '<div>'+
-            '<div class="field"><label>Discord-server</label><select id="snTemplateGuild"></select></div>'+
-            '<div style="margin-top:12px;color:var(--muted);font-size:13px;line-height:1.6">F5 VIP-skitsen opretter eller finder blandt andet <b>F5 Ejer, F5 Admin, F5 Moderator, F5 Support, F5 VIP, F5 Medlem og F5 Muted</b> samt information-, community-, support-, ticket-, VIP-, staff- og voice-områder.</div>'+
-          '</div>'+
-          '<div class="card" style="padding:14px;background:#0c0c13">'+
-            '<div style="font-weight:800;margin-bottom:8px">F5 VIP-skitsen sætter også op</div>'+
-            '<div style="color:var(--muted);font-size:12px;line-height:1.8">✓ Verification-panel<br>✓ Ticket-panel<br>✓ Log-kanal<br>✓ Welcome / leave<br>✓ Suggestions<br>✓ AutoMod + invite filter<br>✓ Anti-raid<br>✓ Levels / XP<br>✓ Economy</div>'+
-          '</div>'+
-        '</div>'+
-        '<div class="actions" style="margin-top:16px"><button type="button" class="btn primary" id="snApplyF5Template">🚀 Opsæt F5 VIP på serveren</button></div>'+
-        '<div id="snTemplateResult" style="margin-top:12px"></div>'+
-      '</div>'+
       '<div class="card">'+
         '<div class="section-title"><div><h2>Bot-indstillinger pr. server</h2><span>Vælg en Discord-server herunder, hvis du vil konfigurere funktionerne.</span></div><div id="snFeatureGuildWrap" style="min-width:260px"></div></div>'+
         '<div id="snFeatureSettings"><div class="empty">Henter Discord-servere…</div></div>'+
