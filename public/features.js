@@ -22,7 +22,7 @@
     ["🎵","Voice","Join og leave voice-kanaler.","/music-join /music-leave"],
     ["📝","Logs","Send botlogs til en valgt Discord-kanal.","/set-log-channel"],
     ["🔒","Lockdown","Lås tekstkanaler og åbn dem igen.","/lockdown /unlockdown"],
-    ["✨","AI-funktioner","AI-assistent og automatisering til ShardNote.","Planlagt"],
+    ["✨","AI-assistent","AI-svar i udvalgte Discord-kanaler for Member Pro.","Member Pro"],
     ["⭐","Premium","Premium-planer og betalingsfunktioner.","Planlagt"],
     ["🎧","Musikafspilning","Rigtig musikafspilning via en lydkilde.","Planlagt"]
   ];
@@ -107,7 +107,35 @@
           '</div>'+
         '</div>';
 
-      document.getElementById("snFeature_welcome_msg").value=s.welcome_message || "";
+      document.getElementById("snFeature_welcome_msg").value=s.welcome_message || "";      if(window.currentUser?.plan==="member_pro" || typeof currentUser!=="undefined" && currentUser?.plan==="member_pro"){
+        const aiChannels=Array.isArray(s.ai_channel_ids)?s.ai_channel_ids.map(String):[];
+        const aiOptions=(data.channels||[]).map(function(ch){
+          return '<option value="'+esc(ch.id)+'"'+(aiChannels.includes(String(ch.id))?" selected":"")+'>'+esc(ch.name)+'</option>';
+        }).join("");
+        const aiBox=document.createElement("div");
+        aiBox.className="card";
+        aiBox.style.marginTop="18px";
+        aiBox.innerHTML=
+          '<div class="section-title"><div><h2>✨ AI-assistent</h2><span>Member Pro kan lade ShardNote svare automatisk i udvalgte Discord-kanaler.</span></div><span class="badge open">Member Pro</span></div>'+
+          switchRow("ai_enabled","AI-svar","Svar automatisk på beskeder i de valgte kanaler.",!!s.ai_enabled)+
+          '<div class="field" style="margin-top:14px"><label>Kanaler hvor AI må svare</label><select id="snAiChannels" multiple size="6">'+aiOptions+'</select><small style="color:var(--muted)">Hold Ctrl nede for at vælge flere kanaler.</small></div>'+
+          '<div class="actions"><button type="button" class="btn primary" id="snAiSave">Gem AI-indstillinger</button></div>';
+        body.appendChild(aiBox);
+        document.getElementById("snAiSave").addEventListener("click",async function(){
+          const channelIds=Array.from(document.getElementById("snAiChannels").selectedOptions).map(function(o){return o.value;});
+          try{
+            await apiCall("/api/bot/guilds/"+encodeURIComponent(selectedGuild)+"/ai",{
+              method:"PATCH",headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({enabled:document.getElementById("snFeature_ai_enabled").classList.contains("on"),channelIds})
+            });
+            if(typeof window.toast==="function")window.toast("AI-indstillinger gemt");
+            await renderFeatureSettings(selectedGuild);
+          }catch(error){if(typeof window.toast==="function")window.toast(error.message);}
+        });
+        document.getElementById("snFeature_ai_enabled").addEventListener("click",function(){this.classList.toggle("on");});
+      }
+
+
       document.getElementById("snFeature_leave_msg").value=s.leave_message || "";
 
       document.querySelectorAll("#snFeatureSettings [data-feature-key]").forEach(function(button){
