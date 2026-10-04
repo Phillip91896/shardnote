@@ -2169,6 +2169,7 @@ body.locked > .app{display:none}
       <div class="field" style="margin-top:12px"><label>Email</label><input id="newUserEmail" type="email" placeholder="jonas@example.com"></div>
       <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="newUserPassword" type="password" placeholder="Mindst 8 tegn"></div>
       <div class="field" style="margin-top:12px"><label>Rolle</label><select id="newUserRole"><option value="member">Member</option><option value="admin">Administrator</option></select></div>
+      <div class="field" style="margin-top:12px"><label>Pakke</label><select id="newUserPlan"><option value="member">Member</option><option value="member_plus">Member Plus</option><option value="member_pro">Member Pro</option></select></div>
       <div class="actions"><button class="btn primary" data-button-label="adminAddUser" onclick="createUser()">+ Tilføj bruger</button></div>
       <p style="color:var(--muted);font-size:12px;margin-top:12px">Kun administratorer kan åbne og ændre dette panel.</p>
     </div>
