@@ -3,6 +3,15 @@
   const TEMPLATE_TITLE="Discord-skitser";
   let selectedGuild=localStorage.getItem("shardnote_template_guild") || "";
   let selectedTemplate=localStorage.getItem("shardnote_selected_template") || "fivem-vip";
+  let selectedLanguage=localStorage.getItem("shardnote_template_language") || "da";
+
+  const TEMPLATE_LANGUAGES=[
+    ["da","🇩🇰 Dansk"],["en","🇬🇧 English"],["de","🇩🇪 Deutsch"],["fr","🇫🇷 Français"],
+    ["es","🇪🇸 Español"],["it","🇮🇹 Italiano"],["nl","🇳🇱 Nederlands"],["pt","🇵🇹 Português"],
+    ["sv","🇸🇪 Svenska"],["no","🇳🇴 Norsk"],["fi","🇫🇮 Suomi"],["pl","🇵🇱 Polski"],
+    ["tr","🇹🇷 Türkçe"],["ru","🇷🇺 Русский"],["uk","🇺🇦 Українська"],["ja","🇯🇵 日本語"],
+    ["ko","🇰🇷 한국어"],["zh","🇨🇳 中文"]
+  ];
 
   const TEMPLATES=[
     {key:"fivem-vip",icon:"🚓",name:"FiveM VIP",desc:"FiveM VIP-server med VIP-område, tickets, staff og gaming.",features:["AutoMod","Invite filter","Levels / XP","Economy","Anti-raid"]},
@@ -79,6 +88,8 @@
     const prefixRoles=[];
     const prefixChannels=[];
     const features={};
+    selectedLanguage=document.getElementById("snTemplateLanguage")?.value || selectedLanguage;
+    localStorage.setItem("shardnote_template_language",selectedLanguage);
     FEATURE_KEYS.forEach(function(item){
       const el=document.getElementById("tpl_"+item[0]);
       features[item[0]]=!!el?.checked;
@@ -88,7 +99,7 @@
     try{
       const response=await apiCall("/api/bot/guilds/"+encodeURIComponent(guildId)+"/templates/"+encodeURIComponent(selectedTemplate),{
         method:"POST",headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({prefixRoles,prefixChannels,features})
+        body:JSON.stringify({prefixRoles,prefixChannels,features,language:selectedLanguage})
       });
       const r=response.result||{};
       if(result)result.innerHTML='<div class="badge open">✅ '+esc(r.name||selectedTemplate)+' er sat op</div>'+
@@ -123,7 +134,10 @@
       '<div class="feature-grid">'+cards+'</div>'+
       '<div class="card" style="margin-top:18px">'+
         '<div class="section-title"><div><h2 id="selectedTemplateTitle">🚓 FiveM VIP</h2><span id="selectedTemplateDesc">Vælg en skitse ovenfor.</span></div><div class="badge open">Valgt skitse</div></div>'+
-        '<div class="field"><label>Discord-server</label><select id="snTemplatePageGuild"></select></div>'+
+        '<div class="grid two">'+
+          '<div class="field"><label>Discord-server</label><select id="snTemplatePageGuild"></select></div>'+
+          '<div class="field"><label>Sprog til serveren</label><select id="snTemplateLanguage">'+TEMPLATE_LANGUAGES.map(function(item){return '<option value="'+item[0]+'">'+item[1]+'</option>';}).join("")+'</select></div>'+
+        '</div>'+
         '<div id="customFeatures" style="display:none;margin-top:16px"><h3 style="margin-bottom:4px">🧰 Vælg funktioner</h3>'+customChecks+'</div>'+
         '<div class="actions" style="margin-top:18px"><button type="button" class="btn primary" id="snTemplatePageApply">🚀 Opsæt denne skitse</button></div>'+
         '<div id="snTemplatePageResult" style="margin-top:12px"></div>'+
@@ -151,6 +165,15 @@
       if(!guilds.some(function(g){return String(g.id)===String(selectedGuild);}))selectedGuild=guilds[0].id;
       localStorage.setItem("shardnote_template_guild",selectedGuild);
       select.innerHTML=guilds.map(function(g){return '<option value="'+esc(g.id)+'"'+(String(g.id)===String(selectedGuild)?" selected":"")+'>'+esc(g.name)+' · '+g.memberCount+' medlemmer</option>';}).join("");
+      const languageSelect=document.getElementById("snTemplateLanguage");
+      if(languageSelect){
+        if(!TEMPLATE_LANGUAGES.some(function(item){return item[0]===selectedLanguage;})) selectedLanguage="da";
+        languageSelect.value=selectedLanguage;
+        languageSelect.addEventListener("change",function(){
+          selectedLanguage=this.value;
+          localStorage.setItem("shardnote_template_language",selectedLanguage);
+        });
+      }
       select.addEventListener("change",function(){selectedGuild=this.value;localStorage.setItem("shardnote_template_guild",selectedGuild);});
       document.getElementById("snTemplatePageApply").addEventListener("click",applyTemplate);
     }catch(error){document.getElementById("snTemplatePageResult").innerHTML='<div class="badge closed">'+esc(error.message)+'</div>';}
