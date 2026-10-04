@@ -147,7 +147,11 @@ async function initDatabase() {
       ADD COLUMN IF NOT EXISTS plan VARCHAR(30) NOT NULL DEFAULT 'member',
       ADD COLUMN IF NOT EXISTS stripe_customer_id VARCHAR(120),
       ADD COLUMN IF NOT EXISTS stripe_subscription_id VARCHAR(120),
-      ADD COLUMN IF NOT EXISTS subscription_current_period_end TIMESTAMPTZ
+      ADD COLUMN IF NOT EXISTS subscription_current_period_end TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS banned BOOLEAN NOT NULL DEFAULT FALSE,
+      ADD COLUMN IF NOT EXISTS ban_type VARCHAR(20),
+      ADD COLUMN IF NOT EXISTS banned_ip INET,
+      ADD COLUMN IF NOT EXISTS banned_at TIMESTAMPTZ
   `);
 
   await db.query(`
@@ -379,8 +383,7 @@ function hasLogsAccess(req) {
 }
 
 function getClientIp(req) {
-  const forwarded = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim();
-  const ip = forwarded || req.ip || req.socket?.remoteAddress || "";
+  const ip = String(req.ip || req.socket?.remoteAddress || "").trim();
   return ip.replace(/^::ffff:/, "");
 }
 
@@ -420,7 +423,7 @@ async function lookupIpLocation(ip) {
 }
 
 async function recordLoginAudit({ req, user, success, eventType }) {
-  const ipAddress = "";
+  const ipAddress = getClientIp(req);
   const userAgent = String(req.headers["user-agent"] || "").slice(0, 1000);
   const location = await lookupIpLocation(ipAddress);
 
@@ -698,7 +701,11 @@ app.post("/api/login", async (req, res) => {
                 plan,
                 stripe_customer_id AS "stripeCustomerId",
                 stripe_subscription_id AS "stripeSubscriptionId",
-                subscription_current_period_end AS "subscriptionCurrentPeriodEnd"
+                subscription_current_period_end AS "subscriptionCurrentPeriodEnd",
+                banned,
+                ban_type AS "banType",
+                host(banned_ip) AS "bannedIp",
+                banned_at AS "bannedAt"
          FROM users WHERE email = $1 LIMIT 1`,
         [email]
       );
@@ -711,6 +718,10 @@ app.post("/api/login", async (req, res) => {
           role: row.role,
           passwordHash: row.password_hash,
           createdAt: row.created_at,
+          banned: !!row.banned,
+          banType: row.banType || null,
+          bannedIp: row.bannedIp || null,
+          bannedAt: row.bannedAt || null,
           subscriptionStatus: row.subscriptionStatus || "inactive",
           trialUsed: !!row.trialUsed,
           plan: ["member","member_plus","member_pro","member_premium"].includes(row.plan) ? row.plan : "member",
@@ -737,13 +748,31 @@ app.post("/api/login", async (req, res) => {
       return res.status(401).json({ error: "Forkert email eller adgangskode." });
     }
 
+    if (user.banned) {
+      await recordLoginAudit({ req, user, success: false, eventType: "login_blocked" });
+      return res.status(403).json({ error: "Denne konto er bannet." });
+    }
+
+    if (db) {
+      const ip = getClientIp(req);
+      const ipBan = await db.query(
+        "SELECT 1 FROM public.users WHERE banned = TRUE AND ban_type = 'ip' AND banned_ip = $1::inet LIMIT 1",
+        [ip]
+      );
+      if (ip && ipBan.rowCount) {
+        await recordLoginAudit({ req, user, success: false, eventType: "ip_ban_blocked" });
+        return res.status(403).json({ error: "Denne IP-adresse er bannet." });
+      }
+    }
+
     const sid = createSessionToken(user.id);
     sessions.set(sid, {
       id: user.id,
       name: user.name,
       email: user.email,
       role: user.role,
-      plan: user.plan || "member"
+      plan: user.plan || "member",
+      banned: !!user.banned
     });
 
     res.setHeader("Set-Cookie", `shardnote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
@@ -788,14 +817,24 @@ app.post("/api/register", async (req, res) => {
     let user;
 
     if (db) {
-      const existing = await db.query("SELECT id FROM users WHERE email = $1 LIMIT 1", [email]);
+      const existing = await db.query("SELECT id, banned FROM users WHERE email = $1 LIMIT 1", [email]);
       if (existing.rowCount) {
+        if (existing.rows[0].banned) return res.status(403).json({ error: "Denne email er bannet." });
         return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+      }
+
+      const clientIp = getClientIp(req);
+      if (clientIp) {
+        const ipBan = await db.query(
+          "SELECT 1 FROM public.users WHERE banned = TRUE AND ban_type = 'ip' AND banned_ip = $1::inet LIMIT 1",
+          [clientIp]
+        );
+        if (ipBan.rowCount) return res.status(403).json({ error: "Denne IP-adresse er bannet." });
       }
 
       try {
         const result = await db.query(
-          "INSERT INTO users (name, email, role, password_hash, plan) VALUES ($1, $2, 'member', $3, 'member') RETURNING id, name, email, role, plan, created_at",
+          "INSERT INTO users (name, email, role, password_hash, plan) VALUES ($1, $2, 'member', $3, 'member') RETURNING id, name, email, role, plan, created_at, banned",
           [name, email, hashPassword(password)]
         );
         user = result.rows[0];
@@ -806,8 +845,14 @@ app.post("/api/register", async (req, res) => {
         throw error;
       }
     } else {
-      if (state.users.some(u => u.email === email)) {
+      const existingUser = state.users.find(u => u.email === email);
+      if (existingUser) {
+        if (existingUser.banned) return res.status(403).json({ error: "Denne email er bannet." });
         return res.status(409).json({ error: "Der findes allerede en konto med den email." });
+      }
+      const clientIp = getClientIp(req);
+      if (clientIp && state.users.some(u => u.banned && u.banType === "ip" && u.bannedIp === clientIp)) {
+        return res.status(403).json({ error: "Denne IP-adresse er bannet." });
       }
 
       user = {
@@ -931,7 +976,14 @@ app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
 
     if (db) {
       const result = await db.query(
-        "SELECT id, name, email, role, plan, created_at AS \"createdAt\" FROM users ORDER BY id ASC"
+        `SELECT
+           id, name, email, role, plan,
+           banned,
+           ban_type AS "banType",
+           host(banned_ip) AS "bannedIp",
+           banned_at AS "bannedAt",
+           created_at AS "createdAt"
+         FROM users ORDER BY id ASC`
       );
       return res.json(result.rows);
     }
@@ -1087,6 +1139,111 @@ app.patch("/api/admin/users/:id/plan", requireAuth, requireAdmin, async (req, re
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Pakken kunne ikke ændres." });
+  }
+});
+
+app.patch("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+
+    if (String(req.params.id) === String(req.user.id)) {
+      return res.status(400).json({ error: "Du kan ikke banne din egen konto." });
+    }
+
+    const banType = req.body?.type === "ip" ? "ip" : "normal";
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: "Ugyldigt bruger-ID." });
+
+    let userEmail = null;
+    let bannedIp = null;
+
+    if (db) {
+      const userResult = await db.query(
+        `SELECT id, email, banned, ban_type AS "banType", host(banned_ip) AS "bannedIp"
+         FROM public.users WHERE id = $1 LIMIT 1`,
+        [id]
+      );
+      if (!userResult.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
+
+      const target = userResult.rows[0];
+      userEmail = target.email;
+
+      if (banType === "ip") {
+        const loginIp = await db.query(
+          `SELECT host(ip_address) AS ip
+           FROM public.login_audit
+           WHERE user_id = $1 AND success = TRUE AND ip_address IS NOT NULL
+           ORDER BY created_at DESC
+           LIMIT 1`,
+          [id]
+        );
+        bannedIp = loginIp.rows[0]?.ip || null;
+        if (!bannedIp) return res.status(400).json({ error: "Der er ingen registreret IP-adresse for denne bruger endnu. Brugeren skal logge ind mindst én gang først." });
+      }
+
+      await db.query(
+        `UPDATE public.users
+         SET banned = TRUE,
+             ban_type = $1,
+             banned_ip = CASE WHEN $1 = 'ip' THEN $2::inet ELSE NULL END,
+             banned_at = NOW()
+         WHERE id = $3`,
+        [banType, bannedIp, id]
+      );
+    } else {
+      const target = state.users.find(u => Number(u.id) === id);
+      if (!target) return res.status(404).json({ error: "Bruger ikke fundet." });
+      userEmail = target.email;
+      if (banType === "ip") {
+        const audit = state.loginAudit.find(item => Number(item.userId) === id && item.success && item.ipAddress);
+        bannedIp = audit?.ipAddress || null;
+        if (!bannedIp) return res.status(400).json({ error: "Der er ingen registreret IP-adresse for denne bruger endnu." });
+      }
+      target.banned = true;
+      target.banType = banType;
+      target.bannedIp = banType === "ip" ? bannedIp : null;
+      target.bannedAt = new Date().toISOString();
+    }
+
+    for (const [sid, sessionUser] of sessions.entries()) {
+      if (String(sessionUser?.id) === String(id)) sessions.delete(sid);
+    }
+
+    log("security", `Admin ${req.user.email} banned ${userEmail} (${banType})`);
+    res.json({ ok: true, banType, bannedIp });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Brugeren kunne ikke bannes." });
+  }
+});
+
+app.patch("/api/admin/users/:id/unban", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) return res.status(400).json({ error: "Ugyldigt bruger-ID." });
+
+    if (db) {
+      const result = await db.query(
+        "UPDATE public.users SET banned = FALSE, ban_type = NULL, banned_ip = NULL, banned_at = NULL WHERE id = $1 RETURNING id, email",
+        [id]
+      );
+      if (!result.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
+      log("security", `Admin ${req.user.email} fjernede ban for ${result.rows[0].email}`);
+      return res.json({ ok: true });
+    }
+
+    const user = state.users.find(u => Number(u.id) === id);
+    if (!user) return res.status(404).json({ error: "Bruger ikke fundet." });
+    user.banned = false;
+    user.banType = null;
+    user.bannedIp = null;
+    user.bannedAt = null;
+    log("security", `Admin ${req.user.email} fjernede ban for ${user.email}`);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Bannet kunne ikke fjernes." });
   }
 });
 
