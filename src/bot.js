@@ -2149,7 +2149,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
     return false;
   }
 
-  client.once("ready", async () => {
+  client.once("clientReady", async () => {
     setReady(true);
 
     try {
