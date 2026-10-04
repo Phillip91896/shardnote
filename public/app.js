@@ -444,66 +444,149 @@ function watchPayment(){
 
 function showLanding(){
   document.body.classList.add("locked");
+
+  window.closePlanDetails=function(){
+    const modal=document.getElementById("planDetailsModal");
+    if(modal) modal.remove();
+  };
+
+  window.showPlanDetails=function(plan){
+    const plans={
+      member:{
+        name:"ShardNote Member",
+        price:"2,67 €",
+        summary:"Grundpakken til mindre Discord-servere.",
+        included:[
+          "Dashboard og egne kontodata",
+          "Tickets og support-håndtering",
+          "Commands og grundlæggende botstyring",
+          "Standard moderation",
+          "Welcome / Leave",
+          "Autorole",
+          "Suggestions og Polls",
+          "Levels / XP og Economy",
+          "Verification og Role panel",
+          "Voice-funktioner"
+        ],
+        excluded:[
+          "Avancerede Member Plus-funktioner",
+          "AI-assistent",
+          "Logs",
+          "Admin-panel"
+        ]
+      },
+      member_plus:{
+        name:"ShardNote Member Plus",
+        price:"4,68 €",
+        summary:"Flere bot- og serverfunktioner oven på Member.",
+        included:[
+          "Alt fra Member",
+          "AutoMod",
+          "Invite filter",
+          "Anti-raid",
+          "Giveaways",
+          "Backups og restore",
+          "Lockdown",
+          "Udvidede bot- og serverindstillinger",
+          "Discord-skitser / templates"
+        ],
+        excluded:[
+          "AI-assistent",
+          "Logs",
+          "Admin-panel"
+        ]
+      },
+      member_pro:{
+        name:"ShardNote Member Pro",
+        price:"6,99 €",
+        summary:"Den fulde medlems-pakke med AI.",
+        included:[
+          "Alt fra Member Plus",
+          "Alle øvrige bot- og serverfunktioner",
+          "AI-assistent i udvalgte Discord-kanaler",
+          "Avancerede serverindstillinger",
+          "AI-kanaler kan vælges og gemmes fra dashboardet"
+        ],
+        excluded:[
+          "Logs",
+          "Admin-panel"
+        ]
+      }
+    };
+
+    const data=plans[plan];
+    if(!data) return;
+    closePlanDetails();
+
+    const modal=document.createElement("div");
+    modal.id="planDetailsModal";
+    modal.style.cssText="position:fixed;inset:0;z-index:1000;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:20px;";
+    modal.innerHTML=
+      '<div style="width:min(720px,100%);max-height:82vh;overflow:auto;background:#11111a;border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 24px 80px rgba(0,0,0,.5);padding:22px">'+
+        '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:16px">'+
+          '<div><div style="font-size:13px;color:var(--muted)">ShardNote-pakke</div><h2 style="margin:4px 0;font-size:26px">'+data.name+'</h2><div style="font-weight:800;color:var(--accent2);font-size:18px">'+data.price+' <span style="font-size:13px;color:var(--muted);font-weight:600">/ måned</span></div></div>'+
+          '<button class="btn small" type="button" onclick="closePlanDetails()">Luk</button>'+
+        '</div>'+
+        '<p style="color:var(--muted);line-height:1.6;margin:14px 0 18px">'+data.summary+'</p>'+
+        '<div style="font-weight:800;margin-bottom:9px">✅ Inkluderet</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px">'+
+          data.included.map(function(item){return '<div style="background:#171722;border:1px solid rgba(66,211,146,.18);border-radius:10px;padding:10px;font-size:13px">✓ '+item+'</div>';}).join("")+
+        '</div>'+
+        '<div style="font-weight:800;margin:20px 0 9px">⛔ Ikke inkluderet</div>'+
+        '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px">'+
+          data.excluded.map(function(item){return '<div style="background:#171722;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px;font-size:13px;color:var(--muted)">— '+item+'</div>';}).join("")+
+        '</div>'+
+        '<div class="actions" style="justify-content:flex-end;margin-top:20px"><button class="btn primary" type="button" onclick="closePlanDetails();showRegister(\''+plan+'\')">Vælg '+data.name.replace("ShardNote ","")+'</button></div>'+
+      '</div>';
+
+    modal.addEventListener("click",function(event){
+      if(event.target===modal) closePlanDetails();
+    });
+    document.body.appendChild(modal);
+  };
+
   const box=document.getElementById("loginScreen") || document.createElement("div");
   box.id="loginScreen";
-  box.innerHTML=`<div class="login-card" style="width:min(720px,100%);text-align:center">
-    <div class="brand" style="justify-content:center;padding:0 0 12px"><div class="brand-mark">S</div><span>ShardNote</span></div>
+  box.innerHTML=`<div class="login-card" style="width:min(980px,100%);text-align:center;max-height:calc(100vh - 36px);overflow:auto">
+    <div class="brand" style="justify-content:center;padding:0 0 10px"><div class="brand-mark">S</div><span>ShardNote</span></div>
     <div style="font-size:12px;color:var(--accent2);font-weight:800;text-transform:uppercase;letter-spacing:.12em">Discord Control Center</div>
-    <h1 style="font-size:38px;margin:12px 0 10px">Få adgang til hele ShardNote</h1>
-    <p style="max-width:560px;margin:0 auto;color:var(--muted);font-size:15px;line-height:1.6">Styr din Discord-bot fra ét samlet kontrolpanel med moderation, tickets, AutoMod, levels, economy, giveaways, logs og meget mere.</p>
-    <div style="max-width:1080px;margin:26px auto 18px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;text-align:left">
-      <div class="card" style="border-color:rgba(109,93,252,.45)">
-        <div style="font-size:13px;color:var(--muted)">ShardNote Member</div>
-        <div style="font-size:38px;font-weight:900;margin:5px 0">2,67 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
-        <div style="color:var(--accent2);font-size:12px;font-weight:800">10 dage gratis</div>
-        <div style="color:var(--green);font-size:12px;margin-top:8px">✓ Standardfunktioner</div>
-        <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Eget dashboard og egne data</div>
-        <button class="btn primary" style="width:100%;margin-top:14px" onclick="showRegister('member')">Vælg Member</button>
-      </div>
-      <div class="card" style="border-color:rgba(66,211,146,.35)">
-        <div style="font-size:13px;color:var(--muted)">ShardNote Member Plus</div>
-        <div style="font-size:38px;font-weight:900;margin:5px 0">4,68 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
-        <div style="color:var(--accent2);font-size:12px;font-weight:800">10 dage gratis</div>
-        <div style="color:var(--green);font-size:12px;margin-top:8px">✓ Alt fra Member</div>
-        <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Flere bot- og serverfunktioner</div>
-        <button class="btn primary" style="width:100%;margin-top:14px" onclick="showRegister('member_plus')">Vælg Member Plus</button>
-      </div>      <div class="card" style="border-color:rgba(245,201,94,.45)">
-        <div style="font-size:13px;color:var(--muted)">ShardNote Member Pro</div>
-        <div style="font-size:38px;font-weight:900;margin:5px 0">6,99 € <span style="font-size:15px;font-weight:600;color:var(--muted)">/ måned</span></div>
-        <div style="color:var(--accent2);font-size:12px;font-weight:800">10 dage gratis</div>
-        <div style="color:var(--green);font-size:12px;margin-top:8px">✓ Alt fra Member Plus</div>
-        <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Alle funktioner + AI-assistent på Discord</div>
-        <button class="btn primary" style="width:100%;margin-top:14px" onclick="showRegister('member_pro')">Vælg Member Pro</button>
-      </div>
+    <h1 style="font-size:34px;margin:10px 0 8px">Få adgang til ShardNote</h1>
+    <p style="max-width:620px;margin:0 auto;color:var(--muted);font-size:14px;line-height:1.55">Vælg en pakke. Tryk på en pakke for at se præcis, hvad der er inkluderet.</p>
+
+    <div style="max-width:920px;margin:22px auto 18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;text-align:left">
+      <button type="button" class="card" style="border-color:rgba(109,93,252,.45);text-align:left;cursor:pointer;padding:16px" onclick="showPlanDetails('member')">
+        <div style="font-size:12px;color:var(--muted)">ShardNote</div>
+        <div style="font-size:21px;font-weight:900;margin:3px 0">Member</div>
+        <div style="font-size:25px;font-weight:900">2,67 € <span style="font-size:12px;font-weight:600;color:var(--muted)">/ måned</span></div>
+        <div style="color:var(--accent2);font-size:11px;font-weight:800;margin-top:5px">10 dage gratis</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:10px">Grundpakken</div>
+        <div style="font-size:12px;color:var(--accent2);margin-top:12px;font-weight:800">Se alle funktioner →</div>
+      </button>
+
+      <button type="button" class="card" style="border-color:rgba(66,211,146,.35);text-align:left;cursor:pointer;padding:16px" onclick="showPlanDetails('member_plus')">
+        <div style="font-size:12px;color:var(--muted)">ShardNote</div>
+        <div style="font-size:21px;font-weight:900;margin:3px 0">Member Plus</div>
+        <div style="font-size:25px;font-weight:900">4,68 € <span style="font-size:12px;font-weight:600;color:var(--muted)">/ måned</span></div>
+        <div style="color:var(--accent2);font-size:11px;font-weight:800;margin-top:5px">10 dage gratis</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:10px">Flere bot- og serverfunktioner</div>
+        <div style="font-size:12px;color:var(--accent2);margin-top:12px;font-weight:800">Se alle funktioner →</div>
+      </button>
+
+      <button type="button" class="card" style="border-color:rgba(245,201,94,.45);text-align:left;cursor:pointer;padding:16px" onclick="showPlanDetails('member_pro')">
+        <div style="font-size:12px;color:var(--muted)">ShardNote</div>
+        <div style="font-size:21px;font-weight:900;margin:3px 0">Member Pro</div>
+        <div style="font-size:25px;font-weight:900">6,99 € <span style="font-size:12px;font-weight:600;color:var(--muted)">/ måned</span></div>
+        <div style="color:var(--accent2);font-size:11px;font-weight:800;margin-top:5px">10 dage gratis</div>
+        <div style="font-size:12px;color:var(--muted);margin-top:10px">Alle funktioner + AI</div>
+        <div style="font-size:12px;color:var(--accent2);margin-top:12px;font-weight:800">Se alle funktioner →</div>
+      </button>
     </div>
-    <div style="max-width:680px;margin:22px auto 24px;text-align:left">
-      <div style="font-size:18px;font-weight:800;margin-bottom:12px">Alt dette får du i ShardNote</div>
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:10px">
-        <div class="card" style="padding:13px"><b>🛡️ Moderation</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Warn, kick, ban, timeout, purge og slowmode.</div></div>
-        <div class="card" style="padding:13px"><b>🎫 Tickets</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Support-tickets, claim, close og transcript.</div></div>
-        <div class="card" style="padding:13px"><b>🤖 AutoMod</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Automatisk spam-beskyttelse og moderering.</div></div>
-        <div class="card" style="padding:13px"><b>🚨 Anti-raid</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Beskyt serveren mod hurtige joins og raids.</div></div>
-        <div class="card" style="padding:13px"><b>👋 Welcome / Leave</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Automatiske velkomst- og farvelbeskeder.</div></div>
-        <div class="card" style="padding:13px"><b>🎭 Autorole</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Giv nye medlemmer roller automatisk.</div></div>
-        <div class="card" style="padding:13px"><b>💡 Suggestions</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Forslag samlet i en bestemt kanal.</div></div>
-        <div class="card" style="padding:13px"><b>🎉 Giveaways</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Giveaways med deltagelse og vindertrækning.</div></div>
-        <div class="card" style="padding:13px"><b>📊 Polls</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Interaktive afstemninger.</div></div>
-        <div class="card" style="padding:13px"><b>📈 Levels / XP</b><div style="font-size:12px;color:var(--muted);margin-top:4px">XP, levels og leaderboard.</div></div>
-        <div class="card" style="padding:13px"><b>💰 Economy</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Coins, daily og work-system.</div></div>
-        <div class="card" style="padding:13px"><b>✅ Verification</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Verification-panel med valgt rolle.</div></div>
-        <div class="card" style="padding:13px"><b>🎭 Role panel</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Interaktive selv-roller.</div></div>
-        <div class="card" style="padding:13px"><b>💾 Backups</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Backup og restore af serveropsætning.</div></div>
-        <div class="card" style="padding:13px"><b>🎵 Voice</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Join og leave voice-kanaler.</div></div>
-        <div class="card" style="padding:13px"><b>📝 Logs</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Botlogs til en valgt Discord-kanal.</div></div>
-        <div class="card" style="padding:13px"><b>🔒 Lockdown</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Lås tekstkanaler og åbn dem igen.</div></div>
-        <div class="card" style="padding:13px"><b>✨ AI-assistent</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Member Pro kan lade AI svare automatisk i udvalgte Discord-kanaler.</div></div>
-        <div class="card" style="padding:13px"><b>⭐ Premium</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Abonnement og betalingsfunktioner.</div></div>
-        <div class="card" style="padding:13px"><b>🎧 Musikafspilning</b><div style="font-size:12px;color:var(--muted);margin-top:4px">Planlagt rigtig musikafspilning.</div></div>
-      </div>
-    </div>
+
+    <div style="font-size:12px;color:var(--muted);margin:6px auto 18px">Den lange funktionsliste er fjernet fra forsiden. Klik på en pakke for at åbne detaljerne.</div>
+
     <div class="actions" style="justify-content:center">
-      <button class="btn primary" onclick="showRegister()">Opret konto og betal</button>
-      <button class="btn" onclick="showLogin()">Jeg har allerede en konto</button>
+      <button class="btn primary" type="button" onclick="showRegister()">Opret konto og betal</button>
+      <button class="btn" type="button" onclick="showLogin()">Jeg har allerede en konto</button>
     </div>
   </div>`;
   if(!box.parentElement) document.body.appendChild(box);
