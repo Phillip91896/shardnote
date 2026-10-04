@@ -300,6 +300,25 @@ async function initDatabase() {
   `);
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS public.serial_keys (
+      id BIGSERIAL PRIMARY KEY,
+      key_hash TEXT NOT NULL UNIQUE,
+      key_last4 VARCHAR(8) NOT NULL,
+      product_name VARCHAR(120) NOT NULL,
+      guild_id VARCHAR(32) NOT NULL,
+      role_id VARCHAR(32) NOT NULL,
+      max_uses INTEGER NOT NULL DEFAULT 1,
+      uses INTEGER NOT NULL DEFAULT 0,
+      created_by BIGINT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      expires_at TIMESTAMPTZ,
+      last_redeemed_by VARCHAR(32),
+      last_redeemed_at TIMESTAMPTZ,
+      revoked BOOLEAN NOT NULL DEFAULT FALSE
+    )
+  `);
+
+  await db.query(`
     INSERT INTO bot_settings (id, prefix, maintenance, auto_reply, welcome_messages)
     VALUES (1, '!', FALSE, TRUE, TRUE)
     ON CONFLICT (id) DO NOTHING
@@ -537,6 +556,15 @@ async function recordLoginAudit({ req, user, success, eventType }) {
 
 function hashPassword(password) {
   return crypto.createHash("sha256").update(String(password)).digest("hex");
+}
+
+function generateSerialKey() {
+  const raw = crypto.randomBytes(18).toString("base64url").toUpperCase();
+  return "SN-" + raw.match(/.{1,6}/g).join("-");
+}
+
+function hashSerialKey(value) {
+  return crypto.createHash("sha256").update(String(value || "").trim().toUpperCase()).digest("hex");
 }
 
 function parseCookies(req) {
@@ -1215,6 +1243,134 @@ app.patch("/api/admin/users/:id/plan", requireAuth, requireAdmin, async (req, re
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Pakken kunne ikke ændres." });
+  }
+});
+
+
+app.get("/api/admin/serial-keys", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!db) return res.json([]);
+    const result = await db.query(
+      'SELECT id, product_name AS "productName", guild_id AS "guildId", role_id AS "roleId", key_last4 AS "keyLast4", max_uses AS "maxUses", uses, revoked, created_at AS "createdAt", expires_at AS "expiresAt", last_redeemed_by AS "lastRedeemedBy", last_redeemed_at AS "lastRedeemedAt" FROM public.serial_keys ORDER BY created_at DESC LIMIT 300'
+    );
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente serial keys." });
+  }
+});
+
+app.post("/api/admin/serial-keys/generate", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    const productName = String(req.body?.productName || "Discord role").trim().slice(0,120) || "Discord role";
+    const guildId = String(req.body?.guildId || "").trim();
+    const roleId = String(req.body?.roleId || "").trim();
+    const quantity = Math.min(Math.max(Number(req.body?.quantity || 1), 1), 100);
+    const maxUses = Math.min(Math.max(Number(req.body?.maxUses || 1), 1), 10000);
+    const expiresAtRaw = String(req.body?.expiresAt || "").trim();
+    const expiresAt = expiresAtRaw ? new Date(expiresAtRaw) : null;
+
+    if (!guildId || !roleId) return res.status(400).json({ error: "Vælg både Discord-server og rolle." });
+    if (expiresAt && Number.isNaN(expiresAt.getTime())) return res.status(400).json({ error: "Ugyldig udløbsdato." });
+    if (!client || !discordReady) return res.status(503).json({ error: "Discord-botten er ikke online." });
+
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) return res.status(404).json({ error: "ShardNote-botten er ikke på den valgte server." });
+
+    const role = guild.roles.cache.get(roleId);
+    if (!role || role.id === guild.id) return res.status(404).json({ error: "Rollen blev ikke fundet." });
+    if (!role.editable) return res.status(400).json({ error: "Botten kan ikke give den valgte rolle. Flyt rollen under ShardNote-bottens rolle." });
+
+    if (!db) return res.status(503).json({ error: "Database er nødvendig for serial keys." });
+
+    const created = [];
+    for (let i = 0; i < quantity; i++) {
+      let inserted = null;
+      for (let attempt = 0; attempt < 5 && !inserted; attempt++) {
+        const key = generateSerialKey();
+        const hash = hashSerialKey(key);
+        try {
+          const result = await db.query(
+            'INSERT INTO public.serial_keys (key_hash, key_last4, product_name, guild_id, role_id, max_uses, created_by, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id',
+            [hash, key.slice(-4), productName, guildId, roleId, maxUses, req.user.id, expiresAt ? expiresAt.toISOString() : null]
+          );
+          if (result.rowCount) inserted = { key, id: result.rows[0].id };
+        } catch (error) {
+          if (error.code !== "23505") throw error;
+        }
+      }
+      if (!inserted) throw new Error("Kunne ikke generere en unik serial key.");
+      created.push(inserted.key);
+    }
+
+    log("security", "Admin " + req.user.email + " generated " + created.length + " serial key(s) for " + productName);
+    res.json({ ok: true, keys: created });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: error.message || "Serial keys kunne ikke genereres." });
+  }
+});
+
+app.patch("/api/admin/serial-keys/:id/revoke", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: "Database er nødvendig." });
+    const result = await db.query(
+      "UPDATE public.serial_keys SET revoked = TRUE WHERE id = $1 RETURNING id",
+      [req.params.id]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: "Serial key ikke fundet." });
+    log("security", "Admin " + req.user.email + " revoked serial key #" + req.params.id);
+    res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Serial key kunne ikke tilbagekaldes." });
+  }
+});
+
+app.post("/api/serial-keys/redeem", requireAuth, async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: "Database er nødvendig." });
+    const key = String(req.body?.key || "").trim().toUpperCase();
+    const guildId = String(req.body?.guildId || "").trim();
+    const discordUserId = String(req.body?.discordUserId || "").trim();
+
+    if (!key || !guildId || !/^\d{17,20}$/.test(discordUserId)) {
+      return res.status(400).json({ error: "Indtast serial key, server-ID og Discord bruger-ID." });
+    }
+
+    const hash = hashSerialKey(key);
+    const result = await db.query(
+      'SELECT id, product_name AS "productName", guild_id AS "guildId", role_id AS "roleId", max_uses AS "maxUses", uses, expires_at AS "expiresAt", revoked FROM public.serial_keys WHERE key_hash = $1 LIMIT 1',
+      [hash]
+    );
+    const item = result.rows[0];
+    if (!item) return res.status(404).json({ error: "Serial key findes ikke." });
+    if (item.revoked) return res.status(400).json({ error: "Denne serial key er tilbagekaldt." });
+    if (item.guildId !== guildId) return res.status(400).json({ error: "Denne key er lavet til en anden Discord-server." });
+    if (item.expiresAt && new Date(item.expiresAt).getTime() <= Date.now()) return res.status(400).json({ error: "Denne serial key er udløbet." });
+    if (item.uses >= item.maxUses) return res.status(400).json({ error: "Denne serial key er allerede brugt op." });
+
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) return res.status(400).json({ error: "ShardNote-botten er ikke på den valgte server." });
+    const member = await guild.members.fetch(discordUserId).catch(() => null);
+    if (!member) return res.status(404).json({ error: "Discord-brugeren er ikke medlem af serveren." });
+    const role = guild.roles.cache.get(item.roleId);
+    if (!role) return res.status(404).json({ error: "Rollen findes ikke længere på serveren." });
+    if (!role.editable) return res.status(400).json({ error: "Botten kan ikke give denne rolle. Flyt rollen under ShardNote-bottens rolle." });
+
+    await member.roles.add(role, "ShardNote serial key redemption");
+
+    const used = await db.query(
+      'UPDATE public.serial_keys SET uses = uses + 1, last_redeemed_by = $1, last_redeemed_at = NOW() WHERE id = $2 AND uses < max_uses RETURNING uses',
+      [discordUserId, item.id]
+    );
+    if (!used.rowCount) return res.status(409).json({ error: "Denne serial key blev brugt op lige før. Rollen er dog givet til denne Discord-bruger." });
+
+    log("security", "Serial key redeemed for " + (member.user?.tag || discordUserId) + " in " + guild.name);
+    res.json({ ok: true, productName: item.productName, roleName: role.name, guildName: guild.name });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Serial key kunne ikke bruges." });
   }
 });
 
@@ -2521,6 +2677,32 @@ body.locked > .app{display:none}
 
 <section class="page" id="page-admin">
   <div class="card" style="margin-bottom:18px">
+    <div class="section-title"><div><h2>🔑 Serial Keys</h2><span>Kun administratorer · generér nøgler til Discord-roller</span></div></div>
+    <div class="form-grid">
+      <div class="field"><label>Server</label><select id="serialGuild" onchange="loadSerialRoles()"><option value="">Vælg server</option></select></div>
+      <div class="field"><label>Discord-rolle</label><select id="serialRole"><option value="">Vælg rolle</option></select></div>
+      <div class="field"><label>Produktnavn</label><input id="serialProduct" maxlength="120" value="Discord Role"></div>
+      <div class="field"><label>Antal keys</label><input id="serialQuantity" type="number" min="1" max="100" value="1"></div>
+      <div class="field"><label>Brug pr. key</label><input id="serialMaxUses" type="number" min="1" max="10000" value="1"></div>
+      <div class="field"><label>Udløbsdato (valgfri)</label><input id="serialExpiresAt" type="datetime-local"></div>
+    </div>
+    <div class="actions"><button class="btn primary" onclick="generateSerialKeys()">🔑 Generér serial keys</button></div>
+    <pre id="serialGenerated" style="display:none;margin-top:14px;white-space:pre-wrap;word-break:break-all;background:#0b0b11;border:1px solid var(--border);padding:12px;border-radius:10px"></pre>
+  </div>
+
+  <div class="card" style="margin-bottom:18px">
+    <div class="section-title"><div><h2>🛒 Store / Redeem</h2><span>Indtast en key for at få Discord-rollen.</span></div></div>
+    <div class="form-grid">
+      <div class="field"><label>Serial key</label><input id="redeemKey" placeholder="SN-XXXXXX-XXXXXX-XXXXXX"></div>
+      <div class="field"><label>Server-ID</label><input id="redeemGuildId" placeholder="Discord server-ID"></div>
+      <div class="field"><label>Discord bruger-ID</label><input id="redeemDiscordUserId" placeholder="Discord bruger-ID"></div>
+    </div>
+    <div class="actions"><button class="btn primary" onclick="redeemSerialKey()">✅ Redeem key</button></div>
+    <div id="redeemResult" style="margin-top:12px"></div>
+  </div>
+
+  <div class="card" style="margin-bottom:18px">
+
     <div class="section-title">
       <div><h2>🔐 IP-adressecenter</h2><span>Kun administratorer · kræver en separat IP-kode</span></div>
       <div class="actions" style="margin:0">
