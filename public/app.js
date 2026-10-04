@@ -473,7 +473,7 @@ function showLanding(){
         <div style="color:var(--accent2);font-size:12px;font-weight:800">10 dage gratis</div>
         <div style="color:var(--green);font-size:12px;margin-top:8px">✓ Alt fra Member Plus</div>
         <div style="color:var(--green);font-size:12px;margin-top:6px">✓ Alle funktioner + AI-assistent på Discord</div>
-        <button class="btn primary" style="width:100%;margin-top:14px" onclick="showRegister('member_plus')">Vælg Member Pro</button>
+        <button class="btn primary" style="width:100%;margin-top:14px" onclick="showRegister('member_pro')">Vælg Member Pro</button>
       </div>
     </div>
     <div style="max-width:680px;margin:22px auto 24px;text-align:left">
@@ -517,9 +517,10 @@ function showPaywall(){
     <div class="brand" style="justify-content:center;padding:0 0 16px"><div class="brand-mark">S</div><span>ShardNote</span></div>
     <h1>Vælg din ShardNote-pakke</h1>
     <p>Du får <b>10 dage gratis</b>. Vælg Member til <b>2,67 €</b> eller Member Plus til <b>4,68 € pr. måned</b>.</p>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px">
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px">
       <button class="btn primary" onclick="startSubscription('member')">Member · 2,67 €</button>
       <button class="btn primary" onclick="startSubscription('member_plus')">Member Plus · 4,68 €</button>
+      <button class="btn primary" onclick="startSubscription('member_pro')">Member Pro · 6,99 €</button>
     </div>
     <div style="font-size:12px;color:var(--muted);margin-top:12px">Når betalingen er godkendt, gemmes din pakke automatisk på kontoen. Næste gang du logger ind, går du direkte ind på dashboardet.</div>
     <button class="btn small" style="margin-top:18px" onclick="logout()">Log ud</button>
