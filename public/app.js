@@ -336,15 +336,61 @@ async function loadUsers(){
       const roleButton=u.id!==currentUser?.id
         ? `<button class="btn small" onclick="toggleUserRole(${u.id},'${u.role}')">${u.role==="admin"?"Gør til member":"Gør til admin"}</button>`
         : "";
+
       const nextPlan={member:"member_plus",member_plus:"member_pro",member_pro:"member"}[u.plan||"member"] || "member";
       const planButton=u.role!=="admin"
         ? `<button class="btn small" onclick="toggleUserPlan(${u.id},'${nextPlan}')">${u.plan==="member_pro"?"Gør til Member":u.plan==="member_plus"?"Gør til Member Pro":"Gør til Member Plus"}</button>`
         : "";
+
+      let moderationButtons="";
+      if(u.id!==currentUser?.id){
+        moderationButtons=u.banned
+          ? `<button class="btn small" onclick="unbanUser(${u.id})">✅ Fjern ban</button>`
+          : `<button class="btn small danger" onclick="banUser(${u.id},'normal')">🚫 Normal ban</button>`+
+            `<button class="btn small danger" onclick="banUser(${u.id},'ip')">🌐 IP-ban</button>`;
+      }
+
       const deleteButton=u.id!==currentUser?.id
         ? `<button class="btn small danger" onclick="deleteUser(${u.id})">Slet</button>`
         : "";
-      return `<div class="activity-item"><div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div><div style="flex:1"><b>${escapeHtml(u.name)}</b><small>${escapeHtml(u.email)} · ${escapeHtml(u.role)} · <b>${escapeHtml(planNames[u.plan]||"Member")}</b></small></div>${roleButton} ${planButton} ${deleteButton}</div>`;
+
+      const banStatus=u.banned
+        ? `<span class="badge closed">${u.banType==="ip"?"IP-bannet":"Bannet"}</span>`
+        : `<span class="badge open">Aktiv</span>`;
+
+      return `<div class="activity-item">
+        <div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div>
+        <div style="flex:1">
+          <b>${escapeHtml(u.name)}</b>
+          <small>${escapeHtml(u.email)} · ${escapeHtml(u.role)} · <b>${escapeHtml(planNames[u.plan]||"Member")}</b> · ${banStatus}</small>
+        </div>
+        ${roleButton} ${planButton} ${moderationButtons} ${deleteButton}
+      </div>`;
     }).join("")||'<div class="empty">Ingen brugere.</div>';
+  }catch(e){toast(e.message)}
+}
+
+async function banUser(id,type){
+  const label=type==="ip"?"IP-ban":"normal ban";
+  if(!confirm("Er du sikker på, at du vil bruge "+label+" på denne bruger?\n\nVed IP-ban bliver både brugerens email/konto og den senest registrerede IP-adresse bannet.")) return;
+  try{
+    const result=await api("/api/admin/users/"+id+"/ban",{
+      method:"PATCH",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({type})
+    });
+    toast(type==="ip"?"✅ IP-ban oprettet":"✅ Bruger bannet");
+    loadUsers();
+    if(result?.bannedIp) loadLogs();
+  }catch(e){toast(e.message)}
+}
+
+async function unbanUser(id){
+  if(!confirm("Fjern bannet fra denne bruger?")) return;
+  try{
+    await api("/api/admin/users/"+id+"/unban",{method:"PATCH"});
+    toast("✅ Ban fjernet");
+    loadUsers();
   }catch(e){toast(e.message)}
 }
 
