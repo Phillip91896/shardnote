@@ -1,6 +1,8 @@
 const pages = ["dashboard","spot","tickets","messages","commands","features","templates","upgrades","store","activate","music","settings","logs","admin"];
 const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord-skitser",upgrades:"Opgraderinger",store:"Store",activate:"Aktivér key",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true,buttonLabels:{}};
+let ticketCache = [];
+let adminTicketCache = [];
 
 async function addBotToDiscord(){
   try{
@@ -138,27 +140,106 @@ async function loadStats(){
   }catch(e){toast(e.message)}
 }
 
-async function loadTickets(){
-  const tickets=await api("/api/tickets");
-  document.getElementById("ticketList").innerHTML=tickets.length?
-    '<table class="table"><thead><tr><th>ID</th><th>Titel</th><th>Bruger</th><th>Behandler</th><th>Status</th><th>Prioritet</th><th>Handlinger</th></tr></thead><tbody>'+
-    tickets.map(function(t){
-      return '<tr><td>#'+t.id+'</td><td>'+escapeHtml(t.title)+'</td><td>'+escapeHtml(t.user)+'</td><td>'+
+function ticketHandlerLabel(handler){
+  return handler==="ai" ? "🤖 AI" : handler==="admins" ? "👑 Admins" : "🎫 Ticket";
+}
+function ticketFilterValues(prefix){
+  const p=prefix==="admin" ? "adminTicket" : "ticket";
+  return {
+    search:(document.getElementById(p+"Search")?.value||"").trim().toLowerCase(),
+    status:document.getElementById(p+"StatusFilter")?.value||"all",
+    handler:document.getElementById(p+"HandlerFilter")?.value||"all",
+    priority:document.getElementById(p+"PriorityFilter")?.value||"all"
+  };
+}
+function filterTicketList(list,prefix){
+  const f=ticketFilterValues(prefix);
+  return list.filter(t=>{
+    const hay=[t.id,t.title,t.user,t.description,t.category,t.handler,t.status,t.priority].join(" ").toLowerCase();
+    return (!f.search || hay.includes(f.search))
+      && (f.status==="all" || t.status===f.status)
+      && (f.handler==="all" || (t.handler||"admins")===f.handler)
+      && (f.priority==="all" || (t.priority||"normal")===f.priority);
+  });
+}
+function updateTicketFilterCount(list,prefix){
+  const id=prefix==="admin" ? "adminTicketCounts" : "ticketCounts";
+  const node=document.getElementById(id);
+  if(!node) return;
+  const open=list.filter(t=>t.status==="open").length;
+  const pending=list.filter(t=>t.status==="pending").length;
+  const closed=list.filter(t=>t.status==="closed").length;
+  node.textContent=list.length+" tickets · "+open+" åbne · "+pending+" afventer · "+closed+" lukkede";
+}
+function bindTicketFilterEvents(prefix,loader){
+  const ids=prefix==="admin"
+    ? ["adminTicketSearch","adminTicketStatusFilter","adminTicketHandlerFilter","adminTicketPriorityFilter"]
+    : ["ticketSearch","ticketStatusFilter","ticketHandlerFilter","ticketPriorityFilter"];
+  ids.forEach(id=>{
+    const el=document.getElementById(id);
+    if(!el || el.dataset.bound==="1") return;
+    el.dataset.bound="1";
+    el.addEventListener(el.tagName==="INPUT"?"input":"change",loader);
+  });
+}
+function renderTicketTable(list,nodeId,isAdmin,prefix){
+  const node=document.getElementById(nodeId);
+  if(!node) return;
+  const filtered=filterTicketList(list,prefix);
+  updateTicketFilterCount(list,prefix);
+  if(!filtered.length){
+    node.innerHTML='<div class="empty">Ingen tickets matcher dine filtre.</div>';
+    return;
+  }
+  node.innerHTML=
+    '<div class="table-wrap"><table class="table"><thead><tr>'+
+    '<th>ID</th><th>Titel</th><th>Bruger</th><th>Behandler</th><th>Status</th><th>Prioritet</th><th>Handlinger</th>'+
+    '</tr></thead><tbody>'+
+    filtered.map(t=>{
+      const handlerOptions=
         '<select class="ticket-handler" data-ticket-handler="'+t.id+'">'+
-          '<option value="ticket" '+(t.handler==="ticket"?"selected":"")+'>🎫 Ticket</option>'+
           '<option value="ai" '+(t.handler==="ai"?"selected":"")+'>🤖 AI</option>'+
           '<option value="admins" '+((!t.handler||t.handler==="admins")?"selected":"")+'>👑 Admins</option>'+
-        '</select></td><td><span class="badge '+t.status+'">'+t.status+'</span></td><td>'+t.priority+'</td><td>'+
-        '<button class="btn small ticket-cycle" data-ticket-id="'+t.id+'" data-ticket-status="'+t.status+'">Skift status</button> '+
-        '<button class="btn small" onclick="openTicketReply('+t.id+')">Svar</button> '+
-        (currentUser?.role==="admin" ? '<button class="btn small" onclick="aiTicketReply('+t.id+', this)">🤖 AI svar</button> ' : '')+
-        '<button class="btn small danger ticket-delete" data-ticket-id="'+t.id+'">Slet</button>'+
-      '</td></tr>';
+          '<option value="ticket" '+(t.handler==="ticket"?"selected":"")+'>🎫 Ticket</option>'+
+        '</select>';
+      return '<tr>'+
+        '<td>#'+t.id+'</td>'+
+        '<td><b>'+escapeHtml(t.title||"Ticket")+'</b>'+(t.category&&t.category!=="support"?' <span class="badge pending">'+escapeHtml(t.category)+'</span>':'')+'</td>'+
+        '<td>'+escapeHtml(t.user||"")+'</td>'+
+        '<td>'+handlerOptions+'</td>'+
+        '<td><span class="badge '+escapeHtml(t.status||"open")+'">'+escapeHtml(t.status||"open")+'</span></td>'+
+        '<td><span class="badge '+escapeHtml(t.priority||"normal")+'">'+escapeHtml(t.priority||"normal")+'</span></td>'+
+        '<td>'+
+          '<button class="btn small ticket-cycle" data-ticket-id="'+t.id+'" data-ticket-status="'+escapeHtml(t.status||"open")+'">Skift status</button> '+
+          '<button class="btn small" onclick="openTicketReply('+t.id+')">Svar</button> '+
+          (isAdmin ? '<button class="btn small" onclick="aiTicketReply('+t.id+', this)">🤖 AI svar</button> ' : '')+
+          (isAdmin ? '<button class="btn small danger ticket-delete" data-ticket-id="'+t.id+'">Slet</button>' : '')+
+        '</td>'+
+      '</tr>';
     }).join("")+
-    '</tbody></table>' : '<div class="empty">Ingen tickets endnu.</div>';
-  document.querySelectorAll(".ticket-handler").forEach(function(el){el.addEventListener("change",function(){setTicketHandler(this.dataset.ticketHandler,this.value);});});
-  document.querySelectorAll(".ticket-cycle").forEach(function(el){el.addEventListener("click",function(){cycleTicket(this.dataset.ticketId,this.dataset.ticketStatus);});});
-  document.querySelectorAll(".ticket-delete").forEach(function(el){el.addEventListener("click",function(){deleteTicket(this.dataset.ticketId);});});
+    '</tbody></table></div>';
+
+  node.querySelectorAll(".ticket-handler").forEach(el=>{
+    el.addEventListener("change",function(){setTicketHandler(this.dataset.ticketHandler,this.value);});
+  });
+  node.querySelectorAll(".ticket-cycle").forEach(el=>{
+    el.addEventListener("click",function(){cycleTicket(this.dataset.ticketId,this.dataset.ticketStatus);});
+  });
+  node.querySelectorAll(".ticket-delete").forEach(el=>{
+    el.addEventListener("click",function(){deleteTicket(this.dataset.ticketId);});
+  });
+}
+
+async function loadTickets(){
+  const node=document.getElementById("ticketList");
+  if(!node) return;
+  bindTicketFilterEvents("tickets","loadTickets");
+  try{
+    ticketCache=await api("/api/tickets");
+    renderTicketTable(ticketCache,"ticketList",currentUser?.role==="admin","tickets");
+  }catch(e){
+    node.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';
+  }
 }
 async function openTicketReply(id){
   try{
@@ -555,56 +636,10 @@ async function loadLogs(){
 async function loadAdminTickets(){
   const node=document.getElementById("adminTicketList");
   if(!node) return;
-  node.innerHTML='<div class="empty">Indlæser tickets…</div>';
+  bindTicketFilterEvents("admin","loadAdminTickets");
   try{
-    const tickets=await api("/api/tickets");
-    if(!tickets.length){
-      node.innerHTML='<div class="empty">Ingen tickets endnu.</div>';
-      return;
-    }
-    node.innerHTML=
-      '<div class="table-wrap"><table class="table"><thead><tr>'+
-      '<th>ID</th><th>Titel</th><th>Bruger</th><th>Behandler</th><th>Status</th><th>Prioritet</th><th>Handlinger</th>'+
-      '</tr></thead><tbody>'+
-      tickets.map(t=>{
-        const handlerOptions=
-          '<select class="ticket-handler" data-ticket-handler="'+t.id+'">'+
-            '<option value="ai" '+(t.handler==="ai"?"selected":"")+'>🤖 AI</option>'+
-            '<option value="admins" '+(t.handler==="admins"?"selected":"")+'>👑 Admins</option>'+
-            '<option value="ticket" '+(t.handler==="ticket"?"selected":"")+'>🎫 Ticket</option>'+
-          '</select>';
-        return '<tr>'+
-          '<td>#'+t.id+'</td>'+
-          '<td>'+escapeHtml(t.title||"Ticket")+'</td>'+
-          '<td>'+escapeHtml(t.user||"")+'</td>'+
-          '<td>'+handlerOptions+'</td>'+
-          '<td><span class="badge '+escapeHtml(t.status||"open")+'">'+escapeHtml(t.status||"open")+'</span></td>'+
-          '<td>'+escapeHtml(t.priority||"normal")+'</td>'+
-          '<td>'+
-            '<button class="btn small ticket-cycle" data-ticket-id="'+t.id+'" data-ticket-status="'+escapeHtml(t.status||"open")+'">Skift status</button> '+
-            '<button class="btn small" onclick="openTicketReply('+t.id+')">Svar</button> '+
-            '<button class="btn small" onclick="aiTicketReply('+t.id+')">🤖 AI svar</button> '+
-            '<button class="btn small danger ticket-delete" data-ticket-id="'+t.id+'">Slet</button>'+
-          '</td>'+
-        '</tr>';
-      }).join("")+
-      '</tbody></table></div>';
-
-    node.querySelectorAll(".ticket-handler").forEach(function(el){
-      el.addEventListener("change",function(){
-        setTicketHandler(this.dataset.ticketHandler,this.value);
-      });
-    });
-    node.querySelectorAll(".ticket-cycle").forEach(function(el){
-      el.addEventListener("click",function(){
-        cycleTicket(this.dataset.ticketId,this.dataset.ticketStatus);
-      });
-    });
-    node.querySelectorAll(".ticket-delete").forEach(function(el){
-      el.addEventListener("click",function(){
-        deleteTicket(this.dataset.ticketId);
-      });
-    });
+    adminTicketCache=await api("/api/tickets");
+    renderTicketTable(adminTicketCache,"adminTicketList",true,"admin");
   }catch(e){
     node.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';
   }
