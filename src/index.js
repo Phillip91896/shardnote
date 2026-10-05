@@ -2935,17 +2935,23 @@ body.locked > .app{display:none}
       <div class="card">
         <h3>Member</h3>
         <p style="color:var(--muted)">Grundpakken til din Discord-server.</p>
-        <div class="actions"><button class="btn primary" onclick="startSubscription('member',1)">Køb 1 måned</button><button class="btn small" onclick="startSubscription('member',3)">3 måneder</button><button class="btn small" onclick="startSubscription('member',12)">12 måneder</button></div>
+        <div class="field" style="margin-top:14px"><label>Vælg betalingsperiode</label><select id="period-member"><option value="1">1 måned</option><option value="3">3 måneder</option><option value="12">12 måneder</option></select></div>
+        <p style="color:var(--muted);font-size:12px;margin:10px 0 0">Den valgte periode åbner den tilsvarende SellAuth-pris.</p>
+        <div class="actions"><button class="btn primary" onclick="buySelectedPeriod('member','period-member')">Fortsæt til betaling</button></div>
       </div>
       <div class="card">
         <h3>Member Plus</h3>
         <p style="color:var(--muted)">Flere server- og botfunktioner.</p>
-        <div class="actions"><button class="btn primary" onclick="startSubscription('member_plus',1)">Køb 1 måned</button><button class="btn small" onclick="startSubscription('member_plus',3)">3 måneder</button><button class="btn small" onclick="startSubscription('member_plus',12)">12 måneder</button></div>
+        <div class="field" style="margin-top:14px"><label>Vælg betalingsperiode</label><select id="period-member-plus"><option value="1">1 måned</option><option value="3">3 måneder</option><option value="12">12 måneder</option></select></div>
+        <p style="color:var(--muted);font-size:12px;margin:10px 0 0">Den valgte periode åbner den tilsvarende SellAuth-pris.</p>
+        <div class="actions"><button class="btn primary" onclick="buySelectedPeriod('member_plus','period-member-plus')">Fortsæt til betaling</button></div>
       </div>
       <div class="card">
         <h3>Member Pro</h3>
         <p style="color:var(--muted)">Avancerede funktioner og AI.</p>
-        <div class="actions"><button class="btn primary" onclick="startSubscription('member_pro',1)">Køb 1 måned</button><button class="btn small" onclick="startSubscription('member_pro',3)">3 måneder</button><button class="btn small" onclick="startSubscription('member_pro',12)">12 måneder</button></div>
+        <div class="field" style="margin-top:14px"><label>Vælg betalingsperiode</label><select id="period-member-pro"><option value="1">1 måned</option><option value="3">3 måneder</option><option value="12">12 måneder</option></select></div>
+        <p style="color:var(--muted);font-size:12px;margin:10px 0 0">Den valgte periode åbner den tilsvarende SellAuth-pris.</p>
+        <div class="actions"><button class="btn primary" onclick="buySelectedPeriod('member_pro','period-member-pro')">Fortsæt til betaling</button></div>
       </div>
     </div>
     <div id="storePurchaseResult" style="margin-top:12px"></div>
