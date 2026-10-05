@@ -1602,8 +1602,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
       const id = interaction.customId.split(":")[1];
       if (db) await db.query("UPDATE public.tickets SET status='closed', closed_at=NOW(), resolved_at=NOW() WHERE id=$1", [id]).catch(() => {});
       await interaction.channel.setName("closed-" + interaction.channel.name).catch(() => {});
-      const row = new ActionRowBuilder().addComponents(...[1,2,3,4,5].map(score => new ButtonBuilder().setCustomId("ticket_csat:" + id + ":" + score).setLabel(String(score) + " ⭐").setStyle(ButtonStyle.Secondary)));
-      return interaction.reply({ content: "🔒 Ticket lukket. Hvor tilfreds var du med hjælpen?", components: [row] });
+      return interaction.reply("🔒 Ticket lukket.");
     }
 
     if (interaction.customId.startsWith("ticket_claim:")) {
