@@ -3,6 +3,7 @@ const express = require('express');
 const { Pool } = require('pg');
 
 const ORIGINAL_POST = express.application.post;
+const ORIGINAL_USE = express.application.use;
 const DATABASE_URL = process.env.DATABASE_URL;
 const db = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, max: 3, idleTimeoutMillis: 30000, connectionTimeoutMillis: 10000 }) : null;
 const SHOP_ID = String(process.env.SELLAUTH_SHOP_ID || '273405').trim();
@@ -10,32 +11,19 @@ const API_KEY = String(process.env.SELLAUTH_API_KEY || '').trim();
 const WEBHOOK_SECRET = String(process.env.SELLAUTH_WEBHOOK_SECRET || '').trim();
 const API_BASE = String(process.env.SELLAUTH_API_BASE_URL || 'https://api.sellauth.com').replace(/\/$/, '');
 
-function hashSerialKey(value) {
-  return crypto.createHash('sha256').update(String(value || '').trim().toUpperCase()).digest('hex');
-}
+function hashSerialKey(value) { return crypto.createHash('sha256').update(String(value || '').trim().toUpperCase()).digest('hex'); }
 function generateSerialKey() {
-  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  const parts = [];
-  for (let group = 0; group < 4; group++) {
-    let part = '';
-    for (let i = 0; i < 5; i++) part += alphabet[crypto.randomInt(0, alphabet.length)];
-    parts.push(part);
-  }
+  const alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; const parts = [];
+  for (let group = 0; group < 4; group++) { let part = ''; for (let i = 0; i < 5; i++) part += alphabet[crypto.randomInt(0, alphabet.length)]; parts.push(part); }
   return parts.join('-');
 }
 function parseCookies(req) {
   const header = req.headers.cookie || '';
-  return Object.fromEntries(header.split(';').filter(Boolean).map(part => {
-    const i = part.indexOf('=');
-    return [part.slice(0, i).trim(), decodeURIComponent(part.slice(i + 1).trim())];
-  }));
+  return Object.fromEntries(header.split(';').filter(Boolean).map(part => { const i = part.indexOf('='); return [part.slice(0, i).trim(), decodeURIComponent(part.slice(i + 1).trim())]; }));
 }
-function sessionSecret() {
-  return process.env.SESSION_SECRET || process.env.DISCORD_TOKEN || process.env.STRIPE_SECRET_KEY || process.env.DATABASE_URL || 'Shardnote Bot-session-secret';
-}
+function sessionSecret() { return process.env.SESSION_SECRET || process.env.DISCORD_TOKEN || process.env.STRIPE_SECRET_KEY || process.env.DATABASE_URL || 'Shardnote Bot-session-secret'; }
 function verifySessionToken(token) {
-  const raw = String(token || '');
-  const [id, signature] = raw.split('.');
+  const raw = String(token || ''); const [id, signature] = raw.split('.');
   if (!id || !signature || !/^\d+$/.test(id)) return null;
   const expected = crypto.createHmac('sha256', sessionSecret()).update(id).digest('hex');
   if (signature.length !== expected.length) return null;
@@ -43,8 +31,7 @@ function verifySessionToken(token) {
 }
 async function sessionUser(req) {
   if (!db) return null;
-  const id = verifySessionToken(parseCookies(req).ShardNote_session);
-  if (id == null) return null;
+  const id = verifySessionToken(parseCookies(req).ShardNote_session); if (id == null) return null;
   const result = await db.query(`SELECT id,name,email,role,plan,subscription_status AS "subscriptionStatus",trial_used AS "trialUsed" FROM public.users WHERE id=$1 LIMIT 1`, [id]);
   return result.rows[0] || null;
 }
@@ -74,19 +61,12 @@ function inferMonths(text) {
 function deepFind(obj, keys) {
   if (!obj || typeof obj !== 'object') return null;
   for (const key of keys) if (obj[key] != null) return obj[key];
-  for (const value of Object.values(obj)) {
-    if (value && typeof value === 'object') {
-      const found = deepFind(value, keys);
-      if (found != null) return found;
-    }
-  }
+  for (const value of Object.values(obj)) if (value && typeof value === 'object') { const found = deepFind(value, keys); if (found != null) return found; }
   return null;
 }
 function productMappingFromEnv() {
-  const raw = String(process.env.SELLAUTH_PRODUCT_MAP || '').trim();
-  if (!raw) return {};
-  const parsed = safeJson(raw);
-  return parsed && typeof parsed === 'object' ? parsed : {};
+  const raw = String(process.env.SELLAUTH_PRODUCT_MAP || '').trim(); if (!raw) return {};
+  const parsed = safeJson(raw); return parsed && typeof parsed === 'object' ? parsed : {};
 }
 async function sellauthRequest(method, endpoint, body) {
   if (!API_KEY) throw new Error('SELLAUTH_API_KEY mangler.');
@@ -95,16 +75,14 @@ async function sellauthRequest(method, endpoint, body) {
     headers: { Authorization: 'Bearer ' + API_KEY, 'Content-Type': 'application/json', Accept: 'application/json' },
     body: body == null ? undefined : JSON.stringify(body)
   });
-  const text = await response.text();
-  let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
+  const text = await response.text(); let data; try { data = JSON.parse(text); } catch { data = { raw: text }; }
   if (!response.ok) throw new Error('SellAuth API ' + response.status + ': ' + String(data?.message || data?.error || text).slice(0, 500));
   return data;
 }
 async function resolveProductInfo(item) {
   const productId = item?.product_id ?? item?.productId ?? deepFind(item, ['product_id','productId']);
   const variantId = item?.variant_id ?? item?.variantId ?? deepFind(item, ['variant_id','variantId']);
-  const mapping = productMappingFromEnv();
-  const direct = mapping[String(variantId || productId)] || mapping[String(productId || '')];
+  const mapping = productMappingFromEnv(); const direct = mapping[String(variantId || productId)] || mapping[String(productId || '')];
   if (direct) return { ...direct, productId, variantId };
   if (productId && API_KEY) {
     try {
@@ -113,15 +91,13 @@ async function resolveProductInfo(item) {
       return { plan: inferPlan(productText) || 'member', months: inferMonths(productText), productId, variantId };
     } catch (_) {}
   }
-  const text = JSON.stringify(item || {});
-  return { plan: inferPlan(text) || 'member', months: inferMonths(text), productId, variantId };
+  const text = JSON.stringify(item || {}); return { plan: inferPlan(text) || 'member', months: inferMonths(text), productId, variantId };
 }
 async function createOrGetLicense({ email, plan, months, orderKey }) {
   if (!db) throw new Error('Database er ikke konfigureret.');
   const existing = await db.query('SELECT id FROM public.license_deliveries WHERE checkout_session_id=$1 LIMIT 1', [orderKey]);
   if (existing.rows[0]) return { duplicate: true, key: null };
-  const rawKey = generateSerialKey();
-  const keyHash = hashSerialKey(rawKey);
+  const rawKey = generateSerialKey(); const keyHash = hashSerialKey(rawKey);
   const user = await db.query('SELECT id FROM public.users WHERE lower(email)=lower($1) LIMIT 1', [email]);
   if (!user.rows[0]) throw new Error('Kunden skal have en ShardNote-konto med samme email før levering.');
   await db.query('BEGIN');
@@ -131,14 +107,23 @@ async function createOrGetLicense({ email, plan, months, orderKey }) {
     await db.query(`UPDATE public.users SET plan=$1, subscription_status='active', trial_used=TRUE WHERE id=$2`, [plan, user.rows[0].id]);
     await db.query('COMMIT');
   } catch (error) {
-    await db.query('ROLLBACK');
-    if (error.code === '23505') return { duplicate: true, key: null };
-    throw error;
+    await db.query('ROLLBACK'); if (error.code === '23505') return { duplicate: true, key: null }; throw error;
   }
   return { duplicate: false, key: rawKey };
 }
 
 function install() {
+  express.application.use = function patchedUse(path, ...handlers) {
+    if (path === '/api' && handlers.length === 1 && typeof handlers[0] === 'function') {
+      const handler = handlers[0];
+      return ORIGINAL_USE.call(this, path, (req, res, next) => {
+        if (req.path === '/sellauth/deliver' || req.path === '/billing/webhook') return next();
+        return handler(req, res, next);
+      });
+    }
+    return ORIGINAL_USE.call(this, path, ...handlers);
+  };
+
   express.application.post = function patchedPost(path, ...handlers) {
     if (path === '/api/billing/create-checkout') {
       return ORIGINAL_POST.call(this, path, express.json({ limit: '100kb' }), async (req, res) => {
@@ -170,8 +155,7 @@ function install() {
             }
           }
           if (!productId) return res.status(503).json({ error: 'SellAuth-produktet kunne ikke findes. Sæt SELLAUTH_PRODUCT_MAP i Render.' });
-          const cartItem = { product_id: productId, quantity: 1 };
-          if (variantId) cartItem.variant_id = variantId;
+          const cartItem = { product_id: productId, quantity: 1 }; if (variantId) cartItem.variant_id = variantId;
           const checkout = await sellauthRequest('POST', `/v1/shops/${encodeURIComponent(SHOP_ID)}/checkout`, { cart: [cartItem], email: user.email, newsletter: false });
           const url = checkout?.url || checkout?.checkout_url || checkout?.checkoutUrl || checkout?.data?.url || checkout?.data?.checkout_url || checkout?.data?.checkoutUrl;
           if (!url) throw new Error('SellAuth returnerede ikke en checkout-URL.');
@@ -200,7 +184,7 @@ function install() {
           const orderKey = `sellauth:${baseId}:${info.productId || ''}:${info.variantId || ''}`;
           const result = await createOrGetLicense({ email, plan, months, orderKey });
           if (result.duplicate) return res.type('text/plain').send('');
-          return res.type('text/plain').send(result.key + '\n');
+          return res.type('text/plain').send(result.key + '\\n');
         } catch (error) {
           console.error('[Shardnote Bot] SellAuth webhook failed:', error);
           return res.status(500).send('Webhook processing failed.');
