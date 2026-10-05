@@ -237,7 +237,58 @@ const commands = [
     options: [{ type: 3, name: "key", description: "Your ShardNote serial key", required: true }]
   },
   { name: "music-join", description: "Join your current voice channel." },
-  { name: "music-leave", description: "Leave the current voice channel." }
+  { name: "music-leave", description: "Leave the current voice channel." },
+  {
+    name: "afk",
+    description: "Set or remove your AFK status.",
+    options: [{ type: 3, name: "reason", description: "Why you are AFK", required: false }]
+  },
+  {
+    name: "remind",
+    description: "Set a reminder.",
+    options: [
+      { type: 3, name: "duration", description: "Example: 10m, 2h, 1d", required: true },
+      { type: 3, name: "message", description: "Reminder text", required: true }
+    ]
+  },
+  {
+    name: "autoresponder-add",
+    description: "Create an automatic response for a word or phrase.",
+    options: [
+      { type: 3, name: "trigger", description: "Word or phrase to watch for", required: true },
+      { type: 3, name: "response", description: "Automatic response", required: true }
+    ]
+  },
+  {
+    name: "autoresponder-remove",
+    description: "Remove an automatic response.",
+    options: [{ type: 3, name: "trigger", description: "Trigger to remove", required: true }]
+  },
+  { name: "autoresponder-list", description: "List automatic responses." },
+  {
+    name: "starboard-set",
+    description: "Configure the starboard.",
+    options: [
+      { type: 7, name: "channel", description: "Starboard channel", required: true, channel_types: [0] },
+      { type: 4, name: "threshold", description: "Stars needed", required: false, min_value: 1, max_value: 50 }
+    ]
+  },
+  { name: "starboard-off", description: "Disable the starboard." },
+  {
+    name: "embed",
+    description: "Send a custom embed.",
+    options: [
+      { type: 3, name: "title", description: "Embed title", required: true },
+      { type: 3, name: "description", description: "Embed text", required: true },
+      { type: 7, name: "channel", description: "Target channel", required: false, channel_types: [0] }
+    ]
+  },
+  {
+    name: "form-panel",
+    description: "Post a simple form panel.",
+    options: [{ type: 3, name: "title", description: "Form title", required: true }]
+  },
+  { name: "serverstats", description: "Show detailed server statistics." }
 ];
 
 function createBot({ state, db, log, createTicket, setReady }) {
