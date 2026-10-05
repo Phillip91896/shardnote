@@ -1,5 +1,5 @@
-const pages = ["dashboard","spot","tickets","messages","commands","features","templates","upgrades","store","music","settings","logs","admin"];
-const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord-skitser",upgrades:"Opgraderinger",store:"Store",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
+const pages = ["dashboard","spot","tickets","messages","commands","features","templates","upgrades","store","activate","music","settings","logs","admin"];
+const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord-skitser",upgrades:"Opgraderinger",store:"Store",activate:"Aktivér key",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true,buttonLabels:{}};
 
 async function addBotToDiscord(){
@@ -35,6 +35,7 @@ function navigate(page){
   if(page==="messages") loadMessages();
   if(page==="upgrades") loadUpgradeIdeas();
   if(page==="store") loadStorePage();
+  if(page==="activate") document.getElementById("licenseActivationKey")?.focus();
   if(page==="commands") loadCommands();
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
@@ -162,12 +163,43 @@ async function loadTickets(){
 async function openTicketReply(id){
   try{
     const messages=await api("/api/tickets/"+id+"/messages");
-    const lines=messages.length ? messages.map(m=>((m.authorRole==="admin"?"👑 Admin":m.authorRole==="ai"?"🤖 AI":"👤 Kunde")+": "+m.content)).join("\n\n") : "Ingen svar endnu.";
-    const reply=prompt("Ticket #"+id+"\n\n"+lines+"\n\nSkriv dit svar:");
-    if(!reply || !reply.trim()) return;
-    await api("/api/tickets/"+id+"/reply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content:reply.trim()})});
-    toast("✅ Svar sendt");
-    loadTickets();
+    const ticket=(await api("/api/tickets")).find(t=>String(t.id)===String(id));
+    const modal=document.createElement("div");
+    modal.id="ticketChatModal";
+    modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+    modal.innerHTML='<div style="width:min(900px,100%);max-height:90vh;background:#11131b;border:1px solid var(--border);border-radius:16px;display:flex;flex-direction:column;overflow:hidden">'+
+      '<div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px"><div><b>🎫 Ticket #'+id+'</b><div style="color:var(--muted);font-size:12px">'+escapeHtml(ticket?.title||"Ticket")+'</div></div><button class="btn small" id="ticketChatClose">Luk</button></div>'+
+      '<div id="ticketChatMessages" style="padding:18px;overflow:auto;min-height:320px;max-height:55vh"></div>'+
+      '<div style="padding:14px 18px;border-top:1px solid var(--border)"><textarea id="ticketChatInput" rows="3" placeholder="Skriv dit svar..." style="width:100%;resize:vertical;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:12px;outline:none"></textarea><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn primary" id="ticketChatSend">Send svar</button></div></div>'+
+    '</div>';
+    document.body.appendChild(modal);
+    const box=modal.querySelector("#ticketChatMessages");
+    const render=items=>{
+      box.innerHTML=items.length?items.map(m=>{
+        const mine=m.authorRole==="admin";
+        const who=m.authorRole==="admin"?"👑 Admin":m.authorRole==="ai"?"🤖 AI":"👤 Kunde";
+        return '<div style="display:flex;justify-content:'+(mine?"flex-end":"flex-start")+';margin:8px 0"><div style="max-width:78%;padding:10px 12px;border-radius:12px;background:'+(mine?"#252b3d":"#1a1d27")+';border:1px solid var(--border)"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">'+who+' · '+escapeHtml(m.authorName||"")+'</div><div style="white-space:pre-wrap;word-break:break-word">'+escapeHtml(m.content||"")+'</div><div style="font-size:10px;color:var(--muted);margin-top:5px">'+new Date(m.createdAt).toLocaleString("da-DK")+'</div></div></div>';
+      }).join(""):'<div class="empty">Ingen beskeder endnu.</div>';
+      box.scrollTop=box.scrollHeight;
+    };
+    render(messages);
+    modal.querySelector("#ticketChatClose").onclick=()=>modal.remove();
+    modal.onclick=e=>{if(e.target===modal)modal.remove();};
+    modal.querySelector("#ticketChatSend").onclick=async()=>{
+      const input=modal.querySelector("#ticketChatInput");
+      const content=input.value.trim();
+      if(!content)return;
+      input.disabled=true;
+      try{
+        await api("/api/tickets/"+id+"/reply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content})});
+        input.value="";
+        render(await api("/api/tickets/"+id+"/messages"));
+        loadTickets();
+        toast("✅ Svar sendt");
+      }catch(e){toast(e.message)}
+      finally{input.disabled=false;input.focus();}
+    };
+    modal.querySelector("#ticketChatInput").focus();
   }catch(e){toast(e.message)}
 }
 async function aiTicketReply(id){
@@ -569,28 +601,26 @@ async function loadIpOverview(){
 
 
 async function loadStorePage(){
-  const result=document.getElementById("storeRedeemResult");
+  const result=document.getElementById("storePurchaseResult");
   if(result) result.textContent="";
 }
 
-async function redeemStoreSerialKey(){
-  const result=document.getElementById("storeRedeemResult");
+async function activateLicenseKey(){
+  const result=document.getElementById("licenseActivationResult");
+  const input=document.getElementById("licenseActivationKey");
   if(result) result.textContent="";
+  const key=input?.value.trim();
+  if(!key){if(result)result.innerHTML='<span class="badge closed">Indtast en license key.</span>';return;}
   try{
     const data=await api("/api/license/redeem",{
       method:"POST",
       headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({key:document.getElementById("storeRedeemKey").value.trim()})
+      body:JSON.stringify({key})
     });
     if(result) result.innerHTML='<span class="badge open">✅ License aktiveret · '+escapeHtml(data.productName||data.plan)+'</span>';
     toast("✅ License aktiveret");
-    try{
-      const me=await fetch("/api/me");
-      if(me.ok){
-        const meData=await me.json();
-        if(meData.user) currentUser=meData.user;
-      }
-    }catch(_){}
+    if(input)input.value="";
+    try{const me=await fetch("/api/me");if(me.ok){const meData=await me.json();if(meData.user)currentUser=meData.user;}}catch(_){}
     loadStats();
   }catch(e){
     if(result) result.innerHTML='<span class="badge closed">'+escapeHtml(e.message)+'</span>';
@@ -681,6 +711,7 @@ async function checkBillingStatus(){
 
 function watchPayment(){
   const query=new URLSearchParams(window.location.search);
+  if(query.get("activate")==="1" && currentUser) setTimeout(()=>navigate("activate"),100);
   if(query.get("payment")!=="success") return;
   let attempts=0;
   const timer=setInterval(async()=>{
