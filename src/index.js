@@ -2442,7 +2442,7 @@ app.get("/api/tickets/:id/events", async (req,res)=>{
 
 app.get("/api/tickets/:id/transcript", async (req,res)=>{
   try {
-    const check=await db.query("SELECT id,title,user_name AS "user" FROM public.tickets WHERE id=$1 AND (owner_user_id=$2 OR $3=TRUE) LIMIT 1",[req.params.id,req.user.id,req.user.role==="admin"]);
+    const check=await db.query('SELECT id,title,user_name AS "user" FROM public.tickets WHERE id=$1 AND (owner_user_id=$2 OR $3=TRUE) LIMIT 1',[req.params.id,req.user.id,req.user.role==="admin"]);
     if(!check.rowCount) return res.status(404).json({error:"Ticket not found"});
     const result=await db.query(
       'SELECT author_name AS "authorName",author_role AS "authorRole",content,created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id=$1 ORDER BY created_at ASC LIMIT 2000',
