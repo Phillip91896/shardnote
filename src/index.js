@@ -1856,7 +1856,7 @@ app.get("/api/stats", async (req, res) => {
 async function generateTicketAiReply(ticket, messages) {
   const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) throw new Error("AI er ikke konfigureret. Tilføj GEMINI_API_KEY i Render.");
-  const model = String(process.env.GEMINI_MODEL || "gemini-3.1-pro").trim();
+  const model = String(process.env.GEMINI_MODEL || "gemini-3.1-pro-preview").trim();
   const transcript = messages.slice(-20).map(m => (m.authorRole === "admin" ? "Admin" : m.authorRole === "ai" ? "AI" : "Kunde") + ": " + m.content).join("\n");
   const prompt = [
     "Du er Shardnote Bot supportassistent.",
