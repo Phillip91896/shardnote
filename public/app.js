@@ -700,7 +700,7 @@ async function checkBillingStatus(){
       window.history.replaceState({},document.title,"/");
       unlockDashboard();
       navigate("store");
-      toast("Betaling godkendt — din adgang er låst op. Du kan nu redeem din license.");
+      toast("Betaling godkendt — din adgang er låst op. Din license key håndteres via Aktiver key.");
       return true;
     }
     return false;
