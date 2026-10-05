@@ -2157,7 +2157,7 @@ app.patch("/api/tickets/:id", async (req, res) => {
              priority = COALESCE($2, priority),
              handler = COALESCE($6, handler)
          WHERE id = $3 AND (owner_user_id = $4 OR $5 = TRUE)
-         RETURNING id, title, user_name AS "user", status, priority, created_at AS "createdAt", owner_user_id AS "ownerUserId"`,
+         RETURNING id, title, user_name AS "user", status, priority, category, description, handler, claimed_by AS "claimedBy", created_at AS "createdAt", owner_user_id AS "ownerUserId"`,
         [
           ["open", "pending", "closed"].includes(req.body.status) ? req.body.status : null,
           ["low", "normal", "high"].includes(req.body.priority) ? req.body.priority : null,
@@ -2196,14 +2196,44 @@ app.get("/api/tickets/:id/messages", async (req, res) => {
       [req.params.id, req.user.id, req.user.role === "admin"]
     );
     if (!check.rowCount) return res.status(404).json({ error: "Ticket not found" });
-    const result = await db.query(
-      'SELECT id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 200',
-      [req.params.id]
-    );
+    const result = req.user.role === "admin"
+      ? await db.query(
+          'SELECT id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 200',
+          [req.params.id]
+        )
+      : await db.query(
+          'SELECT id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id = $1 AND author_role <> \'internal\' ORDER BY created_at ASC LIMIT 200',
+          [req.params.id]
+        );
     res.json(result.rows);
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Ticketbeskeder kunne ikke hentes." });
+  }
+});
+
+app.post("/api/tickets/:id/internal-note", requireAdmin, async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: "Database er nødvendig." });
+    const content = String(req.body?.content || "").trim().slice(0, 4000);
+    if (!content) return res.status(400).json({ error: "Skriv en intern note." });
+
+    const check = await db.query(
+      "SELECT id FROM public.tickets WHERE id = $1 LIMIT 1",
+      [req.params.id]
+    );
+    if (!check.rowCount) return res.status(404).json({ error: "Ticket not found" });
+
+    const result = await db.query(
+      'INSERT INTO public.ticket_messages (ticket_id, author_user_id, author_name, author_role, content) VALUES ($1,$2,$3,$4,$5) RETURNING id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt"',
+      [req.params.id, req.user.id, req.user.name || req.user.email || "Administrator", "internal", content]
+    );
+
+    log("ticket", "Internal note added to ticket #" + req.params.id, req.user.id);
+    res.status(201).json(result.rows[0]);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Den interne note kunne ikke gemmes." });
   }
 });
 
