@@ -42,10 +42,11 @@ app.post("/api/billing/webhook", express.raw({ type: "application/json" }), asyn
                  RETURNING id`,
                 [keyHash, rawKey.slice(-4), "Shardnote Bot " + plan, plan, userId]
               );
-              await db.query(
+              const deliveryInsert = await db.query(
                 `INSERT INTO public.license_deliveries
                   (checkout_session_id,user_id,email,key_hash,key_last4)
-                 VALUES ($1,$2,$3,$4,$5)`,
+                 VALUES ($1,$2,$3,$4,$5)
+                 RETURNING id`,
                 [object.id, userId, object.customer_details?.email || "", keyHash, rawKey.slice(-4)]
               );
               const userResult = await db.query("SELECT name,email FROM public.users WHERE id = $1 LIMIT 1",[userId]);
