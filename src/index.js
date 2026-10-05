@@ -2116,12 +2116,20 @@ app.get("/api/tickets", async (req, res) => {
     if (db) {
       const result = req.user?.role === "admin"
         ? await db.query(`
-            SELECT id, title, user_name AS "user", status, priority, category, description, handler, created_at AS "createdAt", owner_user_id AS "ownerUserId"
+            SELECT id, title, user_name AS "user", status, priority, category, description, handler,
+                   panel_name AS "panelName", tags, claimed_by AS "claimedBy",
+                   first_response_at AS "firstResponseAt", last_activity_at AS "lastActivityAt",
+                   resolved_at AS "resolvedAt", closed_at AS "closedAt",
+                   created_at AS "createdAt", owner_user_id AS "ownerUserId"
             FROM public.tickets
             ORDER BY created_at DESC LIMIT 500
           `)
         : await db.query(`
-            SELECT id, title, user_name AS "user", status, priority, category, description, handler, created_at AS "createdAt", owner_user_id AS "ownerUserId"
+            SELECT id, title, user_name AS "user", status, priority, category, description, handler,
+                   panel_name AS "panelName", tags, claimed_by AS "claimedBy",
+                   first_response_at AS "firstResponseAt", last_activity_at AS "lastActivityAt",
+                   resolved_at AS "resolvedAt", closed_at AS "closedAt",
+                   created_at AS "createdAt", owner_user_id AS "ownerUserId"
             FROM public.tickets
             WHERE owner_user_id = $1
             ORDER BY created_at DESC LIMIT 500
@@ -2147,7 +2155,10 @@ app.post("/api/tickets", async (req, res) => {
       priority: req.body.priority,
       ownerUserId: req.user.id,
       description,
-      handler: req.body.handler
+      handler: req.body.handler,
+      category: req.body.category || "support",
+      panelName: req.body.panelName || "Support",
+      tags: req.body.tags || []
     });
 
     if (db && description) {
@@ -2248,42 +2259,177 @@ app.post("/api/upgrade-ideas", async (req, res) => {
 
 app.patch("/api/tickets/:id", async (req, res) => {
   try {
+    const isAdmin = req.user?.role === "admin";
     if (db) {
+      const existingResult = await db.query(
+        `SELECT id, title, status, priority, handler, claimed_by AS "claimedBy", tags
+         FROM public.tickets
+         WHERE id = $1 AND (owner_user_id = $2 OR $3 = TRUE)
+         LIMIT 1`,
+        [req.params.id, req.user.id, isAdmin]
+      );
+      const existing = existingResult.rows[0];
+      if (!existing) return res.status(404).json({ error: "Ticket not found" });
+
+      const nextStatus = ["open","pending","resolved","closed"].includes(req.body.status) ? req.body.status : existing.status;
+      const nextPriority = ["low","normal","high"].includes(req.body.priority) ? req.body.priority : existing.priority;
+      const nextHandler = ["ai","admins","ticket"].includes(req.body.handler) ? req.body.handler : existing.handler;
+      const nextTitle = typeof req.body.title === "string" ? req.body.title.trim().slice(0,120) : existing.title;
+      const nextClaimedBy = isAdmin && Object.prototype.hasOwnProperty.call(req.body, "claimedBy")
+        ? (req.body.claimedBy ? String(req.body.claimedBy) : null)
+        : existing.claimedBy;
+      const nextTags = isAdmin && Array.isArray(req.body.tags)
+        ? [...new Set(req.body.tags.map(tag => String(tag).trim().toLowerCase()).filter(Boolean))].slice(0,12)
+        : (existing.tags || []);
+      const now= new Date();
+
       const result = await db.query(
         `UPDATE public.tickets
-         SET status = COALESCE($1, status),
-             priority = COALESCE($2, priority),
-             handler = COALESCE($6, handler)
-         WHERE id = $3 AND (owner_user_id = $4 OR $5 = TRUE)
-         RETURNING id, title, user_name AS "user", status, priority, category, description, handler, claimed_by AS "claimedBy", created_at AS "createdAt", owner_user_id AS "ownerUserId"`,
-        [
-          ["open", "pending", "closed"].includes(req.body.status) ? req.body.status : null,
-          ["low", "normal", "high"].includes(req.body.priority) ? req.body.priority : null,
-          req.params.id,
-          req.user.id,
-          req.user.role === "admin",
-          ["ai","admins","ticket"].includes(req.body.handler) ? req.body.handler : null
-        ]
+         SET title=$1,
+             status=$2,
+             priority=$3,
+             handler=$4,
+             claimed_by=$5,
+             tags=$6,
+             last_activity_at=NOW(),
+             resolved_at=CASE WHEN $2='resolved' THEN COALESCE(resolved_at,NOW()) WHEN $2='open' THEN NULL ELSE resolved_at END,
+             closed_at=CASE WHEN $2='closed' THEN COALESCE(closed_at,NOW()) WHEN $2 IN ('open','pending','resolved') THEN NULL ELSE closed_at END
+         WHERE id=$7
+         RETURNING id, title, user_name AS "user", status, priority, category, description, handler,
+                   panel_name AS "panelName", tags, claimed_by AS "claimedBy",
+                   first_response_at AS "firstResponseAt", last_activity_at AS "lastActivityAt",
+                   resolved_at AS "resolvedAt", closed_at AS "closedAt",
+                   created_at AS "createdAt", owner_user_id AS "ownerUserId"`,
+        [nextTitle,nextStatus,nextPriority,nextHandler,nextClaimedBy,nextTags,req.params.id]
       );
-      if (!result.rowCount) return res.status(404).json({ error: "Ticket not found" });
-      const ticket = result.rows[0];
-      const index = state.tickets.findIndex(t => String(t.id) === String(req.params.id));
-      if (index >= 0) state.tickets[index] = ticket;
-      log("ticket", `Ticket #${ticket.id} updated`, req.user.id);
+      const ticket=result.rows[0];
+      if (existing.title !== nextTitle) await recordTicketEvent(ticket.id,req.user.id,req.user.name||req.user.email,"renamed",{from:existing.title,to:nextTitle}).catch(()=>{});
+      if (existing.status !== nextStatus) await recordTicketEvent(ticket.id,req.user.id,req.user.name||req.user.email,"status_changed",{from:existing.status,to:nextStatus}).catch(()=>{});
+      if (existing.priority !== nextPriority) await recordTicketEvent(ticket.id,req.user.id,req.user.name||req.user.email,"priority_changed",{from:existing.priority,to:nextPriority}).catch(()=>{});
+      if (existing.handler !== nextHandler) await recordTicketEvent(ticket.id,req.user.id,req.user.name||req.user.email,"handler_changed",{from:existing.handler,to:nextHandler}).catch(()=>{});
+      if (String(existing.claimedBy||"") !== String(nextClaimedBy||"")) await recordTicketEvent(ticket.id,req.user.id,req.user.name||req.user.email,nextClaimedBy?"claimed":"unclaimed",{claimedBy:nextClaimedBy}).catch(()=>{});
+      if (JSON.stringify(existing.tags||[]) !== JSON.stringify(nextTags)) await recordTicketEvent(ticket.id,req.user.id,req.user.name||req.user.email,"tags_changed",{tags:nextTags}).catch(()=>{});
+
+      const index=state.tickets.findIndex(t=>String(t.id)===String(req.params.id));
+      if(index>=0) state.tickets[index]=ticket;
       return res.json(ticket);
     }
 
-    const ticket = state.tickets.find(t => String(t.id) === String(req.params.id) && (req.user?.role === "admin" || String(t.ownerUserId || "") === String(req.user.id)));
-    if (!ticket) return res.status(404).json({ error: "Ticket not found" });
-    if (["open", "pending", "closed"].includes(req.body.status)) ticket.status = req.body.status;
-    if (["low", "normal", "high"].includes(req.body.priority)) ticket.priority = req.body.priority;
-    if (["ai","admins","ticket"].includes(req.body.handler)) ticket.handler = req.body.handler;
-    log("ticket", `Ticket #${ticket.id} updated`, req.user.id);
+    const ticket=state.tickets.find(t=>String(t.id)===String(req.params.id) && (isAdmin || String(t.ownerUserId||"")===String(req.user.id)));
+    if(!ticket) return res.status(404).json({error:"Ticket not found"});
+    if(typeof req.body.title==="string") ticket.title=req.body.title.trim().slice(0,120)||ticket.title;
+    if(["open","pending","resolved","closed"].includes(req.body.status)) ticket.status=req.body.status;
+    if(["low","normal","high"].includes(req.body.priority)) ticket.priority=req.body.priority;
+    if(["ai","admins","ticket"].includes(req.body.handler)) ticket.handler=req.body.handler;
+    if(isAdmin && Object.prototype.hasOwnProperty.call(req.body,"claimedBy")) ticket.claimedBy=req.body.claimedBy?String(req.body.claimedBy):null;
+    if(isAdmin && Array.isArray(req.body.tags)) ticket.tags=[...new Set(req.body.tags.map(tag=>String(tag).trim().toLowerCase()).filter(Boolean))].slice(0,12);
+    ticket.lastActivityAt=new Date().toISOString();
     res.json(ticket);
-  } catch (error) {
+  } catch(error) {
     console.error(error);
-    res.status(500).json({ error: "Ticket kunne ikke opdateres." });
+    res.status(500).json({error:"Ticket kunne ikke opdateres."});
   }
+});
+
+app.post("/api/tickets/:id/claim", requireAdmin, async (req,res)=>{
+  try {
+    if(!db) return res.status(503).json({error:"Database er nødvendig."});
+    const result=await db.query(
+      `UPDATE public.tickets
+       SET claimed_by=$1,last_activity_at=NOW()
+       WHERE id=$2
+       RETURNING id,claimed_by AS "claimedBy"`,
+      [String(req.user.id),req.params.id]
+    );
+    if(!result.rowCount) return res.status(404).json({error:"Ticket not found"});
+    await recordTicketEvent(req.params.id,req.user.id,req.user.name||req.user.email,"claimed",{claimedBy:String(req.user.id)}).catch(()=>{});
+    res.json({ok:true,claimedBy:String(req.user.id)});
+  } catch(error){console.error(error);res.status(500).json({error:"Ticket kunne ikke claimes."});}
+});
+
+app.post("/api/tickets/:id/unclaim", requireAdmin, async (req,res)=>{
+  try {
+    if(!db) return res.status(503).json({error:"Database er nødvendig."});
+    const result=await db.query(
+      `UPDATE public.tickets SET claimed_by=NULL,last_activity_at=NOW() WHERE id=$1 RETURNING id`,
+      [req.params.id]
+    );
+    if(!result.rowCount) return res.status(404).json({error:"Ticket not found"});
+    await recordTicketEvent(req.params.id,req.user.id,req.user.name||req.user.email,"unclaimed",{}).catch(()=>{});
+    res.json({ok:true});
+  } catch(error){console.error(error);res.status(500).json({error:"Ticket kunne ikke frigives."});}
+});
+
+app.post("/api/tickets/:id/resolve", requireAdmin, async (req,res)=>{
+  try {
+    if(!db) return res.status(503).json({error:"Database er nødvendig."});
+    const result=await db.query(
+      `UPDATE public.tickets SET status='resolved',resolved_at=NOW(),closed_at=NULL,last_activity_at=NOW() WHERE id=$1 RETURNING id,status`,
+      [req.params.id]
+    );
+    if(!result.rowCount) return res.status(404).json({error:"Ticket not found"});
+    await recordTicketEvent(req.params.id,req.user.id,req.user.name||req.user.email,"resolved",{}).catch(()=>{});
+    res.json(result.rows[0]);
+  } catch(error){console.error(error);res.status(500).json({error:"Ticket kunne ikke løses."});}
+});
+
+app.post("/api/tickets/:id/reopen", requireAdmin, async (req,res)=>{
+  try {
+    if(!db) return res.status(503).json({error:"Database er nødvendig."});
+    const result=await db.query(
+      `UPDATE public.tickets SET status='open',resolved_at=NULL,closed_at=NULL,last_activity_at=NOW() WHERE id=$1 RETURNING id,status`,
+      [req.params.id]
+    );
+    if(!result.rowCount) return res.status(404).json({error:"Ticket not found"});
+    await recordTicketEvent(req.params.id,req.user.id,req.user.name||req.user.email,"reopened",{}).catch(()=>{});
+    res.json(result.rows[0]);
+  } catch(error){console.error(error);res.status(500).json({error:"Ticket kunne ikke genåbnes."});}
+});
+
+app.post("/api/tickets/:id/close", requireAdmin, async (req,res)=>{
+  try {
+    if(!db) return res.status(503).json({error:"Database er nødvendig."});
+    const result=await db.query(
+      `UPDATE public.tickets SET status='closed',closed_at=NOW(),last_activity_at=NOW() WHERE id=$1 RETURNING id,status`,
+      [req.params.id]
+    );
+    if(!result.rowCount) return res.status(404).json({error:"Ticket not found"});
+    await recordTicketEvent(req.params.id,req.user.id,req.user.name||req.user.email,"closed",{}).catch(()=>{});
+    res.json(result.rows[0]);
+  } catch(error){console.error(error);res.status(500).json({error:"Ticket kunne ikke lukkes."});}
+});
+
+app.get("/api/tickets/:id/events", async (req,res)=>{
+  try {
+    const check=await db.query("SELECT id FROM public.tickets WHERE id=$1 AND (owner_user_id=$2 OR $3=TRUE) LIMIT 1",[req.params.id,req.user.id,req.user.role==="admin"]);
+    if(!check.rowCount) return res.status(404).json({error:"Ticket not found"});
+    const result=await db.query(
+      'SELECT id,actor_user_id AS "actorUserId",actor_name AS "actorName",action,metadata,created_at AS "createdAt" FROM public.ticket_events WHERE ticket_id=$1 ORDER BY created_at ASC LIMIT 300',
+      [req.params.id]
+    );
+    res.json(result.rows);
+  } catch(error){console.error(error);res.status(500).json({error:"Ticketaktivitet kunne ikke hentes."});}
+});
+
+app.get("/api/tickets/:id/transcript", async (req,res)=>{
+  try {
+    const check=await db.query("SELECT id,title,user_name AS "user" FROM public.tickets WHERE id=$1 AND (owner_user_id=$2 OR $3=TRUE) LIMIT 1",[req.params.id,req.user.id,req.user.role==="admin"]);
+    if(!check.rowCount) return res.status(404).json({error:"Ticket not found"});
+    const result=await db.query(
+      'SELECT author_name AS "authorName",author_role AS "authorRole",content,created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id=$1 ORDER BY created_at ASC LIMIT 2000',
+      [req.params.id]
+    );
+    const lines=[
+      "ShardNote ticket #"+req.params.id,
+      "Titel: "+(check.rows[0].title||"Ticket"),
+      "Bruger: "+(check.rows[0].user||""),
+      "",
+      ...result.rows.map(m=>"["+new Date(m.createdAt).toLocaleString("da-DK")+"] "+(m.authorRole==="ai"?"AI":m.authorRole==="admin"?"Admin":m.authorRole==="internal"?"Intern note":"Kunde")+": "+m.content)
+    ];
+    res.setHeader("Content-Type","text/plain; charset=utf-8");
+    res.setHeader("Content-Disposition",`attachment; filename="ticket-${req.params.id}-transcript.txt"`);
+    res.send(lines.join("\n"));
+  } catch(error){console.error(error);res.status(500).json({error:"Transcript kunne ikke oprettes."});}
 });
 
 app.get("/api/tickets/:id/messages", async (req, res) => {
