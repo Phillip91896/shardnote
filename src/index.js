@@ -198,9 +198,9 @@ async function initDatabase() {
   await db.query(`
     CREATE TABLE IF NOT EXISTS public.trial_ip_claims (
       ip_hash TEXT PRIMARY KEY,
-      first_user_id BIGINT,
       claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-    )
+    );
+    ALTER TABLE public.trial_ip_claims DROP COLUMN IF EXISTS first_user_id;
   `);
 
   await db.query(`
@@ -1208,12 +1208,6 @@ app.post("/api/register", async (req, res) => {
         [name, email, hashPassword(password), activatedPlan, activatedFromKey ? "active" : "inactive", activatedFromKey]
       );
 
-      if (!serialKey && clientIp) {
-        await db.query(
-          "UPDATE public.trial_ip_claims SET first_user_id = $1 WHERE ip_hash = $2",
-          [String(result.rows[0].id), hashIp(clientIp)]
-        );
-      }
       user = result.rows[0];
 
       if (keyRow) {
