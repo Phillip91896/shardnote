@@ -339,6 +339,105 @@ function createBot({ state, db, log, createTicket, setReady }) {
     return total + "s";
   }
 
+  async function getStarboardSettings(guildId) {
+    if (!db) return { channel_id: null, threshold: 3 };
+    await db.query(
+      "INSERT INTO public.starboard_settings (guild_id) VALUES ($1) ON CONFLICT (guild_id) DO NOTHING",
+      [guildId]
+    );
+    const result = await db.query(
+      "SELECT channel_id, threshold FROM public.starboard_settings WHERE guild_id=$1 LIMIT 1",
+      [guildId]
+    );
+    return result.rows[0] || { channel_id: null, threshold: 3 };
+  }
+
+  async function updateStarboard(guild, messageId) {
+    if (!db || !guild) return;
+    const settings = await getStarboardSettings(guild.id);
+    if (!settings.channel_id) return;
+
+    const message = await guild.channels.fetch(messageId).catch(() => null);
+    if (message?.messages) return;
+
+    let sourceMessage = null;
+    for (const channel of guild.channels.cache.values()) {
+      if (!channel.isTextBased?.() || !channel.messages?.fetch) continue;
+      sourceMessage = await channel.messages.fetch(messageId).catch(() => null);
+      if (sourceMessage) break;
+    }
+    if (!sourceMessage || sourceMessage.author?.bot) return;
+
+    const starReaction = sourceMessage.reactions.cache.find(r => r.emoji.name === "⭐");
+    const count = starReaction?.count || 0;
+    const existing = await db.query(
+      "SELECT starboard_message_id FROM public.starboard_posts WHERE guild_id=$1 AND source_message_id=$2 LIMIT 1",
+      [guild.id, sourceMessage.id]
+    );
+
+    const starboardChannel = guild.channels.cache.get(settings.channel_id);
+    if (!starboardChannel?.isTextBased?.()) return;
+
+    if (count < Number(settings.threshold || 3)) {
+      if (existing.rows[0]?.starboard_message_id) {
+        await starboardChannel.messages.delete(existing.rows[0].starboard_message_id).catch(() => {});
+      }
+      await db.query(
+        "DELETE FROM public.starboard_posts WHERE guild_id=$1 AND source_message_id=$2",
+        [guild.id, sourceMessage.id]
+      );
+      return;
+    }
+
+    const embed = new EmbedBuilder()
+      .setColor(0xffd84d)
+      .setAuthor({ name: sourceMessage.author.tag, iconURL: sourceMessage.author.displayAvatarURL({ size: 128 }) })
+      .setDescription(String(sourceMessage.content || "(ingen tekst)").slice(0, 4000))
+      .addFields(
+        { name: "⭐ Stjerner", value: String(count), inline: true },
+        { name: "Kanal", value: "<#" + sourceMessage.channel.id + ">", inline: true }
+      )
+      .setTimestamp(sourceMessage.createdAt);
+
+    if (sourceMessage.url) embed.setFooter({ text: "Åbn original besked" });
+
+    if (existing.rows[0]?.starboard_message_id) {
+      const post = await starboardChannel.messages.fetch(existing.rows[0].starboard_message_id).catch(() => null);
+      if (post) {
+        await post.edit({ content: "⭐ **" + count + "**", embeds: [embed] }).catch(() => {});
+      }
+    } else {
+      const post = await starboardChannel.send({ content: "⭐ **" + count + "**", embeds: [embed] });
+      await db.query(
+        "INSERT INTO public.starboard_posts (guild_id, source_message_id, starboard_message_id, count) VALUES ($1,$2,$3,$4) ON CONFLICT (guild_id,source_message_id) DO UPDATE SET starboard_message_id=$3,count=$4",
+        [guild.id, sourceMessage.id, post.id, count]
+      );
+    }
+  }
+
+  function startReminderWorker() {
+    if (!db) return;
+    setInterval(async () => {
+      try {
+        const result = await db.query(
+          "SELECT id, guild_id, user_id, channel_id, remind_at, content FROM public.reminders WHERE remind_at <= NOW() ORDER BY remind_at ASC LIMIT 25"
+        );
+        for (const reminder of result.rows) {
+          const user = await client.users.fetch(reminder.user_id).catch(() => null);
+          if (user) {
+            await user.send("⏰ **Påmindelse**
+" + reminder.content).catch(() => {});
+          }
+          await db.query("DELETE FROM public.reminders WHERE id=$1", [reminder.id]);
+        }
+      } catch (error) {
+        log("error", "Reminder worker error: " + error.message);
+      }
+    }, 30000);
+  }
+
+  startReminderWorker();
+
   async function getGuildSettings(guildId) {
     const cached = guildSettingsCache.get(guildId);
     if (cached && cached.expiresAt > Date.now()) return cached.value;
@@ -2168,6 +2267,160 @@ function createBot({ state, db, log, createTicket, setReady }) {
       await interaction.reply({
         content: "✅ Serial key godkendt! Du har fået rollen **" + role.name + "**.",
         ephemeral: true
+      });
+      return true;
+    }
+
+    if (command === "afk") {
+      if (!db) {
+        await interaction.reply({ content: "Database kræves for AFK.", ephemeral: true });
+        return true;
+      }
+      const reason = interaction.options.getString("reason") || "AFK";
+      await db.query(
+        "INSERT INTO public.afk_status (guild_id,user_id,reason) VALUES ($1,$2,$3) ON CONFLICT (guild_id,user_id) DO UPDATE SET reason=$3,created_at=NOW()",
+        [interaction.guild.id, interaction.user.id, reason.slice(0, 500)]
+      );
+      await interaction.reply("💤 AFK slået til: " + reason.slice(0, 300));
+      return true;
+    }
+
+    if (command === "remind") {
+      if (!db) {
+        await interaction.reply({ content: "Database kræves for reminders.", ephemeral: true });
+        return true;
+      }
+      const duration = parseDuration(interaction.options.getString("duration", true));
+      if (!duration || duration > 30 * 86400000) {
+        await interaction.reply({ content: "Brug fx 10m, 2h eller 1d. Maksimum er 30 dage.", ephemeral: true });
+        return true;
+      }
+      const content = interaction.options.getString("message", true).slice(0, 1000);
+      await db.query(
+        "INSERT INTO public.reminders (guild_id,user_id,channel_id,remind_at,content) VALUES ($1,$2,$3,NOW()+($4 * INTERVAL '1 millisecond'),$5)",
+        [interaction.guild.id, interaction.user.id, interaction.channelId, duration, content]
+      );
+      await interaction.reply("⏰ Reminder sat til om **" + formatDuration(duration) + "**.");
+      return true;
+    }
+
+    if (command === "autoresponder-add") {
+      if (!requirePermission(PermissionFlagsBits.ManageGuild)) return true;
+      if (!db) {
+        await interaction.reply({ content: "Database kræves.", ephemeral: true });
+        return true;
+      }
+      const trigger = interaction.options.getString("trigger", true).trim().toLowerCase().slice(0, 120);
+      const response = interaction.options.getString("response", true).slice(0, 1500);
+      await db.query(
+        "INSERT INTO public.autoresponders (guild_id,trigger,response) VALUES ($1,$2,$3) ON CONFLICT (guild_id,trigger) DO UPDATE SET response=$3",
+        [interaction.guild.id, trigger, response]
+      );
+      await interaction.reply("✅ Autoresponder gemt for **" + trigger + "**.");
+      return true;
+    }
+
+    if (command === "autoresponder-remove") {
+      if (!requirePermission(PermissionFlagsBits.ManageGuild)) return true;
+      if (db) {
+        const trigger = interaction.options.getString("trigger", true).trim().toLowerCase().slice(0, 120);
+        await db.query("DELETE FROM public.autoresponders WHERE guild_id=$1 AND trigger=$2", [interaction.guild.id, trigger]);
+      }
+      await interaction.reply("✅ Autoresponder fjernet.");
+      return true;
+    }
+
+    if (command === "autoresponder-list") {
+      if (!requirePermission(PermissionFlagsBits.ManageGuild)) return true;
+      if (!db) {
+        await interaction.reply({ content: "Database kræves.", ephemeral: true });
+        return true;
+      }
+      const result = await db.query("SELECT trigger,response FROM public.autoresponders WHERE guild_id=$1 ORDER BY trigger ASC", [interaction.guild.id]);
+      const content = result.rows.length
+        ? result.rows.map(row => "• **" + row.trigger + "** → " + row.response.slice(0, 180)).join("
+")
+        : "Ingen autoresponders.";
+      await interaction.reply({ content, ephemeral: true });
+      return true;
+    }
+
+    if (command === "starboard-set") {
+      if (!requirePermission(PermissionFlagsBits.ManageGuild)) return true;
+      if (!db) {
+        await interaction.reply({ content: "Database kræves.", ephemeral: true });
+        return true;
+      }
+      const channel = interaction.options.getChannel("channel", true);
+      const threshold = interaction.options.getInteger("threshold") || 3;
+      await db.query(
+        "INSERT INTO public.starboard_settings (guild_id,channel_id,threshold) VALUES ($1,$2,$3) ON CONFLICT (guild_id) DO UPDATE SET channel_id=$2,threshold=$3",
+        [interaction.guild.id, channel.id, threshold]
+      );
+      await interaction.reply("⭐ Starboard sat til " + channel + " med **" + threshold + "** stjerner.");
+      return true;
+    }
+
+    if (command === "starboard-off") {
+      if (!requirePermission(PermissionFlagsBits.ManageGuild)) return true;
+      if (db) await db.query("UPDATE public.starboard_settings SET channel_id=NULL WHERE guild_id=$1", [interaction.guild.id]);
+      await interaction.reply("⭐ Starboard slået fra.");
+      return true;
+    }
+
+    if (command === "embed") {
+      if (!requirePermission(PermissionFlagsBits.ManageMessages)) return true;
+      const channel = interaction.options.getChannel("channel") || interaction.channel;
+      if (!channel?.isTextBased()) {
+        await interaction.reply({ content: "Kanalen kan ikke modtage beskeder.", ephemeral: true });
+        return true;
+      }
+      const title = interaction.options.getString("title", true).slice(0, 256);
+      const description = interaction.options.getString("description", true).slice(0, 4000);
+      await channel.send({
+        embeds: [new EmbedBuilder().setTitle(title).setDescription(description).setColor(0x6d5dfc).setFooter({ text: "ShardNote Embed" })]
+      });
+      await interaction.reply({ content: "✅ Embed sendt.", ephemeral: true });
+      return true;
+    }
+
+    if (command === "form-panel") {
+      if (!requirePermission(PermissionFlagsBits.ManageGuild)) return true;
+      const title = interaction.options.getString("title", true).slice(0, 150);
+      const panelId = interaction.id;
+      if (db) {
+        await db.query(
+          "INSERT INTO public.form_panels (id,guild_id,channel_id,title) VALUES ($1,$2,$3,$4)",
+          [panelId, interaction.guild.id, interaction.channel.id, title]
+        );
+      }
+      const row = new ActionRowBuilder().addComponents(
+        new ButtonBuilder().setCustomId("form_open:" + panelId).setLabel("📝 Åbn formular").setStyle(ButtonStyle.Primary)
+      );
+      await interaction.channel.send({
+        embeds: [new EmbedBuilder().setTitle("📝 " + title).setDescription("Tryk på knappen for at udfylde formularen.").setColor(0x6d5dfc)],
+        components: [row]
+      });
+      await interaction.reply({ content: "✅ Form-panel sendt.", ephemeral: true });
+      return true;
+    }
+
+    if (command === "serverstats") {
+      const g = interaction.guild;
+      await interaction.reply({
+        embeds: [
+          new EmbedBuilder()
+            .setTitle("📊 " + g.name)
+            .setColor(0x6d5dfc)
+            .addFields(
+              { name: "Medlemmer", value: String(g.memberCount || 0), inline: true },
+              { name: "Kanaler", value: String(g.channels.cache.size), inline: true },
+              { name: "Roller", value: String(g.roles.cache.size), inline: true },
+              { name: "Boosts", value: String(g.premiumSubscriptionCount || 0), inline: true },
+              { name: "Owner", value: "<@" + g.ownerId + ">", inline: true },
+              { name: "ID", value: g.id, inline: true }
+            )
+        ]
       });
       return true;
     }
