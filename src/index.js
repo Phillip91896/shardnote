@@ -2999,13 +2999,9 @@ body.locked > .app{display:none}
 <section class="page" id="page-tickets">
   <div class="card">
     <div class="section-title">
-      <div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap">
+      <div>
         <h2 style="margin:0">Ticket-system</h2>
-        <select id="ticketHandlerDefault" class="feature-select" style="min-width:160px">
-          <option value="ticket">🎫 Ticket</option>
-          <option value="ai">🤖 AI</option>
-          <option value="admins" selected>👑 Admins</option>
-        </select>
+        <span>Opret og skriv direkte i en ticket-chat.</span>
       </div>
       <button class="btn primary" data-button-label="ticketNew" onclick="newTicket()">+ Ny ticket</button>
     </div>
