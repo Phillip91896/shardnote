@@ -352,21 +352,15 @@ function createBot({ state, db, log, createTicket, setReady }) {
     return result.rows[0] || { channel_id: null, threshold: 3 };
   }
 
-  async function updateStarboard(guild, messageId) {
-    if (!db || !guild) return;
+  async function updateStarboard(guild, sourceMessage) {
+    if (!db || !guild || !sourceMessage) return;
+    if (sourceMessage.partial) {
+      await sourceMessage.fetch().catch(() => {});
+    }
+    if (!sourceMessage.author || sourceMessage.author.bot) return;
+
     const settings = await getStarboardSettings(guild.id);
     if (!settings.channel_id) return;
-
-    const message = await guild.channels.fetch(messageId).catch(() => null);
-    if (message?.messages) return;
-
-    let sourceMessage = null;
-    for (const channel of guild.channels.cache.values()) {
-      if (!channel.isTextBased?.() || !channel.messages?.fetch) continue;
-      sourceMessage = await channel.messages.fetch(messageId).catch(() => null);
-      if (sourceMessage) break;
-    }
-    if (!sourceMessage || sourceMessage.author?.bot) return;
 
     const starReaction = sourceMessage.reactions.cache.find(r => r.emoji.name === "⭐");
     const count = starReaction?.count || 0;
@@ -399,7 +393,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
       )
       .setTimestamp(sourceMessage.createdAt);
 
-    if (sourceMessage.url) embed.setFooter({ text: "Åbn original besked" });
+    if (sourceMessage.url) embed.setFooter({ text: sourceMessage.url });
 
     if (existing.rows[0]?.starboard_message_id) {
       const post = await starboardChannel.messages.fetch(existing.rows[0].starboard_message_id).catch(() => null);
@@ -414,7 +408,6 @@ function createBot({ state, db, log, createTicket, setReady }) {
       );
     }
   }
-
   function startReminderWorker() {
     if (!db) return;
     setInterval(async () => {
@@ -1630,6 +1623,42 @@ function createBot({ state, db, log, createTicket, setReady }) {
       });
     }
 
+    if (interaction.customId.startsWith("form_open:")) {
+      const panelId = interaction.customId.split(":")[1];
+      let title = "ShardNote formular";
+      if (db) {
+        const result = await db.query("SELECT title FROM public.form_panels WHERE id=$1 AND guild_id=$2 LIMIT 1", [panelId, interaction.guild.id]);
+        title = result.rows[0]?.title || title;
+      }
+      const modal = new ModalBuilder()
+        .setCustomId("form_submit:" + panelId)
+        .setTitle(String(title).slice(0, 45));
+      const nameInput = new TextInputBuilder()
+        .setCustomId("form_name")
+        .setLabel("Dit navn")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(100);
+      const topicInput = new TextInputBuilder()
+        .setCustomId("form_topic")
+        .setLabel("Hvad handler det om?")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(150);
+      const detailsInput = new TextInputBuilder()
+        .setCustomId("form_details")
+        .setLabel("Beskriv det nærmere")
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true)
+        .setMaxLength(1000);
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(nameInput),
+        new ActionRowBuilder().addComponents(topicInput),
+        new ActionRowBuilder().addComponents(detailsInput)
+      );
+      return interaction.showModal(modal);
+    }
+
     if (interaction.customId.startsWith("role:")) {
       const role = interaction.guild.roles.cache.get(interaction.customId.split(":")[1]);
       const member = await getMember(interaction.guild, interaction.user.id);
@@ -2517,6 +2546,38 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
   client.on("interactionCreate", async (interaction) => {
     if (interaction.isButton()) return handleFeatureButton(interaction).catch(error => log("error", "Button error: " + error.message));
+    if (interaction.isModalSubmit()) {
+      if (!interaction.guild || !interaction.customId.startsWith("form_submit:")) return;
+      try {
+        const panelId = interaction.customId.split(":")[1];
+        const name = interaction.fields.getTextInputValue("form_name");
+        const topic = interaction.fields.getTextInputValue("form_topic");
+        const details = interaction.fields.getTextInputValue("form_details");
+        const panelChannelId = interaction.channel?.id;
+        const destination = interaction.guild.channels.cache.get(panelChannelId) || interaction.channel;
+        if (destination?.isTextBased?.()) {
+          await destination.send({
+            embeds: [
+              new EmbedBuilder()
+                .setTitle("📝 Ny formular")
+                .setColor(0x6d5dfc)
+                .addFields(
+                  { name: "Bruger", value: interaction.user.toString(), inline: true },
+                  { name: "Navn", value: name, inline: true },
+                  { name: "Emne", value: topic, inline: true },
+                  { name: "Detaljer", value: details.slice(0, 1024) }
+                )
+                .setFooter({ text: "Form panel: " + panelId })
+            ]
+          });
+        }
+        await interaction.reply({ content: "✅ Formular sendt.", ephemeral: true });
+      } catch (error) {
+        await interaction.reply({ content: "Formularen kunne ikke sendes.", ephemeral: true }).catch(() => {});
+        log("error", "Form submit error: " + error.message);
+      }
+      return;
+    }
     if (!interaction.isChatInputCommand()) return;
 
     try {
@@ -2734,8 +2795,67 @@ function createBot({ state, db, log, createTicket, setReady }) {
     }
   });
 
+  client.on("messageReactionAdd", async (reaction, user) => {
+    if (user.bot || !reaction.message.guild) return;
+    try {
+      if (reaction.partial) await reaction.fetch().catch(() => {});
+      if (reaction.emoji.name === "⭐") {
+        await updateStarboard(reaction.message.guild, reaction.message);
+      }
+    } catch (error) {
+      log("error", "Starboard add error: " + error.message);
+    }
+  });
+
+  client.on("messageReactionRemove", async (reaction, user) => {
+    if (user.bot || !reaction.message.guild) return;
+    try {
+      if (reaction.partial) await reaction.fetch().catch(() => {});
+      if (reaction.emoji.name === "⭐") {
+        await updateStarboard(reaction.message.guild, reaction.message);
+      }
+    } catch (error) {
+      log("error", "Starboard remove error: " + error.message);
+    }
+  });
+
   client.on("messageCreate", async (message) => {
     if (message.author.bot) return;
+
+    if (message.guild && db) {
+      try {
+        const ownAfk = await db.query(
+          "DELETE FROM public.afk_status WHERE guild_id=$1 AND user_id=$2 RETURNING reason",
+          [message.guild.id, message.author.id]
+        );
+        if (ownAfk.rowCount) {
+          await message.reply("👋 Velkommen tilbage! Din AFK-status er fjernet.").catch(() => {});
+        }
+
+        const mentioned = [...message.mentions.users.values()].filter(user => user.id !== message.author.id);
+        for (const user of mentioned.slice(0, 5)) {
+          const afk = await db.query(
+            "SELECT reason,created_at FROM public.afk_status WHERE guild_id=$1 AND user_id=$2 LIMIT 1",
+            [message.guild.id, user.id]
+          );
+          if (afk.rowCount) {
+            await message.reply("💤 <@" + user.id + "> er AFK: " + String(afk.rows[0].reason).slice(0, 300)).catch(() => {});
+          }
+        }
+
+        const responders = await db.query(
+          "SELECT trigger,response FROM public.autoresponders WHERE guild_id=$1 ORDER BY LENGTH(trigger) DESC LIMIT 50",
+          [message.guild.id]
+        );
+        const content = message.content.toLowerCase();
+        const match = responders.rows.find(row => row.trigger && content.includes(String(row.trigger).toLowerCase()));
+        if (match && !message.content.startsWith(state.settings.prefix || "!")) {
+          await message.reply(String(match.response).slice(0, 1800)).catch(() => {});
+        }
+      } catch (error) {
+        log("error", "AFK/autoresponder error: " + error.message);
+      }
+    }
 
     try {
       if (await runAutoMod(message)) return;
