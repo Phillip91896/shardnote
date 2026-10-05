@@ -319,6 +319,66 @@ async function initDatabase() {
   `);
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS public.afk_status (
+      guild_id VARCHAR(32) NOT NULL,
+      user_id VARCHAR(32) NOT NULL,
+      reason VARCHAR(500) NOT NULL DEFAULT 'AFK',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (guild_id, user_id)
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.reminders (
+      id BIGSERIAL PRIMARY KEY,
+      guild_id VARCHAR(32) NOT NULL,
+      user_id VARCHAR(32) NOT NULL,
+      channel_id VARCHAR(32),
+      remind_at TIMESTAMPTZ NOT NULL,
+      content VARCHAR(1000) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.autoresponders (
+      guild_id VARCHAR(32) NOT NULL,
+      trigger VARCHAR(120) NOT NULL,
+      response TEXT NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (guild_id, trigger)
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.starboard_settings (
+      guild_id VARCHAR(32) PRIMARY KEY,
+      channel_id VARCHAR(32),
+      threshold INTEGER NOT NULL DEFAULT 3
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.starboard_posts (
+      guild_id VARCHAR(32) NOT NULL,
+      source_message_id VARCHAR(32) NOT NULL,
+      starboard_message_id VARCHAR(32),
+      count INTEGER NOT NULL DEFAULT 0,
+      PRIMARY KEY (guild_id, source_message_id)
+    )
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.form_panels (
+      id VARCHAR(64) PRIMARY KEY,
+      guild_id VARCHAR(32) NOT NULL,
+      channel_id VARCHAR(32) NOT NULL,
+      title VARCHAR(150) NOT NULL,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS suggestions (
       id BIGSERIAL PRIMARY KEY,
       guild_id VARCHAR(32) NOT NULL,
