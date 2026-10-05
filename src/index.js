@@ -3140,9 +3140,15 @@ body.locked > .app{display:none}
 
 <section class="page" id="page-admin">
   <div class="card" style="margin-bottom:18px">
-    <div class="section-title"><div><h2>🎫 Tickets</h2><span>Administrator-adgang til alle tickets og hele samtalen.</span></div></div>
-    <p style="color:var(--muted);line-height:1.6">Åbn tickets herfra for at se kundens beskeder, AI-svar og dine egne adminsvar. Du kan også svare direkte på ticketen.</p>
-    <div class="actions"><button class="btn primary" onclick="navigate('tickets')">🎫 Åbn Tickets</button></div>
+    <div class="section-title">
+      <div>
+        <h2>🎫 Tickets</h2>
+        <span>Alle kundetickets direkte i Admin-panelet.</span>
+      </div>
+      <button class="btn small" onclick="loadAdminTickets()">Opdater</button>
+    </div>
+    <p style="color:var(--muted);line-height:1.6">Åbn en ticket direkte herfra og se hele samtalen, inklusive <b>🤖 AI-svar</b>, kundens beskeder og dine adminsvar.</p>
+    <div id="adminTicketList"></div>
   </div>
 
   <div class="card" style="margin-bottom:18px">
