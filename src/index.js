@@ -1853,6 +1853,82 @@ app.get("/api/stats", async (req, res) => {
   }
 });
 
+function emailHtmlEscape(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+async function getTicketAdminEmail() {
+  const configured = String(process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+  if (configured) return configured;
+
+  if (db) {
+    const result = await db.query(
+      "SELECT email FROM public.users WHERE role = 'admin' ORDER BY id ASC LIMIT 1"
+    );
+    return result.rows[0]?.email ? String(result.rows[0].email).trim().toLowerCase() : "";
+  }
+
+  const admin = state.users.find(user => user.role === "admin");
+  return admin?.email ? String(admin.email).trim().toLowerCase() : "";
+}
+
+async function sendTicketAdminEscalationEmail(ticket, messages, reason) {
+  const resendKey = String(process.env.RESEND_API_KEY || "").trim();
+  const from = String(process.env.RESEND_FROM_EMAIL || "").trim();
+  const to = await getTicketAdminEmail();
+
+  if (!resendKey || !from || !to) {
+    console.warn("[Shardnote Bot] Admin escalation email is not configured. Set RESEND_API_KEY and RESEND_FROM_EMAIL in Render.");
+    return false;
+  }
+
+  const transcript = messages.slice(-20).map(m => {
+    const who = m.authorRole === "admin" ? "Admin" : m.authorRole === "ai" ? "AI" : "Kunde";
+    return `<p><b>${emailHtmlEscape(who)} — ${emailHtmlEscape(m.authorName || "")}</b><br>${emailHtmlEscape(m.content || "").replace(/\n/g, "<br>")}</p>`;
+  }).join("");
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer " + resendKey
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject: `🚨 ShardNote ticket #${emailHtmlEscape(ticket.id)} kræver en administrator`,
+      html:
+        `<h2>🚨 Ticket #${emailHtmlEscape(ticket.id)} kræver hjælp</h2>` +
+        `<p><b>Ticket:</b> ${emailHtmlEscape(ticket.title || "Support ticket")}</p>` +
+        `<p><b>Hvorfor:</b> ${emailHtmlEscape(reason || "AI kunne ikke løse ticketen.")}</p>` +
+        `<p><b>Beskrivelse:</b><br>${emailHtmlEscape(ticket.description || "").replace(/\n/g, "<br>")}</p>` +
+        `<hr><h3>Seneste samtale</h3>${transcript || "<p>Ingen beskeder.</p>"}` +
+        `<p><a href="https://shardnote-mxj3.onrender.com">Åbn ShardNote</a></p>`
+    })
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.message || data?.error?.message || "Kunne ikke sende admin-mailen.");
+  }
+
+  return true;
+}
+
+function normalizeAiAnswer(answer) {
+  const raw = String(answer || "").trim();
+  const needsAdmin = /^\[ADMIN_HANDOFF\]/i.test(raw);
+  return {
+    needsAdmin,
+    text: raw.replace(/^\[ADMIN_HANDOFF\]\s*/i, "").trim()
+  };
+}
+
 async function generateTicketAiReply(ticket, messages) {
   const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) throw new Error("AI er ikke konfigureret. Tilføj GEMINI_API_KEY i Render.");
@@ -1868,7 +1944,10 @@ async function generateTicketAiReply(ticket, messages) {
   const prompt = [
     "Du er Shardnote Bot supportassistent.",
     "Svar kort, venligt og konkret på kundens supportticket.",
-    "Du må ikke opfinde funktioner, priser eller løfter. Hvis du mangler oplysninger, så sig det og foreslå kontakt til en administrator.",
+    "Du må ikke opfinde funktioner, priser eller løfter.",
+    "Hvis du kan løse problemet med de oplysninger, du har, så svar direkte og konkret.",
+    "Hvis du ikke kan løse problemet sikkert, mangler vigtig adgang/oplysning, eller sagen kræver en administrator, skal du starte svaret med præcis [ADMIN_HANDOFF].",
+    "Efter [ADMIN_HANDOFF] skal du kort forklare brugeren, at en administrator tager over.",
     "Svar på dansk, medmindre kunden skriver på et andet sprog.",
     "",
     "Ticket: " + String(ticket.title || ""),
@@ -1891,7 +1970,7 @@ async function generateTicketAiReply(ticket, messages) {
         body: JSON.stringify({
           system_instruction: {
             parts: [{
-              text: "Du er Shardnote Bot supportassistent. Vær hjælpsom, præcis og sikker. Opfind ikke funktioner, priser eller løfter."
+              text: "Du er Shardnote Bot supportassistent. Vær hjælpsom, præcis og sikker. Opfind ikke funktioner, priser eller løfter. Brug [ADMIN_HANDOFF], når sagen kræver menneskelig hjælp."
             }]
           },
           contents: [{
@@ -1920,12 +1999,10 @@ async function generateTicketAiReply(ticket, messages) {
 
       const message = data?.error?.message || "AI-svar kunne ikke genereres.";
       lastError = new Error(message);
-
       const retryable = response.status === 429 || response.status === 503 ||
         /quota|high demand|temporar|resource exhausted|rate.?limit/i.test(message);
 
       if (!retryable) break;
-
       console.warn(`[Shardnote Bot] Gemini model ${model} was unavailable; trying fallback model.`);
     } catch (error) {
       lastError = error;
@@ -1998,13 +2075,41 @@ app.post("/api/tickets", async (req, res) => {
           content: description
         }];
         const answer = await generateTicketAiReply(ticket, history);
-        await db.query(
-          'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4)',
-          [ticket.id, "Shardnote Bot AI", "ai", answer]
-        );
+        const aiResult = normalizeAiAnswer(answer);
+        if (aiResult.needsAdmin) {
+          try {
+            await sendTicketAdminEscalationEmail(ticket, history, "AI vurderede, at sagen kræver en administrator.");
+          } catch (notifyError) {
+            console.error("[Shardnote Bot] Admin escalation email failed:", notifyError.message);
+          }
+          await db.query(
+            'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4)',
+            [ticket.id, "Shardnote Bot AI", "ai", aiResult.text || "Jeg sender din ticket videre til en administrator, som hjælper dig videre."]
+          );
+          await db.query("UPDATE public.tickets SET status = 'pending', handler = 'admins' WHERE id = $1", [ticket.id]);
+        } else {
+          await db.query(
+            'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4)',
+            [ticket.id, "Shardnote Bot AI", "ai", aiResult.text]
+          );
+        }
         log("ticket", "AI automatically replied to ticket #" + ticket.id, req.user.id);
       } catch (error) {
         console.error("[Shardnote Bot] Automatic ticket AI failed:", error.message);
+        try {
+          await sendTicketAdminEscalationEmail(ticket, history, error.message);
+        } catch (notifyError) {
+          console.error("[Shardnote Bot] Could not notify admin about AI failure:", notifyError.message);
+        }
+        try {
+          await db.query(
+            'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4)',
+            [ticket.id, "Shardnote Bot AI", "ai", "Jeg kunne ikke svare sikkert på dette lige nu. Jeg har sendt din ticket videre til en administrator."]
+          );
+          await db.query("UPDATE public.tickets SET status = 'pending', handler = 'admins' WHERE id = $1", [ticket.id]);
+        } catch (dbError) {
+          console.error("[Shardnote Bot] Could not save AI escalation message:", dbError.message);
+        }
         ticket.aiError = error.message;
       }
     }
@@ -2130,13 +2235,41 @@ app.post("/api/tickets/:id/reply", async (req, res) => {
             [req.params.id]
           );
           const answer = await generateTicketAiReply(currentTicket, history.rows);
-          await db.query(
-            'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4)',
-            [req.params.id, "Shardnote Bot AI", "ai", answer]
-          );
+          const aiResult = normalizeAiAnswer(answer);
+          if (aiResult.needsAdmin) {
+            try {
+              await sendTicketAdminEscalationEmail(currentTicket, history.rows, "AI vurderede, at sagen kræver en administrator.");
+            } catch (notifyError) {
+              console.error("[Shardnote Bot] Admin escalation email failed:", notifyError.message);
+            }
+            await db.query(
+              'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4)',
+              [req.params.id, "Shardnote Bot AI", "ai", aiResult.text || "Jeg sender din ticket videre til en administrator, som hjælper dig videre."]
+            );
+            await db.query("UPDATE public.tickets SET status = 'pending', handler = 'admins' WHERE id = $1", [req.params.id]);
+          } else {
+            await db.query(
+              'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4)',
+              [req.params.id, "Shardnote Bot AI", "ai", aiResult.text]
+            );
+          }
           log("ticket", "AI automatically replied to customer on ticket #" + req.params.id, req.user.id);
         } catch (error) {
           console.error("[Shardnote Bot] Automatic AI reply failed:", error.message);
+          try {
+            await sendTicketAdminEscalationEmail(currentTicket, history.rows, error.message);
+          } catch (notifyError) {
+            console.error("[Shardnote Bot] Admin escalation email failed:", notifyError.message);
+          }
+          try {
+            await db.query(
+              'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4)',
+              [req.params.id, "Shardnote Bot AI", "ai", "Jeg kunne ikke svare sikkert på dette lige nu. Jeg har sendt din ticket videre til en administrator."]
+            );
+            await db.query("UPDATE public.tickets SET status = 'pending', handler = 'admins' WHERE id = $1", [req.params.id]);
+          } catch (dbError) {
+            console.error("[Shardnote Bot] Could not save AI escalation message:", dbError.message);
+          }
         }
       }
     }
@@ -2171,9 +2304,17 @@ app.post("/api/tickets/:id/ai-reply", requireAdmin, async (req, res) => {
     }
 
     const answer = await generateTicketAiReply(ticket, history);
+    const aiResult = normalizeAiAnswer(answer);
+    if (aiResult.needsAdmin) {
+      try {
+        await sendTicketAdminEscalationEmail(ticket, history, "AI vurderede, at sagen kræver en administrator.");
+      } catch (notifyError) {
+        console.error("[Shardnote Bot] Admin escalation email failed:", notifyError.message);
+      }
+    }
     const result = await db.query(
       'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4) RETURNING id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt"',
-      [ticket.id, "Shardnote Bot AI", "ai", answer]
+      [ticket.id, "Shardnote Bot AI", "ai", aiResult.text || "Jeg sender din ticket videre til en administrator, som hjælper dig videre."]
     );
     await db.query("UPDATE public.tickets SET status = 'pending', handler = 'ai' WHERE id = $1", [ticket.id]);
     log("ticket", "AI replied to ticket #" + ticket.id, req.user.id);
