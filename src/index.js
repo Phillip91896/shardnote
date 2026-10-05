@@ -1911,18 +1911,40 @@ app.get("/api/tickets", async (req, res) => {
 
 app.post("/api/tickets", async (req, res) => {
   try {
+    const description = String(req.body?.description || "").trim().slice(0, 5000);
     const ticket = await saveTicket({
       title: req.body.title,
       user: req.body.user,
       status: "open",
       priority: req.body.priority,
       ownerUserId: req.user.id,
+      description,
       handler: req.body.handler
     });
+
+    if (db && description) {
+      await db.query(
+        'INSERT INTO public.ticket_messages (ticket_id, author_user_id, author_name, author_role, content) VALUES ($1,$2,$3,$4,$5)',
+        [
+          ticket.id,
+          req.user.id,
+          req.user.name || req.user.email || "Bruger",
+          "user",
+          description
+        ]
+      );
+    }
+
     log("ticket", `Ticket #${ticket.id} created from dashboard`, req.user.id);
-    if (ticket.handler === "ai" && db && process.env.OPENAI_API_KEY) {
+
+    if (ticket.handler === "ai" && db && process.env.OPENAI_API_KEY && description) {
       try {
-        const answer = await generateTicketAiReply(ticket, []);
+        const history = [{
+          authorName: req.user.name || req.user.email || "Bruger",
+          authorRole: "user",
+          content: description
+        }];
+        const answer = await generateTicketAiReply(ticket, history);
         await db.query(
           'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4)',
           [ticket.id, "Shardnote Bot AI", "ai", answer]
@@ -1930,8 +1952,10 @@ app.post("/api/tickets", async (req, res) => {
         log("ticket", "AI automatically replied to ticket #" + ticket.id, req.user.id);
       } catch (error) {
         console.error("[Shardnote Bot] Automatic ticket AI failed:", error.message);
+        ticket.aiError = error.message;
       }
     }
+
     res.status(201).json(ticket);
   } catch (error) {
     console.error(error);
