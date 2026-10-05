@@ -151,7 +151,7 @@ async function loadTickets(){
         '</select></td><td><span class="badge '+t.status+'">'+t.status+'</span></td><td>'+t.priority+'</td><td>'+
         '<button class="btn small ticket-cycle" data-ticket-id="'+t.id+'" data-ticket-status="'+t.status+'">Skift status</button> '+
         '<button class="btn small" onclick="openTicketReply('+t.id+')">Svar</button> '+
-        (currentUser?.role==="admin" ? '<button class="btn small" onclick="aiTicketReply('+t.id+')">🤖 AI svar</button> ' : '')+
+        (currentUser?.role==="admin" ? '<button class="btn small" onclick="aiTicketReply('+t.id+', this)">🤖 AI svar</button> ' : '')+
         '<button class="btn small danger ticket-delete" data-ticket-id="'+t.id+'">Slet</button>'+
       '</td></tr>';
     }).join("")+
@@ -202,13 +202,27 @@ async function openTicketReply(id){
     modal.querySelector("#ticketChatInput").focus();
   }catch(e){toast(e.message)}
 }
-async function aiTicketReply(id){
+async function aiTicketReply(id, button){
+  if(button?.dataset.busy==="1") return;
+  if(button){
+    button.dataset.busy="1";
+    button.disabled=true;
+    button.dataset.originalText=button.textContent;
+    button.textContent="🤖 AI arbejder…";
+  }
   try{
     await api("/api/tickets/"+id+"/ai-reply",{method:"POST"});
     toast("🤖 AI-svar sendt");
     loadTickets();
     loadAdminTickets();
   }catch(e){toast(e.message)}
+  finally{
+    if(button){
+      button.disabled=false;
+      button.dataset.busy="0";
+      button.textContent=button.dataset.originalText || "🤖 AI svar";
+    }
+  }
 }
 function closeNewTicketComposer(){
   const modal=document.getElementById("newTicketComposer");
