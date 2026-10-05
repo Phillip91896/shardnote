@@ -207,6 +207,7 @@ async function aiTicketReply(id){
     await api("/api/tickets/"+id+"/ai-reply",{method:"POST"});
     toast("🤖 AI-svar sendt");
     loadTickets();
+    loadAdminTickets();
   }catch(e){toast(e.message)}
 }
 function closeNewTicketComposer(){
@@ -288,16 +289,17 @@ async function setTicketHandler(id,handler){
     await api("/api/tickets/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({handler})});
     toast(handler==="ai"?"🤖 AI valgt":handler==="admins"?"👑 Admins valgt":"🎫 Ticket valgt");
     loadTickets();
+    loadAdminTickets();
   }catch(e){toast(e.message)}
 }
 async function cycleTicket(id,status){
   const next={open:"pending",pending:"closed",closed:"open"}[status];
   await api("/api/tickets/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status:next})});
-  loadTickets();loadStats();
+  loadTickets();loadStats();loadAdminTickets();
 }
 async function deleteTicket(id){
   if(!confirm("Slet denne ticket?")) return;
-  await api("/api/tickets/"+id,{method:"DELETE"});toast("Ticket slettet");loadTickets();loadStats();
+  await api("/api/tickets/"+id,{method:"DELETE"});toast("Ticket slettet");loadTickets();loadStats();loadAdminTickets();
 }
 
 async function submitUpgradeIdea(){
@@ -518,21 +520,47 @@ async function loadAdminTickets(){
     }
     node.innerHTML=
       '<div class="table-wrap"><table class="table"><thead><tr>'+
-      '<th>ID</th><th>Titel</th><th>Bruger</th><th>Behandler</th><th>Status</th><th>Prioritet</th><th></th>'+
+      '<th>ID</th><th>Titel</th><th>Bruger</th><th>Behandler</th><th>Status</th><th>Prioritet</th><th>Handlinger</th>'+
       '</tr></thead><tbody>'+
       tickets.map(t=>{
-        const handler=t.handler==="ai"?"🤖 AI":t.handler==="ticket"?"🎫 Ticket":"👑 Admins";
+        const handlerOptions=
+          '<select class="ticket-handler" data-ticket-handler="'+t.id+'">'+
+            '<option value="ai" '+(t.handler==="ai"?"selected":"")+'>🤖 AI</option>'+
+            '<option value="admins" '+(t.handler==="admins"?"selected":"")+'>👑 Admins</option>'+
+            '<option value="ticket" '+(t.handler==="ticket"?"selected":"")+'>🎫 Ticket</option>'+
+          '</select>';
         return '<tr>'+
           '<td>#'+t.id+'</td>'+
           '<td>'+escapeHtml(t.title||"Ticket")+'</td>'+
           '<td>'+escapeHtml(t.user||"")+'</td>'+
-          '<td>'+handler+'</td>'+
+          '<td>'+handlerOptions+'</td>'+
           '<td><span class="badge '+escapeHtml(t.status||"open")+'">'+escapeHtml(t.status||"open")+'</span></td>'+
           '<td>'+escapeHtml(t.priority||"normal")+'</td>'+
-          '<td><button class="btn small primary" onclick="openTicketReply('+t.id+')">Åbn samtale</button></td>'+
+          '<td>'+
+            '<button class="btn small ticket-cycle" data-ticket-id="'+t.id+'" data-ticket-status="'+escapeHtml(t.status||"open")+'">Skift status</button> '+
+            '<button class="btn small" onclick="openTicketReply('+t.id+')">Svar</button> '+
+            '<button class="btn small" onclick="aiTicketReply('+t.id+')">🤖 AI svar</button> '+
+            '<button class="btn small danger ticket-delete" data-ticket-id="'+t.id+'">Slet</button>'+
+          '</td>'+
         '</tr>';
       }).join("")+
       '</tbody></table></div>';
+
+    node.querySelectorAll(".ticket-handler").forEach(function(el){
+      el.addEventListener("change",function(){
+        setTicketHandler(this.dataset.ticketHandler,this.value);
+      });
+    });
+    node.querySelectorAll(".ticket-cycle").forEach(function(el){
+      el.addEventListener("click",function(){
+        cycleTicket(this.dataset.ticketId,this.dataset.ticketStatus);
+      });
+    });
+    node.querySelectorAll(".ticket-delete").forEach(function(el){
+      el.addEventListener("click",function(){
+        deleteTicket(this.dataset.ticketId);
+      });
+    });
   }catch(e){
     node.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';
   }
