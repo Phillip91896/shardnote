@@ -1856,8 +1856,15 @@ app.get("/api/stats", async (req, res) => {
 async function generateTicketAiReply(ticket, messages) {
   const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
   if (!apiKey) throw new Error("AI er ikke konfigureret. Tilføj GEMINI_API_KEY i Render.");
-  const model = String(process.env.GEMINI_MODEL || "gemini-3.1-pro-preview").trim();
-  const transcript = messages.slice(-20).map(m => (m.authorRole === "admin" ? "Admin" : m.authorRole === "ai" ? "AI" : "Kunde") + ": " + m.content).join("\n");
+
+  const primaryModel = String(process.env.GEMINI_MODEL || "gemini-3.8-flash").trim();
+  const fallbackModel = String(process.env.GEMINI_FALLBACK_MODEL || "gemini-3.7-flash").trim();
+  const models = [...new Set([primaryModel, fallbackModel, "gemini-3.5-flash-lite"].filter(Boolean))];
+
+  const transcript = messages.slice(-20)
+    .map(m => (m.authorRole === "admin" ? "Admin" : m.authorRole === "ai" ? "AI" : "Kunde") + ": " + m.content)
+    .join("\n");
+
   const prompt = [
     "Du er Shardnote Bot supportassistent.",
     "Svar kort, venligt og konkret på kundens supportticket.",
@@ -1871,41 +1878,62 @@ async function generateTicketAiReply(ticket, messages) {
     transcript || "(ingen tidligere beskeder)"
   ].join("\n");
 
-  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "x-goog-api-key": apiKey
-    },
-    body: JSON.stringify({
-      system_instruction: {
-        parts: [{ text: "Du er Shardnote Bot supportassistent. Vær hjælpsom, præcis og sikker. Opfind ikke funktioner, priser eller løfter." }]
-      },
-      contents: [{
-        role: "user",
-        parts: [{ text: prompt }]
-      }],
-      generationConfig: {
-        maxOutputTokens: 500,
-        temperature: 0.2
-      }
-    })
-  });
+  let lastError = null;
 
-  const data = await response.json();
-  if (!response.ok) {
-    const message = data?.error?.message || "AI-svar kunne ikke genereres.";
-    throw new Error(message);
+  for (const model of models) {
+    try {
+      const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-goog-api-key": apiKey
+        },
+        body: JSON.stringify({
+          system_instruction: {
+            parts: [{
+              text: "Du er Shardnote Bot supportassistent. Vær hjælpsom, præcis og sikker. Opfind ikke funktioner, priser eller løfter."
+            }]
+          },
+          contents: [{
+            role: "user",
+            parts: [{ text: prompt }]
+          }],
+          generationConfig: {
+            maxOutputTokens: 500,
+            temperature: 0.2
+          }
+        })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        const text = (data?.candidates || [])
+          .flatMap(candidate => candidate?.content?.parts || [])
+          .map(part => part?.text || "")
+          .join("")
+          .trim();
+
+        if (!text) throw new Error("AI returnerede ikke et svar.");
+        return text.slice(0, 4000);
+      }
+
+      const message = data?.error?.message || "AI-svar kunne ikke genereres.";
+      lastError = new Error(message);
+
+      const retryable = response.status === 429 || response.status === 503 ||
+        /quota|high demand|temporar|resource exhausted|rate.?limit/i.test(message);
+
+      if (!retryable) break;
+
+      console.warn(`[Shardnote Bot] Gemini model ${model} was unavailable; trying fallback model.`);
+    } catch (error) {
+      lastError = error;
+      console.warn(`[Shardnote Bot] Gemini model ${model} failed; trying fallback model:`, error.message);
+    }
   }
 
-  const text = (data?.candidates || [])
-    .flatMap(candidate => candidate?.content?.parts || [])
-    .map(part => part?.text || "")
-    .join("")
-    .trim();
-
-  if (!text) throw new Error("AI returnerede ikke et svar.");
-  return text.slice(0, 4000);
+  throw lastError || new Error("AI-svar kunne ikke genereres.");
 }
 
 app.get("/api/tickets", async (req, res) => {
