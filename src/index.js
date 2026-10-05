@@ -26,6 +26,48 @@ app.post("/api/billing/webhook", express.raw({ type: "application/json" }), asyn
       const plan=object.metadata?.plan;
       if(userId){
         await updateUserSubscription({userId,status:"active",customerId,subscriptionId});
+        if (db && ["member","member_plus","member_pro"].includes(plan) && object.id) {
+          try {
+            const delivery = await db.query(
+              "SELECT id, sent_at AS \"sentAt\" FROM public.license_deliveries WHERE checkout_session_id = $1 LIMIT 1",
+              [object.id]
+            );
+            if (!delivery.rows[0]) {
+              const rawKey = generateSerialKey();
+              const keyHash = hashSerialKey(rawKey);
+              const keyResult = await db.query(
+                `INSERT INTO public.serial_keys
+                  (key_hash,key_last4,product_name,access_plan,max_uses,created_by)
+                 VALUES ($1,$2,$3,$4,1,$5)
+                 RETURNING id`,
+                [keyHash, rawKey.slice(-4), "Shardnote Bot " + plan, plan, userId]
+              );
+              await db.query(
+                `INSERT INTO public.license_deliveries
+                  (checkout_session_id,user_id,email,key_hash,key_last4)
+                 VALUES ($1,$2,$3,$4,$5)`,
+                [object.id, userId, object.customer_details?.email || "", keyHash, rawKey.slice(-4)]
+              );
+              const userResult = await db.query("SELECT name,email FROM public.users WHERE id = $1 LIMIT 1",[userId]);
+              const recipient = userResult.rows[0];
+              if (recipient?.email) {
+                const mail = await sendLicenseEmail({
+                  to: recipient.email,
+                  name: recipient.name,
+                  key: rawKey,
+                  plan,
+                  months: Number(object.metadata?.months || 1)
+                });
+                if (mail.sent) {
+                  await db.query("UPDATE public.license_deliveries SET sent_at = NOW() WHERE id = $1",[delivery.rows[0]?.id || (await db.query("SELECT id FROM public.license_deliveries WHERE checkout_session_id=$1",[object.id])).rows[0].id]);
+                }
+              }
+              log("billing", "License key generated for checkout #" + object.id, userId);
+            }
+          } catch (mailError) {
+            console.error("[Shardnote Bot] License delivery failed:", mailError.message);
+          }
+        }
         if(db && ["member","member_plus","member_pro","member_premium"].includes(plan)){
           await db.query("UPDATE public.users SET plan = $1 WHERE id = $2",[plan,userId]);
         }
@@ -312,6 +354,19 @@ async function initDatabase() {
   `);
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS public.license_deliveries (
+      id BIGSERIAL PRIMARY KEY,
+      checkout_session_id VARCHAR(255) NOT NULL UNIQUE,
+      user_id BIGINT NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+      email VARCHAR(160) NOT NULL,
+      key_hash TEXT,
+      key_last4 VARCHAR(8),
+      sent_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS public.serial_keys (
       id BIGSERIAL PRIMARY KEY,
       key_hash TEXT NOT NULL UNIQUE,
@@ -576,6 +631,41 @@ async function recordLoginAudit({ req, user, success, eventType }) {
 
 function hashPassword(password) {
   return crypto.createHash("sha256").update(String(password)).digest("hex");
+}
+
+async function sendLicenseEmail({to,name,key,plan,months}) {
+  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  const from = String(process.env.MAIL_FROM || "").trim();
+  if (!apiKey || !from) {
+    console.warn("[Shardnote Bot] License email not sent: RESEND_API_KEY or MAIL_FROM is missing.");
+    return { sent: false, reason: "mail_not_configured" };
+  }
+  const activationUrl = PUBLIC_SITE_URL + "/?activate=1";
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + apiKey,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      subject: "Din ShardNote licens-key",
+      html: "<div style=\"font-family:Arial,sans-serif;line-height:1.6\">" +
+        "<h2>Din ShardNote licens</h2>" +
+        "<p>Hej " + String(name || "").replace(/[&<>"]/g,"") + ",</p>" +
+        "<p>Dit køb er bekræftet. Din licens-key er:</p>" +
+        "<p style=\"font-size:20px;font-weight:700;letter-spacing:1px\">" + key + "</p>" +
+        "<p>Pakke: <b>" + plan + "</b><br>Periode: <b>" + months + " måned(er)</b></p>" +
+        "<p><a href=\"" + activationUrl + "\">Aktivér din key</a></p>" +
+        "<p>Gem denne mail sikkert.</p></div>"
+    })
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(()=>"");
+    throw new Error("Maillevering fejlede: " + response.status + " " + body.slice(0,500));
+  }
+  return { sent: true };
 }
 
 function generateSerialKey() {
@@ -2835,29 +2925,31 @@ body.locked > .app{display:none}
 <section class="page" id="page-store">
   <div class="card" style="margin-bottom:18px">
     <div class="section-title">
-      <div><h2>🛒 Shardnote Bot Store</h2><span>Redeem en serial key for en Discord-rolle</span></div>
+      <div><h2>🛒 Shardnote Bot Store</h2><span>Køb din ShardNote-licens</span></div>
     </div>
     <p style="color:var(--muted);line-height:1.6">
-      Din serial key er bundet til én bestemt Discord-server og rolle. Du kan også bruge <b>/redeem</b> direkte i Discord.
+      Vælg den pakke og periode, du vil købe. Efter et bekræftet køb bliver din licens-key udleveret til din konto og sendt til din mail, når maillevering er konfigureret.
     </p>
-    <div class="form-grid">
-      <div class="field"><label>Serial key</label><input id="storeRedeemKey" placeholder="XXXXX-XXXXX-XXXXX-XXXXX"></div>
-      <div class="field"><label>Discord server-ID</label><input id="storeRedeemGuildId" placeholder="Server-ID"></div>
-      <div class="field"><label>Discord bruger-ID</label><input id="storeRedeemDiscordUserId" placeholder="Dit Discord bruger-ID"></div>
-    </div>
     <div class="actions">
-      <button class="btn primary" onclick="redeemStoreSerialKey()">✅ Aktivér key</button>
+      <button class="btn primary" onclick="startSubscription('member',1)">Køb Member · 1 måned</button>
+      <button class="btn" onclick="startSubscription('member',3)">Køb Member · 3 måneder</button>
+      <button class="btn" onclick="startSubscription('member',12)">Køb Member · 12 måneder</button>
     </div>
-    <div id="storeRedeemResult" style="margin-top:12px"></div>
+    <div id="storePurchaseResult" style="margin-top:12px"></div>
   </div>
-
   <div class="card">
-    <div class="section-title"><div><h2>Sådan fungerer det</h2><span>3 simple trin</span></div></div>
-    <div class="activity">
-      <div class="activity-item"><div class="activity-icon">1</div><div><b>Få din serial key</b><small>Du får en key fra Shardnote Bot Store eller en administrator.</small></div></div>
-      <div class="activity-item"><div class="activity-icon">2</div><div><b>Indtast den</b><small>Brug formularen her eller kommandoen <code>/redeem</code> i Discord.</small></div></div>
-      <div class="activity-item"><div class="activity-icon">3</div><div><b>Få rollen</b><small>Shardnote Bot kontrollerer nøglen og giver rollen automatisk.</small></div></div>
-    </div>
+    <div class="section-title"><div><h2>🔑 Har du allerede en key?</h2><span>Aktivér den separat fra butikken</span></div></div>
+    <p style="color:var(--muted);line-height:1.6">Key-aktivering hører ikke til i selve Bot Store. Åbn aktiveringen og indsæt din licens.</p>
+    <div class="actions"><button class="btn primary" onclick="navigate('activate')">🔑 Aktivér key</button></div>
+  </div>
+</section>
+
+<section class="page" id="page-activate">
+  <div class="card" style="max-width:760px;margin:0 auto">
+    <div class="section-title"><div><h2>🔑 Aktivér din key</h2><span>Indtast den licens, du har købt eller fået udleveret</span></div></div>
+    <div class="field"><label>Licens-key</label><input id="licenseActivationKey" placeholder="XXXXX-XXXXX-XXXXX-XXXXX" autocomplete="off"></div>
+    <div class="actions" style="margin-top:14px"><button class="btn primary" onclick="activateLicenseKey()">✅ Aktivér licens</button><button class="btn" onclick="navigate('store')">Tilbage til Store</button></div>
+    <div id="licenseActivationResult" style="margin-top:12px"></div>
   </div>
 </section>
 
