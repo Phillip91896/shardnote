@@ -3541,9 +3541,15 @@ body.locked > .app{display:none}
         <button class="btn primary" data-button-label="ticketNew" onclick="newTicket()">+ Ny ticket</button>
       </div>
     </div>
+    <div id="ticketOverviewCards" class="grid four" style="margin-bottom:14px">
+      <div class="card"><div style="color:var(--muted);font-size:12px">Alle tickets</div><div id="ticketMetricTotal" style="font-size:28px;font-weight:800;margin-top:5px">0</div></div>
+      <div class="card"><div style="color:var(--muted);font-size:12px">Åbne</div><div id="ticketMetricOpen" style="font-size:28px;font-weight:800;margin-top:5px">0</div></div>
+      <div class="card"><div style="color:var(--muted);font-size:12px">Afventer kunde</div><div id="ticketMetricPending" style="font-size:28px;font-weight:800;margin-top:5px">0</div></div>
+      <div class="card"><div style="color:var(--muted);font-size:12px">Gns. første svar</div><div id="ticketMetricResponse" style="font-size:28px;font-weight:800;margin-top:5px">—</div></div>
+    </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 0 14px">
-      <input id="ticketSearch" placeholder="🔎 Søg i tickets…" style="flex:1;min-width:190px">
-      <select id="ticketStatusFilter"><option value="all">Alle statusser</option><option value="open">Åben</option><option value="pending">Afventer</option><option value="closed">Lukket</option></select>
+      <input id="ticketSearch" placeholder="🔎 Søg i ID, titel, bruger eller besked…" style="flex:1;min-width:240px">
+      <select id="ticketStatusFilter"><option value="all">Alle statusser</option><option value="open">Åben</option><option value="pending">Afventer</option><option value="resolved">Løst</option><option value="closed">Lukket</option></select>
       <select id="ticketHandlerFilter"><option value="all">Alle behandlere</option><option value="ai">🤖 AI</option><option value="admins">👑 Admins</option><option value="ticket">🎫 Ticket</option></select>
       <select id="ticketPriorityFilter"><option value="all">Alle prioriteter</option><option value="high">Høj</option><option value="normal">Normal</option><option value="low">Lav</option></select>
       <span id="ticketCounts" class="badge pending">0 tickets</span>
