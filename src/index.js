@@ -2931,10 +2931,22 @@ body.locked > .app{display:none}
     <p style="color:var(--muted);line-height:1.6">
       Vælg den pakke og periode, du vil købe. Efter et bekræftet køb bliver din licens-key udleveret til din konto og sendt til din mail, når maillevering er konfigureret.
     </p>
-    <div class="actions">
-      <button class="btn primary" onclick="startSubscription('member',1)">Køb Member · 1 måned</button>
-      <button class="btn" onclick="startSubscription('member',3)">Køb Member · 3 måneder</button>
-      <button class="btn" onclick="startSubscription('member',12)">Køb Member · 12 måneder</button>
+    <div class="grid three" style="margin-top:16px">
+      <div class="card">
+        <h3>Member</h3>
+        <p style="color:var(--muted)">Grundpakken til din Discord-server.</p>
+        <div class="actions"><button class="btn primary" onclick="startSubscription('member',1)">Køb 1 måned</button><button class="btn small" onclick="startSubscription('member',3)">3 måneder</button><button class="btn small" onclick="startSubscription('member',12)">12 måneder</button></div>
+      </div>
+      <div class="card">
+        <h3>Member Plus</h3>
+        <p style="color:var(--muted)">Flere server- og botfunktioner.</p>
+        <div class="actions"><button class="btn primary" onclick="startSubscription('member_plus',1)">Køb 1 måned</button><button class="btn small" onclick="startSubscription('member_plus',3)">3 måneder</button><button class="btn small" onclick="startSubscription('member_plus',12)">12 måneder</button></div>
+      </div>
+      <div class="card">
+        <h3>Member Pro</h3>
+        <p style="color:var(--muted)">Avancerede funktioner og AI.</p>
+        <div class="actions"><button class="btn primary" onclick="startSubscription('member_pro',1)">Køb 1 måned</button><button class="btn small" onclick="startSubscription('member_pro',3)">3 måneder</button><button class="btn small" onclick="startSubscription('member_pro',12)">12 måneder</button></div>
+      </div>
     </div>
     <div id="storePurchaseResult" style="margin-top:12px"></div>
   </div>
