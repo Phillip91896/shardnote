@@ -1195,6 +1195,10 @@ function showLanding(){
         </select>
         <div style="font-size:12px;color:var(--muted);line-height:1.5">Du får <b style="color:#fff">10 dage gratis</b>. Første betaling sker efter prøveperioden, og derefter gentages betalingen efter den valgte periode.</div>
       </div>
+
+    <div style="margin:18px auto 6px;display:flex;justify-content:center">
+      <button class="btn primary" type="button" style="padding:13px 24px;font-size:15px;font-weight:900" onclick="beginPurchase('member')">🚀 Prøv det gratis i 10 dage</button>
+    </div>
     </div>
 
     <div style="max-width:920px;margin:22px auto 18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;text-align:left">
