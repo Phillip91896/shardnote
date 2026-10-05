@@ -149,6 +149,19 @@ async function initDatabase() {
   `);
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS public.ticket_feedback (
+      id BIGSERIAL PRIMARY KEY,
+      ticket_id BIGINT NOT NULL REFERENCES public.tickets(id) ON DELETE CASCADE,
+      guild_id VARCHAR(32),
+      user_id VARCHAR(32),
+      rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      comment TEXT,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      UNIQUE (ticket_id, user_id)
+    )
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS messages (
       id BIGSERIAL PRIMARY KEY,
       channel VARCHAR(80) NOT NULL,

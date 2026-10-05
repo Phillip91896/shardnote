@@ -1600,9 +1600,33 @@ function createBot({ state, db, log, createTicket, setReady }) {
     if (interaction.customId.startsWith("ticket_close:")) {
       if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageChannels)) return interaction.reply({ content: "Du mangler Manage Channels.", ephemeral: true });
       const id = interaction.customId.split(":")[1];
+      const ticket = await getTicketForChannel(interaction.channel.id);
       if (db) await db.query("UPDATE public.tickets SET status='closed', closed_at=NOW(), resolved_at=NOW() WHERE id=$1", [id]).catch(() => {});
       await interaction.channel.setName("closed-" + interaction.channel.name).catch(() => {});
-      return interaction.reply("🔒 Ticket lukket.");
+      const ratingRow = new ActionRowBuilder().addComponents(
+        ...[1,2,3,4,5].map(n => new ButtonBuilder().setCustomId("ticket_csat:" + id + ":" + n).setLabel(String(n) + " ⭐").setStyle(n >= 4 ? ButtonStyle.Success : n === 3 ? ButtonStyle.Secondary : ButtonStyle.Danger))
+      );
+      await interaction.channel.send({
+        content: ticket?.ownerUserId ? "<@" + ticket.ownerUserId + "> — hvordan gik din supportoplevelse? Vælg 1–5." : "Hvordan gik din supportoplevelse? Vælg 1–5.",
+        components: [ratingRow]
+      }).catch(() => {});
+      return interaction.reply("🔒 Ticket lukket. Brugeren kan nu give en 1–5 vurdering.");
+    }
+
+    if (interaction.customId.startsWith("ticket_csat:")) {
+      const [, id, rawRating] = interaction.customId.split(":");
+      const rating = Number(rawRating);
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) return interaction.reply({ content: "Ugyldig vurdering.", ephemeral: true });
+      if (db) {
+        const ticket = await db.query("SELECT owner_user_id FROM public.tickets WHERE id=$1 LIMIT 1", [id]).catch(() => ({ rows: [] }));
+        const ownerId = String(ticket.rows[0]?.owner_user_id || "");
+        if (ownerId && ownerId !== String(interaction.user.id)) return interaction.reply({ content: "Kun personen, der oprettede ticketen, kan give vurderingen.", ephemeral: true });
+        await db.query(
+          "INSERT INTO public.ticket_feedback (ticket_id, guild_id, user_id, rating) VALUES ($1,$2,$3,$4) ON CONFLICT (ticket_id,user_id) DO UPDATE SET rating=EXCLUDED.rating, created_at=NOW()",
+          [id, interaction.guild.id, interaction.user.id, rating]
+        ).catch(() => {});
+      }
+      return interaction.update({ content: "⭐ Tak for din vurdering på " + rating + "/5.", components: [] });
     }
 
     if (interaction.customId.startsWith("ticket_claim:")) {
