@@ -957,9 +957,9 @@ async function saveTicket({ title, user, status = "open", priority = "normal", o
 
   if (db) {
     const result = await db.query(
-      `INSERT INTO public.tickets (title, user_name, status, priority, owner_user_id, category, description, handler)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-       RETURNING id, title, user_name AS "user", status, priority, category, description, handler, created_at AS "createdAt"`,
+      `INSERT INTO public.tickets (title, user_name, status, priority, owner_user_id, category, description, handler, panel_name, tags, last_activity_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+       RETURNING id, title, user_name AS "user", status, priority, category, description, handler, panel_name AS "panelName", tags, claimed_by AS "claimedBy", first_response_at AS "firstResponseAt", last_activity_at AS "lastActivityAt", resolved_at AS "resolvedAt", closed_at AS "closedAt", created_at AS "createdAt"`,
       [cleanTitle, cleanUser, cleanStatus, cleanPriority, resolvedOwnerUserId, cleanCategory, cleanDescription, cleanHandler, cleanPanelName, cleanTags]
     );
     const ticket = result.rows[0];
