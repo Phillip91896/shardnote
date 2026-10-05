@@ -666,6 +666,12 @@ function unlockDashboard(){
   if(query.get("activate")==="1") setTimeout(()=>navigate("activate"),100);
 }
 
+async function buySelectedPeriod(plan, selectId){
+  const select=document.getElementById(selectId);
+  const months=Number(select?.value||1);
+  await startSubscription(plan, months);
+}
+
 async function startSubscription(plan="member",months=1){
   try{
     const selectedMonths=[1,3,12].includes(Number(months)) ? Number(months) : 1;
