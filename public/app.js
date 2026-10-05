@@ -39,7 +39,7 @@ function navigate(page){
   if(page==="commands") loadCommands();
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
-  if(page==="admin"){ loadUsers(); loadDatabaseSummary(); loadIpCenter(); loadSerialGuilds(); loadSerialKeysList(); }
+  if(page==="admin"){ loadAdminTickets(); loadUsers(); loadDatabaseSummary(); loadIpCenter(); loadSerialGuilds(); loadSerialKeysList(); }
 }
 
 
@@ -503,6 +503,38 @@ async function loadLogs(){
   }catch(e){
     if(e.message.includes("Logs er låst")) renderLogLocked();
     else toast(e.message);
+  }
+}
+
+async function loadAdminTickets(){
+  const node=document.getElementById("adminTicketList");
+  if(!node) return;
+  node.innerHTML='<div class="empty">Indlæser tickets…</div>';
+  try{
+    const tickets=await api("/api/tickets");
+    if(!tickets.length){
+      node.innerHTML='<div class="empty">Ingen tickets endnu.</div>';
+      return;
+    }
+    node.innerHTML=
+      '<div class="table-wrap"><table class="table"><thead><tr>'+
+      '<th>ID</th><th>Titel</th><th>Bruger</th><th>Behandler</th><th>Status</th><th>Prioritet</th><th></th>'+
+      '</tr></thead><tbody>'+
+      tickets.map(t=>{
+        const handler=t.handler==="ai"?"🤖 AI":t.handler==="ticket"?"🎫 Ticket":"👑 Admins";
+        return '<tr>'+
+          '<td>#'+t.id+'</td>'+
+          '<td>'+escapeHtml(t.title||"Ticket")+'</td>'+
+          '<td>'+escapeHtml(t.user||"")+'</td>'+
+          '<td>'+handler+'</td>'+
+          '<td><span class="badge '+escapeHtml(t.status||"open")+'">'+escapeHtml(t.status||"open")+'</span></td>'+
+          '<td>'+escapeHtml(t.priority||"normal")+'</td>'+
+          '<td><button class="btn small primary" onclick="openTicketReply('+t.id+')">Åbn samtale</button></td>'+
+        '</tr>';
+      }).join("")+
+      '</tbody></table></div>';
+  }catch(e){
+    node.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';
   }
 }
 
