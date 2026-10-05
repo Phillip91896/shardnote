@@ -237,7 +237,7 @@ async function createTicketFromChat(){
         user:currentUser?.name || currentUser?.email || "Dashboard user",
         description:content,
         priority:"normal",
-        handler:"admins"
+        handler:document.getElementById("ticketHandlerDefault")?.value || "ai"
       })
     });
     closeNewTicketComposer();
