@@ -2202,6 +2202,8 @@ app.post("/api/tickets", async (req, res) => {
             [ticket.id, "Shardnote Bot AI", "ai", aiResult.text]
           );
         }
+        await recordTicketEvent(ticket.id, null, "Shardnote Bot AI", "ai_reply", {}).catch(() => {});
+        await db.query("UPDATE public.tickets SET last_activity_at=NOW() WHERE id=$1", [ticket.id]).catch(() => {});
         log("ticket", "AI automatically replied to ticket #" + ticket.id, req.user.id);
       } catch (error) {
         console.error("[Shardnote Bot] Automatic ticket AI failed:", error.message);
@@ -2497,7 +2499,24 @@ app.post("/api/tickets/:id/reply", async (req, res) => {
       'INSERT INTO public.ticket_messages (ticket_id, author_user_id, author_name, author_role, content) VALUES ($1,$2,$3,$4,$5) RETURNING id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt"',
       [req.params.id, req.user.id, authorName, role, content]
     );
-    await db.query("UPDATE public.tickets SET status = 'pending' WHERE id = $1 AND status <> 'closed'", [req.params.id]);
+    if (role === "admin") {
+      await db.query(
+        "UPDATE public.tickets SET status='pending', last_activity_at=NOW(), first_response_at=COALESCE(first_response_at,NOW()) WHERE id=$1 AND status <> 'closed'",
+        [req.params.id]
+      );
+    } else {
+      await db.query(
+        "UPDATE public.tickets SET status='open', last_activity_at=NOW() WHERE id=$1 AND status <> 'closed'",
+        [req.params.id]
+      );
+    }
+    await recordTicketEvent(
+      req.params.id,
+      req.user.id,
+      authorName,
+      role === "admin" ? "admin_reply" : "user_reply",
+      { content: content.slice(0, 300) }
+    ).catch(() => {});
     log("ticket", "Ticket #" + req.params.id + " received a " + role + " reply", req.user.id);
     if (role === "user") {
       const ticketInfo = await db.query('SELECT id, title, description, handler FROM public.tickets WHERE id = $1 LIMIT 1', [req.params.id]);
@@ -2527,6 +2546,8 @@ app.post("/api/tickets/:id/reply", async (req, res) => {
               [req.params.id, "Shardnote Bot AI", "ai", aiResult.text]
             );
           }
+          await recordTicketEvent(req.params.id, null, "Shardnote Bot AI", "ai_reply", {}).catch(() => {});
+          await db.query("UPDATE public.tickets SET last_activity_at=NOW() WHERE id=$1", [req.params.id]).catch(() => {});
           log("ticket", "AI automatically replied to customer on ticket #" + req.params.id, req.user.id);
         } catch (error) {
           console.error("[Shardnote Bot] Automatic AI reply failed:", error.message);
