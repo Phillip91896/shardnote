@@ -295,15 +295,72 @@ async function openTicketReply(id){
     modal.id="ticketChatModal";
     modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
     modal.innerHTML='<div style="width:min(900px,100%);max-height:90vh;background:#11131b;border:1px solid var(--border);border-radius:16px;display:flex;flex-direction:column;overflow:hidden">'+
-      '<div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px"><div><b>🎫 Ticket #'+id+'</b><div style="color:var(--muted);font-size:12px">'+escapeHtml(ticket?.title||"Ticket")+' · '+ticketHandlerLabel(ticket?.handler)+'</div></div><button class="btn small" id="ticketChatClose">Luk</button></div>'+
+      '<div style="padding:14px 18px;border-bottom:1px solid var(--border)"><div style="display:flex;justify-content:space-between;align-items:center;gap:12px"><div><b>🎫 Ticket #'+id+'</b><div style="color:var(--muted);font-size:12px">'+escapeHtml(ticket?.title||"Ticket")+' · '+ticketHandlerLabel(ticket?.handler)+' · '+ticketStatusLabel(ticket?.status||"open")+'</div></div><button class="btn small" id="ticketChatClose">Luk</button></div>'+
+      (isAdmin ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:10px"><button class="btn small" id="ticketClaimBtn">'+(ticket?.claimedBy?"👤 Frigiv":"🙋 Claim")+'</button><button class="btn small" id="ticketResolveBtn">'+((ticket?.status==="resolved")?"↩ Genåbn":"✅ Løs")+'</button><button class="btn small" id="ticketCloseBtn">'+((ticket?.status==="closed")?"↩ Genåbn":"🔒 Luk")+'</button><button class="btn small" id="ticketTranscriptBtn">📄 Transcript</button><button class="btn small" id="ticketActivityBtn">📜 Aktivitet</button></div><div style="display:flex;gap:6px;align-items:center;margin-top:8px"><label style="font-size:12px;color:var(--muted)">Prioritet</label><select id="ticketPriorityQuick"><option value="low" '+(ticket?.priority==="low"?"selected":"")+'>Lav</option><option value="normal" '+(ticket?.priority==="normal"?"selected":"")+'>Normal</option><option value="high" '+(ticket?.priority==="high"?"selected":"")+'>Høj</option></select></div>' : '')+
+      '</div>'+
       '<div id="ticketChatMessages" style="padding:18px;overflow:auto;min-height:320px;max-height:55vh"></div>'+
+      '<div id="ticketActivityPanel" style="display:none;padding:12px 18px;border-top:1px solid var(--border);max-height:220px;overflow:auto"></div>'+
       '<div style="padding:14px 18px;border-top:1px solid var(--border)">'+
         (isAdmin ? '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><select id="ticketChatMode"><option value="reply">💬 Svar til kunde</option><option value="internal">🔒 Intern note</option></select><span style="color:var(--muted);font-size:12px">Interne noter kan kun ses af administratorer.</span></div>' : '')+
+        '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px"><button class="btn small ticket-quick-reply" data-reply="Hej! Tak for din besked. Vi kigger på sagen nu.">👋 Modtaget</button><button class="btn small ticket-quick-reply" data-reply="Tak for oplysningerne. Vi undersøger det og vender tilbage.">🔎 Undersøger</button><button class="btn small ticket-quick-reply" data-reply="Din sag er løst. Skriv endelig igen, hvis problemet fortsætter.">✅ Løst</button></div>'+
         '<textarea id="ticketChatInput" rows="3" placeholder="Skriv dit svar..." style="width:100%;resize:vertical;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:12px;outline:none"></textarea>'+
         '<div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn primary" id="ticketChatSend">Send svar</button></div>'+
       '</div>'+
     '</div>';
     document.body.appendChild(modal);
+
+    async function refreshTicketRecord(){
+      const list=await api("/api/tickets");
+      const fresh=list.find(t=>String(t.id)===String(id));
+      return fresh||ticket;
+    }
+    const loadActivity=async()=>{
+      try{
+        const items=await api("/api/tickets/"+id+"/events");
+        const panel=modal.querySelector("#ticketActivityPanel");
+        if(!panel) return;
+        panel.innerHTML=items.length
+          ? items.map(ev=>'<div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:12px"><b>'+escapeHtml(ev.action)+'</b> · '+escapeHtml(ev.actorName||"System")+'<div style="color:var(--muted)">'+new Date(ev.createdAt).toLocaleString("da-DK")+'</div></div>').join("")
+          : '<div class="empty">Ingen aktivitet endnu.</div>';
+      }catch(e){toast(e.message)}
+    };
+    if(isAdmin){
+      modal.querySelector("#ticketClaimBtn")?.addEventListener("click",async()=>{
+        const fresh=await refreshTicketRecord();
+        await patchTicketAction(id,fresh?.claimedBy?"unclaim":"claim");
+        modal.remove();
+      });
+      modal.querySelector("#ticketResolveBtn")?.addEventListener("click",async()=>{
+        const fresh=await refreshTicketRecord();
+        await patchTicketAction(id,fresh?.status==="resolved"?"reopen":"resolve");
+        modal.remove();
+      });
+      modal.querySelector("#ticketCloseBtn")?.addEventListener("click",async()=>{
+        const fresh=await refreshTicketRecord();
+        await patchTicketAction(id,fresh?.status==="closed"?"reopen":"close");
+        modal.remove();
+      });
+      modal.querySelector("#ticketTranscriptBtn")?.addEventListener("click",()=>downloadTicketTranscript(id));
+      modal.querySelector("#ticketActivityBtn")?.addEventListener("click",async()=>{
+        const panel=modal.querySelector("#ticketActivityPanel");
+        if(panel) panel.style.display=panel.style.display==="none"?"block":"none";
+        if(panel?.style.display==="block") await loadActivity();
+      });
+      modal.querySelector("#ticketPriorityQuick")?.addEventListener("change",async(e)=>{
+        try{
+          await api("/api/tickets/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({priority:e.target.value})});
+          toast("Prioritet opdateret");
+          loadTickets();loadAdminTickets();
+        }catch(err){toast(err.message)}
+      });
+    }
+    modal.querySelectorAll(".ticket-quick-reply").forEach(btn=>{
+      btn.addEventListener("click",()=>{
+        const input=modal.querySelector("#ticketChatInput");
+        if(input){input.value=btn.dataset.reply||"";input.focus();}
+      });
+    });
+
     const box=modal.querySelector("#ticketChatMessages");
     const render=items=>{
       box.innerHTML=items.length?items.map(m=>{
