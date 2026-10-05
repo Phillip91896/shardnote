@@ -267,6 +267,25 @@ function claimTicket(id){
 function resolveTicket(id){patchTicketAction(id,"resolve")}
 function closeTicket(id){patchTicketAction(id,"close")}
 function reopenTicket(id){patchTicketAction(id,"reopen")}
+async function downloadTicketTranscript(id){
+  try{
+    const response=await fetch("/api/tickets/"+id+"/transcript",{credentials:"include",cache:"no-store"});
+    if(!response.ok){
+      const data=await response.json().catch(()=>({}));
+      throw new Error(data.error||"Transcript kunne ikke hentes.");
+    }
+    const blob=await response.blob();
+    const objectUrl=URL.createObjectURL(blob);
+    const link=document.createElement("a");
+    link.href=objectUrl;
+    link.download="ticket-"+id+"-transcript.txt";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(objectUrl);
+  }catch(e){toast(e.message)}
+}
+
 async function openTicketReply(id){
   try{
     const messages=await api("/api/tickets/"+id+"/messages");
