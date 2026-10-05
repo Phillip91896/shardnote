@@ -2204,12 +2204,12 @@ app.post("/api/tickets", async (req, res) => {
     log("ticket", `Ticket #${ticket.id} created from dashboard`, req.user.id);
 
     if (ticket.handler === "ai" && db && process.env.GEMINI_API_KEY && description) {
+      let history = [{
+        authorName: req.user.name || req.user.email || "Bruger",
+        authorRole: "user",
+        content: description
+      }];
       try {
-        const history = [{
-          authorName: req.user.name || req.user.email || "Bruger",
-          authorRole: "user",
-          content: description
-        }];
         const answer = await generateTicketAiReply(ticket, history);
         const aiResult = normalizeAiAnswer(answer);
         if (aiResult.needsAdmin) {
@@ -2638,7 +2638,10 @@ app.post("/api/tickets/:id/ai-reply", requireAdmin, async (req, res) => {
       'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4) RETURNING id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt"',
       [ticket.id, "Shardnote Bot AI", "ai", aiResult.text || "Jeg sender din ticket videre til en administrator, som hjælper dig videre."]
     );
-    await db.query("UPDATE public.tickets SET status = 'pending', handler = 'ai' WHERE id = $1", [ticket.id]);
+    await db.query(
+      "UPDATE public.tickets SET status='pending', handler=$1, last_activity_at=NOW() WHERE id=$2",
+      [aiResult.needsAdmin ? "admins" : "ai", ticket.id]
+    );
     log("ticket", "AI replied to ticket #" + ticket.id, req.user.id);
     res.status(201).json(result.rows[0]);
   } catch (error) {
