@@ -2156,11 +2156,21 @@ app.post("/api/tickets/:id/ai-reply", requireAdmin, async (req, res) => {
     );
     const ticket = ticketResult.rows[0];
     if (!ticket) return res.status(404).json({ error: "Ticket not found" });
+
     const messagesResult = await db.query(
-      'SELECT author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 200',
+      'SELECT id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 200',
       [ticket.id]
     );
-    const answer = await generateTicketAiReply(ticket, messagesResult.rows);
+    const history = messagesResult.rows;
+
+    const lastMessage = history[history.length - 1];
+    if (lastMessage?.authorRole === "ai") {
+      return res.status(409).json({
+        error: "AI har allerede svaret på den seneste besked."
+      });
+    }
+
+    const answer = await generateTicketAiReply(ticket, history);
     const result = await db.query(
       'INSERT INTO public.ticket_messages (ticket_id, author_name, author_role, content) VALUES ($1,$2,$3,$4) RETURNING id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt"',
       [ticket.id, "Shardnote Bot AI", "ai", answer]
