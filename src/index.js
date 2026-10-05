@@ -260,7 +260,25 @@ async function initDatabase() {
       ADD COLUMN IF NOT EXISTS claimed_by VARCHAR(32),
       ADD COLUMN IF NOT EXISTS category VARCHAR(40) NOT NULL DEFAULT 'support',
       ADD COLUMN IF NOT EXISTS description TEXT,
-      ADD COLUMN IF NOT EXISTS handler VARCHAR(20) NOT NULL DEFAULT 'admins'
+      ADD COLUMN IF NOT EXISTS handler VARCHAR(20) NOT NULL DEFAULT 'admins',
+      ADD COLUMN IF NOT EXISTS tags TEXT[] NOT NULL DEFAULT '{}'::text[],
+      ADD COLUMN IF NOT EXISTS panel_name VARCHAR(80) NOT NULL DEFAULT 'Support',
+      ADD COLUMN IF NOT EXISTS first_response_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS last_activity_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      ADD COLUMN IF NOT EXISTS resolved_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS closed_at TIMESTAMPTZ
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.ticket_events (
+      id BIGSERIAL PRIMARY KEY,
+      ticket_id BIGINT NOT NULL REFERENCES public.tickets(id) ON DELETE CASCADE,
+      actor_user_id BIGINT,
+      actor_name VARCHAR(160),
+      action VARCHAR(60) NOT NULL,
+      metadata JSONB NOT NULL DEFAULT '{}'::jsonb,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
   `);
 
   await db.query(`
@@ -909,14 +927,24 @@ async function isGuildLinkedToUser(userId, guildId) {
   return result.rowCount > 0;
 }
 
-async function saveTicket({ title, user, status = "open", priority = "normal", ownerUserId = null, guildId = null, category = "support", description = "", handler = "admins" }) {
+async function recordTicketEvent(ticketId, actorUserId, actorName, action, metadata = {}) {
+  if (!db || !ticketId) return;
+  await db.query(
+    'INSERT INTO public.ticket_events (ticket_id, actor_user_id, actor_name, action, metadata) VALUES ($1,$2,$3,$4,$5)',
+    [ticketId, actorUserId || null, actorName || null, action, JSON.stringify(metadata || {})]
+  );
+}
+
+async function saveTicket({ title, user, status = "open", priority = "normal", ownerUserId = null, guildId = null, category = "support", description = "", handler = "admins", panelName = "Support", tags = [] }) {
   const cleanTitle = String(title || "New ticket").slice(0, 120);
   const cleanUser = String(user || "Dashboard user").slice(0, 80);
-  const cleanStatus = ["open", "pending", "closed"].includes(status) ? status : "open";
+  const cleanStatus = ["open", "pending", "resolved", "closed"].includes(status) ? status : "open";
   const cleanPriority = ["low", "normal", "high"].includes(priority) ? priority : "normal";
   const cleanCategory = String(category || "support").trim().slice(0, 40) || "support";
   const cleanDescription = String(description || "").trim().slice(0, 5000);
   const cleanHandler = ["ai","admins","ticket"].includes(String(handler)) ? String(handler) : "admins";
+  const cleanPanelName = String(panelName || "Support").trim().slice(0, 80) || "Support";
+  const cleanTags = Array.isArray(tags) ? [...new Set(tags.map(tag => String(tag).trim().toLowerCase()).filter(Boolean))].slice(0, 12) : [];
   let resolvedOwnerUserId = ownerUserId || null;
 
   if (!resolvedOwnerUserId && db && guildId) {
@@ -932,13 +960,16 @@ async function saveTicket({ title, user, status = "open", priority = "normal", o
       `INSERT INTO public.tickets (title, user_name, status, priority, owner_user_id, category, description, handler)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, title, user_name AS "user", status, priority, category, description, handler, created_at AS "createdAt"`,
-      [cleanTitle, cleanUser, cleanStatus, cleanPriority, resolvedOwnerUserId, cleanCategory, cleanDescription, cleanHandler]
+      [cleanTitle, cleanUser, cleanStatus, cleanPriority, resolvedOwnerUserId, cleanCategory, cleanDescription, cleanHandler, cleanPanelName, cleanTags]
     );
     const ticket = result.rows[0];
     ticket.ownerUserId = resolvedOwnerUserId;
     ticket.category = cleanCategory;
     ticket.description = cleanDescription;
     ticket.handler = cleanHandler;
+    ticket.panelName = cleanPanelName;
+    ticket.tags = cleanTags;
+    await recordTicketEvent(ticket.id, ownerUserId, cleanUser, "created", { panelName: cleanPanelName, category: cleanCategory, handler: cleanHandler }).catch(() => {});
     state.tickets.unshift(ticket);
     state.tickets = state.tickets.slice(0, 500);
     return ticket;
@@ -953,6 +984,13 @@ async function saveTicket({ title, user, status = "open", priority = "normal", o
     category: cleanCategory,
     description: cleanDescription,
     handler: cleanHandler,
+    panelName: cleanPanelName,
+    tags: cleanTags,
+    claimedBy: null,
+    firstResponseAt: null,
+    lastActivityAt: new Date().toISOString(),
+    resolvedAt: null,
+    closedAt: null,
     ownerUserId: resolvedOwnerUserId,
     createdAt: new Date().toISOString()
   };
