@@ -3249,6 +3249,13 @@ body.locked > .app{display:none}
         <button class="btn primary" data-button-label="ticketNew" onclick="newTicket()">+ Ny ticket</button>
       </div>
     </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 0 14px">
+      <input id="ticketSearch" placeholder="🔎 Søg i tickets…" style="flex:1;min-width:190px">
+      <select id="ticketStatusFilter"><option value="all">Alle statusser</option><option value="open">Åben</option><option value="pending">Afventer</option><option value="closed">Lukket</option></select>
+      <select id="ticketHandlerFilter"><option value="all">Alle behandlere</option><option value="ai">🤖 AI</option><option value="admins">👑 Admins</option><option value="ticket">🎫 Ticket</option></select>
+      <select id="ticketPriorityFilter"><option value="all">Alle prioriteter</option><option value="high">Høj</option><option value="normal">Normal</option><option value="low">Lav</option></select>
+      <span id="ticketCounts" class="badge pending">0 tickets</span>
+    </div>
     <div id="ticketList"></div>
   </div>
 </section>
@@ -3357,6 +3364,13 @@ body.locked > .app{display:none}
       <button class="btn small" onclick="loadAdminTickets()">Opdater</button>
     </div>
     <p style="color:var(--muted);line-height:1.6">Åbn en ticket direkte herfra og se hele samtalen, inklusive <b>🤖 AI-svar</b>, kundens beskeder og dine adminsvar.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:0 0 14px">
+      <input id="adminTicketSearch" placeholder="🔎 Søg i alle tickets…" style="flex:1;min-width:190px">
+      <select id="adminTicketStatusFilter"><option value="all">Alle statusser</option><option value="open">Åben</option><option value="pending">Afventer</option><option value="closed">Lukket</option></select>
+      <select id="adminTicketHandlerFilter"><option value="all">Alle behandlere</option><option value="ai">🤖 AI</option><option value="admins">👑 Admins</option><option value="ticket">🎫 Ticket</option></select>
+      <select id="adminTicketPriorityFilter"><option value="all">Alle prioriteter</option><option value="high">Høj</option><option value="normal">Normal</option><option value="low">Lav</option></select>
+      <span id="adminTicketCounts" class="badge pending">0 tickets</span>
+    </div>
     <div id="adminTicketList"></div>
   </div>
 
