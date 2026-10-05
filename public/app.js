@@ -662,6 +662,8 @@ function unlockDashboard(){
     }
   }
   loadStats();
+  const query=new URLSearchParams(window.location.search);
+  if(query.get("activate")==="1") setTimeout(()=>navigate("activate"),100);
 }
 
 async function startSubscription(plan="member",months=1){
