@@ -1854,9 +1854,9 @@ app.get("/api/stats", async (req, res) => {
 });
 
 async function generateTicketAiReply(ticket, messages) {
-  const apiKey = String(process.env.OPENAI_API_KEY || "").trim();
-  if (!apiKey) throw new Error("AI er ikke konfigureret. Tilføj OPENAI_API_KEY i Render.");
-  const model = String(process.env.OPENAI_MODEL || "gpt-6-luna").trim();
+  const apiKey = String(process.env.GEMINI_API_KEY || "").trim();
+  if (!apiKey) throw new Error("AI er ikke konfigureret. Tilføj GEMINI_API_KEY i Render.");
+  const model = String(process.env.GEMINI_MODEL || "gemini-3.1-pro").trim();
   const transcript = messages.slice(-20).map(m => (m.authorRole === "admin" ? "Admin" : m.authorRole === "ai" ? "AI" : "Kunde") + ": " + m.content).join("\n");
   const prompt = [
     "Du er Shardnote Bot supportassistent.",
@@ -1871,14 +1871,39 @@ async function generateTicketAiReply(ticket, messages) {
     transcript || "(ingen tidligere beskeder)"
   ].join("\n");
 
-  const response = await fetch("https://api.openai.com/v1/responses", {
+  const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
     method: "POST",
-    headers: {"Content-Type":"application/json","Authorization":"Bearer " + apiKey},
-    body: JSON.stringify({model, input: prompt, max_output_tokens: 500})
+    headers: {
+      "Content-Type": "application/json",
+      "x-goog-api-key": apiKey
+    },
+    body: JSON.stringify({
+      system_instruction: {
+        parts: [{ text: "Du er Shardnote Bot supportassistent. Vær hjælpsom, præcis og sikker. Opfind ikke funktioner, priser eller løfter." }]
+      },
+      contents: [{
+        role: "user",
+        parts: [{ text: prompt }]
+      }],
+      generationConfig: {
+        maxOutputTokens: 500,
+        temperature: 0.2
+      }
+    })
   });
+
   const data = await response.json();
-  if (!response.ok) throw new Error(data?.error?.message || "AI-svar kunne ikke genereres.");
-  const text = data.output_text || (data.output || []).flatMap(item => item.content || []).map(item => item.text || "").join("").trim();
+  if (!response.ok) {
+    const message = data?.error?.message || "AI-svar kunne ikke genereres.";
+    throw new Error(message);
+  }
+
+  const text = (data?.candidates || [])
+    .flatMap(candidate => candidate?.content?.parts || [])
+    .map(part => part?.text || "")
+    .join("")
+    .trim();
+
   if (!text) throw new Error("AI returnerede ikke et svar.");
   return text.slice(0, 4000);
 }
@@ -1937,7 +1962,7 @@ app.post("/api/tickets", async (req, res) => {
 
     log("ticket", `Ticket #${ticket.id} created from dashboard`, req.user.id);
 
-    if (ticket.handler === "ai" && db && process.env.OPENAI_API_KEY && description) {
+    if (ticket.handler === "ai" && db && process.env.GEMINI_API_KEY && description) {
       try {
         const history = [{
           authorName: req.user.name || req.user.email || "Bruger",
@@ -2070,7 +2095,7 @@ app.post("/api/tickets/:id/reply", async (req, res) => {
     if (role === "user") {
       const ticketInfo = await db.query('SELECT id, title, description, handler FROM public.tickets WHERE id = $1 LIMIT 1', [req.params.id]);
       const currentTicket = ticketInfo.rows[0];
-      if (currentTicket?.handler === "ai" && process.env.OPENAI_API_KEY) {
+      if (currentTicket?.handler === "ai" && process.env.GEMINI_API_KEY) {
         try {
           const history = await db.query(
             'SELECT author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 200',
