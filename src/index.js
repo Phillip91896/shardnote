@@ -3026,9 +3026,19 @@ body.locked > .app{display:none}
     <div class="section-title">
       <div>
         <h2 style="margin:0">Ticket-system</h2>
-        <span>Opret og skriv direkte i en ticket-chat.</span>
+        <span>Vælg hvem der skal behandle ticketen, og skriv derefter direkte i chatten.</span>
       </div>
-      <button class="btn primary" data-button-label="ticketNew" onclick="newTicket()">+ Ny ticket</button>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;justify-content:flex-end">
+        <label style="display:flex;align-items:center;gap:8px;color:var(--muted);font-size:13px">
+          <span>Behandler</span>
+          <select id="ticketHandlerDefault" class="ticket-handler-default">
+            <option value="ai">🤖 AI</option>
+            <option value="admins">👑 Admins</option>
+            <option value="ticket">🎫 Ticket</option>
+          </select>
+        </label>
+        <button class="btn primary" data-button-label="ticketNew" onclick="newTicket()">+ Ny ticket</button>
+      </div>
     </div>
     <div id="ticketList"></div>
   </div>
