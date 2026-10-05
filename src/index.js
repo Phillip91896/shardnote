@@ -2145,6 +2145,33 @@ app.get("/api/tickets", async (req, res) => {
   }
 });
 
+app.get("/api/tickets/overview", async (req,res)=>{
+  try{
+    if(!db) return res.json({total:state.tickets.length,open:0,pending:0,resolved:0,closed:0,avgResponseMinutes:null,activity:[]});
+    const where=req.user?.role==="admin" ? "" : " WHERE owner_user_id = $1";
+    const params=req.user?.role==="admin" ? [] : [req.user.id];
+    const counts=await db.query(
+      `SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE status='open')::int AS open,
+        COUNT(*) FILTER (WHERE status='pending')::int AS pending,
+        COUNT(*) FILTER (WHERE status='resolved')::int AS resolved,
+        COUNT(*) FILTER (WHERE status='closed')::int AS closed,
+        ROUND(AVG(EXTRACT(EPOCH FROM (first_response_at-created_at))/60.0)::numeric,1) AS "avgResponseMinutes"
+       FROM public.tickets${where}`,
+      params
+    );
+    const activity=await db.query(
+      `SELECT DATE(created_at) AS day, COUNT(*)::int AS count
+       FROM public.tickets${where}${where ? " AND" : " WHERE"} created_at >= NOW()-INTERVAL '14 days'
+       GROUP BY DATE(created_at)
+       ORDER BY DATE(created_at) ASC`,
+      params
+    );
+    res.json({...(counts.rows[0]||{}),activity:activity.rows});
+  }catch(error){console.error(error);res.status(500).json({error:"Ticket-statistik kunne ikke hentes."});}
+});
+
 app.post("/api/tickets", async (req, res) => {
   try {
     const description = String(req.body?.description || "").trim().slice(0, 5000);
