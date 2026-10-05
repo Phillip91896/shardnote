@@ -190,14 +190,44 @@ async function openTicketReply(id){
       const content=input.value.trim();
       if(!content)return;
       input.disabled=true;
+      modal.querySelector("#ticketChatSend").disabled=true;
+
+      let aiTyping=false;
+      const showAiTyping=()=>{
+        if(aiTyping) return;
+        aiTyping=true;
+        const typing=document.createElement("div");
+        typing.id="ticketAiTyping";
+        typing.style.cssText="display:flex;justify-content:flex-start;margin:8px 0";
+        typing.innerHTML='<div style="max-width:78%;padding:10px 12px;border-radius:12px;background:#1a1d27;border:1px solid var(--border)"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">🤖 AI · Shardnote Bot AI</div><div style="color:var(--muted)">AI skriver et svar…</div></div>';
+        box.appendChild(typing);
+        box.scrollTop=box.scrollHeight;
+      };
+
       try{
-        await api("/api/tickets/"+id+"/reply",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content})});
+        const ticket=(await api("/api/tickets")).find(t=>String(t.id)===String(id));
+        if(ticket?.handler==="ai") showAiTyping();
+
+        await api("/api/tickets/"+id+"/reply",{
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({content})
+        });
+
         input.value="";
         render(await api("/api/tickets/"+id+"/messages"));
         loadTickets();
+        loadAdminTickets();
         toast("✅ Svar sendt");
-      }catch(e){toast(e.message)}
-      finally{input.disabled=false;input.focus();}
+      }catch(e){
+        const typing=document.getElementById("ticketAiTyping");
+        if(typing) typing.remove();
+        toast(e.message)
+      }finally{
+        input.disabled=false;
+        modal.querySelector("#ticketChatSend").disabled=false;
+        input.focus();
+      }
     };
     modal.querySelector("#ticketChatInput").focus();
   }catch(e){toast(e.message)}
