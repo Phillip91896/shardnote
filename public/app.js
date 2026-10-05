@@ -245,21 +245,29 @@ async function openTicketReply(id){
   try{
     const messages=await api("/api/tickets/"+id+"/messages");
     const ticket=(await api("/api/tickets")).find(t=>String(t.id)===String(id));
+    const isAdmin=currentUser?.role==="admin";
     const modal=document.createElement("div");
     modal.id="ticketChatModal";
     modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
     modal.innerHTML='<div style="width:min(900px,100%);max-height:90vh;background:#11131b;border:1px solid var(--border);border-radius:16px;display:flex;flex-direction:column;overflow:hidden">'+
-      '<div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px"><div><b>🎫 Ticket #'+id+'</b><div style="color:var(--muted);font-size:12px">'+escapeHtml(ticket?.title||"Ticket")+'</div></div><button class="btn small" id="ticketChatClose">Luk</button></div>'+
+      '<div style="padding:16px 18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px"><div><b>🎫 Ticket #'+id+'</b><div style="color:var(--muted);font-size:12px">'+escapeHtml(ticket?.title||"Ticket")+' · '+ticketHandlerLabel(ticket?.handler)+'</div></div><button class="btn small" id="ticketChatClose">Luk</button></div>'+
       '<div id="ticketChatMessages" style="padding:18px;overflow:auto;min-height:320px;max-height:55vh"></div>'+
-      '<div style="padding:14px 18px;border-top:1px solid var(--border)"><textarea id="ticketChatInput" rows="3" placeholder="Skriv dit svar..." style="width:100%;resize:vertical;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:12px;outline:none"></textarea><div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn primary" id="ticketChatSend">Send svar</button></div></div>'+
+      '<div style="padding:14px 18px;border-top:1px solid var(--border)">'+
+        (isAdmin ? '<div style="display:flex;gap:8px;align-items:center;margin-bottom:8px"><select id="ticketChatMode"><option value="reply">💬 Svar til kunde</option><option value="internal">🔒 Intern note</option></select><span style="color:var(--muted);font-size:12px">Interne noter kan kun ses af administratorer.</span></div>' : '')+
+        '<textarea id="ticketChatInput" rows="3" placeholder="Skriv dit svar..." style="width:100%;resize:vertical;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:12px;outline:none"></textarea>'+
+        '<div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn primary" id="ticketChatSend">Send svar</button></div>'+
+      '</div>'+
     '</div>';
     document.body.appendChild(modal);
     const box=modal.querySelector("#ticketChatMessages");
     const render=items=>{
       box.innerHTML=items.length?items.map(m=>{
+        const internal=m.authorRole==="internal";
         const mine=m.authorRole==="admin";
-        const who=m.authorRole==="admin"?"👑 Admin":m.authorRole==="ai"?"🤖 AI":"👤 Kunde";
-        return '<div style="display:flex;justify-content:'+(mine?"flex-end":"flex-start")+';margin:8px 0"><div style="max-width:78%;padding:10px 12px;border-radius:12px;background:'+(mine?"#252b3d":"#1a1d27")+';border:1px solid var(--border)"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">'+who+' · '+escapeHtml(m.authorName||"")+'</div><div style="white-space:pre-wrap;word-break:break-word">'+escapeHtml(m.content||"")+'</div><div style="font-size:10px;color:var(--muted);margin-top:5px">'+new Date(m.createdAt).toLocaleString("da-DK")+'</div></div></div>';
+        const who=internal?"🔒 Intern note":m.authorRole==="admin"?"👑 Admin":m.authorRole==="ai"?"🤖 AI":"👤 Kunde";
+        const bg=internal?"#2b2412":mine?"#252b3d":"#1a1d27";
+        const border=internal?"rgba(255,196,76,.35)":"var(--border)";
+        return '<div style="display:flex;justify-content:'+(mine?"flex-end":"flex-start")+';margin:8px 0"><div style="max-width:78%;padding:10px 12px;border-radius:12px;background:'+bg+';border:1px solid '+border+'"><div style="font-size:11px;color:var(--muted);margin-bottom:4px">'+who+' · '+escapeHtml(m.authorName||"")+'</div><div style="white-space:pre-wrap;word-break:break-word">'+escapeHtml(m.content||"")+'</div><div style="font-size:10px;color:var(--muted);margin-top:5px">'+new Date(m.createdAt).toLocaleString("da-DK")+'</div></div></div>';
       }).join(""):'<div class="empty">Ingen beskeder endnu.</div>';
       box.scrollTop=box.scrollHeight;
     };
@@ -272,10 +280,11 @@ async function openTicketReply(id){
       if(!content)return;
       input.disabled=true;
       modal.querySelector("#ticketChatSend").disabled=true;
+      const mode=modal.querySelector("#ticketChatMode")?.value || "reply";
 
       let aiTyping=false;
       const showAiTyping=()=>{
-        if(aiTyping) return;
+        if(aiTyping || mode!=="reply") return;
         aiTyping=true;
         const typing=document.createElement("div");
         typing.id="ticketAiTyping";
@@ -286,24 +295,21 @@ async function openTicketReply(id){
       };
 
       try{
-        const ticket=(await api("/api/tickets")).find(t=>String(t.id)===String(id));
-        if(ticket?.handler==="ai") showAiTyping();
+        const currentTicket=(await api("/api/tickets")).find(t=>String(t.id)===String(id));
+        if(currentTicket?.handler==="ai" && !isAdmin) showAiTyping();
 
-        await api("/api/tickets/"+id+"/reply",{
-          method:"POST",
-          headers:{"Content-Type":"application/json"},
-          body:JSON.stringify({content})
-        });
+        const endpoint=mode==="internal" ? "/api/tickets/"+id+"/internal-note" : "/api/tickets/"+id+"/reply";
+        await api(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({content})});
 
         input.value="";
         render(await api("/api/tickets/"+id+"/messages"));
         loadTickets();
         loadAdminTickets();
-        toast("✅ Svar sendt");
+        toast(mode==="internal" ? "🔒 Intern note gemt" : "✅ Svar sendt");
       }catch(e){
         const typing=document.getElementById("ticketAiTyping");
         if(typing) typing.remove();
-        toast(e.message)
+        toast(e.message);
       }finally{
         input.disabled=false;
         modal.querySelector("#ticketChatSend").disabled=false;
