@@ -196,6 +196,14 @@ async function initDatabase() {
   `);
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS public.trial_ip_claims (
+      ip_hash TEXT PRIMARY KEY,
+      first_user_id BIGINT,
+      claimed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
     ALTER TABLE public.users
       ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(30) NOT NULL DEFAULT 'inactive',
       ADD COLUMN IF NOT EXISTS trial_used BOOLEAN NOT NULL DEFAULT FALSE,
@@ -1161,6 +1169,22 @@ app.post("/api/register", async (req, res) => {
     await db.query("BEGIN");
     try {
       let keyRow = null;
+
+      if (!serialKey && clientIp) {
+        const trialClaim = await db.query(
+          `INSERT INTO public.trial_ip_claims (ip_hash)
+           VALUES ($1)
+           ON CONFLICT (ip_hash) DO NOTHING
+           RETURNING ip_hash`,
+          [hashIp(clientIp)]
+        );
+        if (!trialClaim.rowCount) {
+          throw Object.assign(
+            new Error("Denne IP-adresse har allerede brugt den gratis 10-dages prøveperiode."),
+            { statusCode: 403 }
+          );
+        }
+      }
       if (serialKey) {
         const keyHash = hashSerialKey(serialKey);
         const keyResult = await db.query(
@@ -1183,6 +1207,13 @@ app.post("/api/register", async (req, res) => {
         "INSERT INTO users (name, email, role, password_hash, plan, subscription_status, trial_used) VALUES ($1, $2, 'member', $3, $4, $5, $6) RETURNING id, name, email, role, plan, subscription_status, trial_used, created_at, banned",
         [name, email, hashPassword(password), activatedPlan, activatedFromKey ? "active" : "inactive", activatedFromKey]
       );
+
+      if (!serialKey && clientIp) {
+        await db.query(
+          "UPDATE public.trial_ip_claims SET first_user_id = $1 WHERE ip_hash = $2",
+          [String(result.rows[0].id), hashIp(clientIp)]
+        );
+      }
       user = result.rows[0];
 
       if (keyRow) {
