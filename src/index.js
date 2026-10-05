@@ -3079,6 +3079,12 @@ body.locked > .app{display:none}
 
 <section class="page" id="page-admin">
   <div class="card" style="margin-bottom:18px">
+    <div class="section-title"><div><h2>🎫 Tickets</h2><span>Administrator-adgang til alle tickets og hele samtalen.</span></div></div>
+    <p style="color:var(--muted);line-height:1.6">Åbn tickets herfra for at se kundens beskeder, AI-svar og dine egne adminsvar. Du kan også svare direkte på ticketen.</p>
+    <div class="actions"><button class="btn primary" onclick="navigate('tickets')">🎫 Åbn Tickets</button></div>
+  </div>
+
+  <div class="card" style="margin-bottom:18px">
     <div class="section-title"><div><h2>🔑 Serial Keys</h2><span>Kun administratorer · generér nøgler til Discord-roller</span></div></div>
     <div class="form-grid">
       <div class="field"><label>Key type</label><select id="serialType" onchange="toggleSerialType()"><option value="account">Website access</option><option value="discord">Discord role</option></select></div>
@@ -3093,17 +3099,6 @@ body.locked > .app{display:none}
     <div class="actions"><button class="btn primary" onclick="generateSerialKeys()">🔑 Generér serial keys</button></div>
     <pre id="serialGenerated" style="display:none;margin-top:14px;white-space:pre-wrap;word-break:break-all;background:#0b0b11;border:1px solid var(--border);padding:12px;border-radius:10px"></pre>
     <div id="serialKeyList" style="margin-top:16px"></div>
-  </div>
-
-  <div class="card" style="margin-bottom:18px">
-    <div class="section-title"><div><h2>🛒 Store / Redeem</h2><span>Indtast en key for at få Discord-rollen.</span></div></div>
-    <div class="form-grid">
-      <div class="field"><label>Serial key</label><input id="redeemKey" placeholder="XXXXX-XXXXX-XXXXX-XXXXX"></div>
-      <div class="field"><label>Server-ID</label><input id="redeemGuildId" placeholder="Discord server-ID"></div>
-      <div class="field"><label>Discord bruger-ID</label><input id="redeemDiscordUserId" placeholder="Discord bruger-ID"></div>
-    </div>
-    <div class="actions"><button class="btn primary" onclick="redeemSerialKey()">✅ Redeem key</button></div>
-    <div id="redeemResult" style="margin-top:12px"></div>
   </div>
 
   <div class="card" style="margin-bottom:18px">
