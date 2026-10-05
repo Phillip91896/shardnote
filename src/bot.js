@@ -7,7 +7,11 @@ const {
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
-  AttachmentBuilder
+  AttachmentBuilder,
+  ModalBuilder,
+  TextInputBuilder,
+  TextInputStyle,
+  Partials
 } = require("discord.js");
 const { joinVoiceChannel, getVoiceConnection } = require("@discordjs/voice");
 
@@ -242,8 +246,10 @@ function createBot({ state, db, log, createTicket, setReady }) {
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMembers,
       GatewayIntentBits.GuildMessages,
-      GatewayIntentBits.MessageContent
-    ]
+      GatewayIntentBits.MessageContent,
+      GatewayIntentBits.GuildMessageReactions
+    ],
+    partials: [Partials.Message, Partials.Channel, Partials.Reaction]
   });
 
   async function registerGuildCommands(guild) {
