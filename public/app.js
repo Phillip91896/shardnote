@@ -209,14 +209,80 @@ async function aiTicketReply(id){
     loadTickets();
   }catch(e){toast(e.message)}
 }
-async function newTicket(){
-  const title=prompt("Ticket titel:");
-  if(!title) return;
-  const handler=document.getElementById("ticketHandlerDefault")?.value || "admins";
-  await api("/api/tickets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({title,user:"Dashboard user",priority:"normal",handler})});
-  toast(handler==="ai"?"🤖 Ticket oprettet til AI":handler==="admins"?"👑 Ticket oprettet til Admins":"🎫 Ticket oprettet");
-  loadTickets();loadStats();
+function closeNewTicketComposer(){
+  const modal=document.getElementById("newTicketComposer");
+  if(modal) modal.remove();
 }
+
+async function createTicketFromChat(){
+  const modal=document.getElementById("newTicketComposer");
+  const input=modal?.querySelector("#newTicketMessage");
+  const content=String(input?.value||"").trim();
+  const errorNode=modal?.querySelector("#newTicketError");
+  if(!content){
+    if(errorNode) errorNode.textContent="Skriv først, hvad du har brug for hjælp til.";
+    return;
+  }
+  const send=modal.querySelector("#newTicketSend");
+  send.disabled=true;
+  send.textContent="Opretter…";
+  if(errorNode) errorNode.textContent="";
+  try{
+    const title=content.split(/\r?\n/)[0].slice(0,80) || "Support ticket";
+    const ticket=await api("/api/tickets",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({
+        title,
+        user:currentUser?.name || currentUser?.email || "Dashboard user",
+        description:content,
+        priority:"normal",
+        handler:"admins"
+      })
+    });
+    closeNewTicketComposer();
+    await loadTickets();
+    await loadStats();
+    await openTicketReply(ticket.id);
+    toast("✅ Ticket oprettet");
+  }catch(e){
+    if(errorNode) errorNode.textContent=e.message;
+    else toast(e.message);
+  }finally{
+    send.disabled=false;
+    send.textContent="Send ticket";
+  }
+}
+
+function newTicket(){
+  closeNewTicketComposer();
+  const modal=document.createElement("div");
+  modal.id="newTicketComposer";
+  modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
+  modal.innerHTML=
+    '<div style="width:min(760px,100%);background:#11131b;border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 80px rgba(0,0,0,.45);overflow:hidden">'+
+      '<div style="padding:18px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;gap:12px">'+
+        '<div><b style="font-size:18px">🎫 Opret en ticket</b><div style="color:var(--muted);font-size:12px;margin-top:4px">Skriv direkte her. Du behøver ikke skrive navn eller ticket-titel.</div></div>'+
+        '<button class="btn small" type="button" id="newTicketClose">Luk</button>'+
+      '</div>'+
+      '<div style="padding:18px">'+
+        '<textarea id="newTicketMessage" rows="8" placeholder="Skriv hvad du har brug for hjælp til…" style="width:100%;resize:vertical;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:12px;padding:14px;outline:none"></textarea>'+
+        '<div id="newTicketError" style="min-height:20px;color:var(--red);font-size:12px;margin-top:9px"></div>'+
+        '<div style="display:flex;justify-content:flex-end;gap:10px;margin-top:8px"><button class="btn" type="button" id="newTicketCancel">Annuller</button><button class="btn primary" type="button" id="newTicketSend">Send ticket</button></div>'+
+      '</div>'+
+    '</div>';
+  document.body.appendChild(modal);
+  modal.querySelector("#newTicketClose").onclick=closeNewTicketComposer;
+  modal.querySelector("#newTicketCancel").onclick=closeNewTicketComposer;
+  modal.onclick=function(e){if(e.target===modal)closeNewTicketComposer();};
+  modal.querySelector("#newTicketSend").onclick=createTicketFromChat;
+  const input=modal.querySelector("#newTicketMessage");
+  input.addEventListener("keydown",function(e){
+    if((e.ctrlKey||e.metaKey)&&e.key==="Enter") createTicketFromChat();
+  });
+  input.focus();
+}
+
 async function setTicketHandler(id,handler){
   try{
     await api("/api/tickets/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({handler})});
@@ -835,7 +901,7 @@ function showLanding(){
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px">'+
           data.excluded.map(function(item){return '<div style="background:#171722;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px;font-size:13px;color:var(--muted)">— '+item+'</div>';}).join("")+
         '</div>'+
-        '<div class="actions" style="justify-content:flex-end;margin-top:20px"><button class="btn primary" type="button" onclick="closePlanDetails();showRegister(\''+plan+'\')">Fortsæt med denne pakke →</button></div>'+
+        '<div class="actions" style="justify-content:flex-end;margin-top:20px"><button class="btn primary" type="button" onclick="closePlanDetails();beginPurchase(\''+plan+'\')">Fortsæt med denne pakke →</button></div>'+
       '</div>';
 
     modal.addEventListener("click",function(event){
@@ -1068,6 +1134,7 @@ window.showRegister=showRegister;
 window.showLanding=showLanding;
 window.showPaywall=showPaywall;
 window.beginPurchase=beginPurchase;
+window.closeNewTicketComposer=closeNewTicketComposer;
 window.startSubscription=startSubscription;
 window.checkBillingStatus=checkBillingStatus;
 window.login=login;
