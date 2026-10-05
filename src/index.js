@@ -290,6 +290,17 @@ async function initDatabase() {
   `);
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS public.ticket_csat (
+      ticket_id BIGINT PRIMARY KEY REFERENCES public.tickets(id) ON DELETE CASCADE,
+      guild_id VARCHAR(32) NOT NULL,
+      user_id VARCHAR(32) NOT NULL,
+      rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+      comment VARCHAR(500),
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS guild_settings (
       guild_id VARCHAR(32) PRIMARY KEY,
       log_channel_id VARCHAR(32),
