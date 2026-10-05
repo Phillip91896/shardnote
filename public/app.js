@@ -729,6 +729,18 @@ function watchPayment(){
   },2000);
 }
 
+function beginPurchase(plan="member"){
+  const allowedPlans=["member","member_plus","member_pro"];
+  const selectedPlan=allowedPlans.includes(plan)?plan:"member";
+  const months=Number(document.getElementById("landingBillingMonths")?.value||1);
+  const selectedMonths=[1,3,12].includes(months)?months:1;
+  window.shardnoteBotPreferredPlan=selectedPlan;
+  window.shardnoteBotPreferredMonths=selectedMonths;
+  localStorage.setItem("shardnote_preferred_plan",selectedPlan);
+  localStorage.setItem("shardnote_preferred_months",String(selectedMonths));
+  showRegister(selectedPlan);
+}
+
 function showLanding(){
   document.body.classList.add("locked");
 
@@ -823,7 +835,7 @@ function showLanding(){
         '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:8px">'+
           data.excluded.map(function(item){return '<div style="background:#171722;border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:10px;font-size:13px;color:var(--muted)">— '+item+'</div>';}).join("")+
         '</div>'+
-        '<div class="actions" style="justify-content:flex-end;margin-top:20px"><button class="btn primary" type="button" onclick="closePlanDetails();showRegister(\''+plan+'\')">Jeg har købt denne pakke</button></div>'+
+        '<div class="actions" style="justify-content:flex-end;margin-top:20px"><button class="btn primary" type="button" onclick="closePlanDetails();showRegister(\''+plan+'\')">Fortsæt med denne pakke →</button></div>'+
       '</div>';
 
     modal.addEventListener("click",function(event){
@@ -859,7 +871,18 @@ function showLanding(){
     </div><div class="brand" style="justify-content:center;padding:0 0 10px"><div class="brand-mark">S</div><span>Shardnote Bot</span></div>
     <div style="font-size:12px;color:var(--accent2);font-weight:800;text-transform:uppercase;letter-spacing:.12em">Discord Control Center</div>
     <h1 style="font-size:34px;margin:10px 0 8px">Få adgang til Shardnote Bot</h1>
-    <p style="max-width:620px;margin:0 auto;color:var(--muted);font-size:14px;line-height:1.55">Vælg en pakke. Tryk på en pakke for at se præcis, hvad der er inkluderet.</p>
+    <p style="max-width:700px;margin:0 auto;color:var(--muted);font-size:14px;line-height:1.55">Vælg en pakke, se alle funktionerne, og vælg derefter om du vil betale hver 1., 3. eller 12. måned.</p>
+    <div style="max-width:700px;margin:16px auto 0;padding:14px 16px;border:1px solid rgba(109,93,252,.28);background:rgba(109,93,252,.08);border-radius:14px;text-align:left">
+      <div style="font-weight:900;font-size:13px;margin-bottom:8px">💳 Sådan fungerer betalingen</div>
+      <div style="display:grid;grid-template-columns:minmax(180px,240px) 1fr;gap:10px;align-items:center">
+        <select id="landingBillingMonths" aria-label="Betalingsperiode" style="width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none">
+          <option value="1">1 måned</option>
+          <option value="3">3 måneder</option>
+          <option value="12">12 måneder</option>
+        </select>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5">Du får <b style="color:#fff">10 dage gratis</b>. Første betaling sker efter prøveperioden, og derefter gentages betalingen efter den valgte periode.</div>
+      </div>
+    </div>
 
     <div style="max-width:920px;margin:22px auto 18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;text-align:left">
       <button type="button" class="card" style="border-color:rgba(109,93,252,.45);text-align:left;cursor:pointer;padding:16px" onclick="showPlanDetails('member')">
@@ -890,10 +913,10 @@ function showLanding(){
       </button>
     </div>
 
-    <div style="font-size:12px;color:var(--muted);margin:6px auto 18px">Køb først en Shardnote Bot-pakke, få din serial key, og brug den ved oprettelsen af din konto for at få adgang.</div>
+    <div style="font-size:12px;color:var(--muted);margin:16px auto 18px;max-width:760px">Tryk på en pakke ovenfor for at se alle funktionerne og fortsætte til oprettelse og betaling. Har du allerede en konto, kan du logge ind nedenfor.</div>
 
     <div class="actions" style="justify-content:center">
-      <button class="btn primary" type="button" onclick="showRegister()">Jeg har en serial key</button>
+      <button class="btn" type="button" onclick="showRegister()">Opret konto</button>
       <button class="btn" type="button" onclick="showLogin()">Jeg har allerede en konto</button>
     </div>
   </div>`;
@@ -911,18 +934,22 @@ function showLanding(){
 
 function showPaywall(){
   document.body.classList.add("locked");
+  const preferredMonths=Number(window.shardnoteBotPreferredMonths || localStorage.getItem("shardnote_preferred_months") || 1);
+  const selectedMonths=[1,3,12].includes(preferredMonths)?preferredMonths:1;
+  const preferredPlan=window.shardnoteBotPreferredPlan || localStorage.getItem("shardnote_preferred_plan") || "member";
   const box=document.getElementById("loginScreen") || document.createElement("div");
   box.id="loginScreen";
   box.innerHTML=`<div class="login-card" style="text-align:center">
     <div class="brand" style="justify-content:center;padding:0 0 16px"><div class="brand-mark">S</div><span>Shardnote Bot</span></div>
     <h1>Vælg din Shardnote Bot-pakke</h1>
-    <p>Du får <b>10 dage gratis</b>. Vælg først hvor længe abonnementet skal løbe.</p>
+    <p>Du får <b>10 dage gratis</b>. Vælg din pakke og om du vil betale hver 1., 3. eller 12. måned.</p>
+    <div style="font-size:12px;color:var(--muted);margin-top:-4px;margin-bottom:10px">Valgt pakke fra forsiden: <b style="color:#fff">${preferredPlan}</b></div>
     <div class="field" style="text-align:left;margin-top:14px">
       <label>Abonnementsperiode</label>
       <select id="billingMonths" style="width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none">
-        <option value="1">1 måned — Member 2,67 € · Plus 4,68 € · Pro 6,99 €</option>
-        <option value="3">3 måneder — Member 8,01 € · Plus 14,04 € · Pro 20,97 €</option>
-        <option value="12">12 måneder — Member 32,04 € · Plus 56,16 € · Pro 83,88 €</option>
+        <option value="1"${selectedMonths===1?' selected':''}>1 måned — Member 2,67 € · Plus 4,68 € · Pro 6,99 €</option>
+        <option value="3"${selectedMonths===3?' selected':''}>3 måneder — Member 8,01 € · Plus 14,04 € · Pro 20,97 €</option>
+        <option value="12"${selectedMonths===12?' selected':''}>12 måneder — Member 32,04 € · Plus 56,16 € · Pro 83,88 €</option>
       </select>
     </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:12px">
@@ -1040,6 +1067,7 @@ window.showLogin=showLogin;
 window.showRegister=showRegister;
 window.showLanding=showLanding;
 window.showPaywall=showPaywall;
+window.beginPurchase=beginPurchase;
 window.startSubscription=startSubscription;
 window.checkBillingStatus=checkBillingStatus;
 window.login=login;
