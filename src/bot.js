@@ -418,8 +418,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
         for (const reminder of result.rows) {
           const user = await client.users.fetch(reminder.user_id).catch(() => null);
           if (user) {
-            await user.send("⏰ **Påmindelse**
-" + reminder.content).catch(() => {});
+            await user.send("⏰ **Påmindelse**\n" + reminder.content).catch(() => {});
           }
           await db.query("DELETE FROM public.reminders WHERE id=$1", [reminder.id]);
         }
