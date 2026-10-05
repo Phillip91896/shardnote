@@ -59,7 +59,7 @@ app.post("/api/billing/webhook", express.raw({ type: "application/json" }), asyn
                   months: Number(object.metadata?.months || 1)
                 });
                 if (mail.sent) {
-                  await db.query("UPDATE public.license_deliveries SET sent_at = NOW() WHERE id = $1",[delivery.rows[0]?.id || (await db.query("SELECT id FROM public.license_deliveries WHERE checkout_session_id=$1",[object.id])).rows[0].id]);
+                  await db.query("UPDATE public.license_deliveries SET sent_at = NOW() WHERE id = $1",[deliveryInsert.rows[0].id]);
                 }
               }
               log("billing", "License key generated for checkout #" + object.id, userId);
