@@ -1193,7 +1193,7 @@ function showLanding(){
           <option value="3">3 måneder</option>
           <option value="12">12 måneder</option>
         </select>
-        <div style="font-size:12px;color:var(--muted);line-height:1.5">Du får <b style="color:#fff">10 dage gratis</b>. Første betaling sker efter prøveperioden, og derefter gentages betalingen efter den valgte periode.</div>
+        <div style="font-size:12px;color:var(--muted);line-height:1.5">Du får <b style="color:#fff">10 dage gratis</b>. Den gratis prøveperiode kan kun bruges én gang pr. IP-adresse. Første betaling sker efter prøveperioden, og derefter gentages betalingen efter den valgte periode.</div>
       </div>
 
     <div style="margin:18px auto 6px;display:flex;justify-content:center">
