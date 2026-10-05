@@ -2366,8 +2366,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
       }
       const result = await db.query("SELECT trigger,response FROM public.autoresponders WHERE guild_id=$1 ORDER BY trigger ASC", [interaction.guild.id]);
       const content = result.rows.length
-        ? result.rows.map(row => "• **" + row.trigger + "** → " + row.response.slice(0, 180)).join("
-")
+        ? result.rows.map(row => "• **" + row.trigger + "** → " + row.response.slice(0, 180)).join("\n")
         : "Ingen autoresponders.";
       await interaction.reply({ content, ephemeral: true });
       return true;
