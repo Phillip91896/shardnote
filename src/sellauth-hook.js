@@ -35,7 +35,7 @@ async function sessionUser(req) {
   const result = await db.query(`SELECT id,name,email,role,plan,subscription_status AS "subscriptionStatus",trial_used AS "trialUsed" FROM public.users WHERE id=$1 LIMIT 1`, [id]);
   return result.rows[0] || null;
 }
-function paid(user) { return user?.role === 'admin' || ['active','trialing'].includes(user?.subscriptionStatus); }
+function paid(user) { return ['admin','owner'].includes(String(user?.role || '').toLowerCase()) || ['active','trialing'].includes(user?.subscriptionStatus); }
 function safeJson(value) { try { return JSON.parse(value); } catch { return null; } }
 function hmacMatches(rawBody, signature) {
   if (!WEBHOOK_SECRET || !signature) return false;
