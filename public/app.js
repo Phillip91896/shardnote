@@ -1,5 +1,5 @@
 const pages = ["dashboard","spot","tickets","messages","commands","features","templates","upgrades","store","activate","music","settings","logs","admin"];
-const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord-skitser",upgrades:"Opgraderinger",store:"Store",activate:"Aktivér key",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
+const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord Templates",upgrades:"Opgraderinger",store:"Store",activate:"Aktivér key",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true,buttonLabels:{}};
 let ticketCache = [];
 let adminTicketCache = [];
