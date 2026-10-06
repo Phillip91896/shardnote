@@ -469,6 +469,36 @@ function createBot({ state, db, log, createTicket, setReady }) {
     if (!guild) throw new Error("Discord serveren blev ikke fundet.");
 
     const templates = {
+      "official": {
+        name: "Shardnote Official",
+        roles: [
+          "Ejer","Admin","Developer","Community Manager","Moderator",
+          "Support Manager","Support Lead","Senior Support","Supporter","Trial Support",
+          "Event Manager","Content Creator","Media Team","Partner","Premium","Verified",
+          "Beta Tester","Translator","Medlem"
+        ],
+        extraRoles: [
+          "Whitelist Team","Application Team","Event Team","Content Creator","Media Team",
+          "Server Tester","Developer Lead","Business Owner"
+        ],
+        categories: [
+          "📌 INFORMATION","📢 ANNOUNCEMENTS","🚀 SHARDNOTE","💬 COMMUNITY",
+          "🎫 SUPPORT","🤝 PARTNERS","🔊 VOICE","🔒 STAFF"
+        ],
+        channels: [
+          "velkommen","regler","server-info","how-to-join","faq","roles",
+          "annonceringer","product-news","changelog","status","security-alerts",
+          "bot-news","feature-requests","bug-reports","known-issues","roadmap","documentation",
+          "chat","off-topic","memes","showcase","clips","suggestions","feedback","events","polls",
+          "support","ticket-panel","support-info","waiting-for-support","billing","account-help",
+          "partner-info","partner-requests","partner-news",
+          "staff-chat","staff-announcements","ticket-logs","mod-logs","server-logs","reports","applications"
+        ],
+        announcementChannels: ["annonceringer","product-news","changelog","status","security-alerts","bot-news","staff-announcements","partner-news"],
+        staffVoiceRooms: ["Support Room 1","Support Room 2","Support Room 3","Support Room 4","Support Room 5"],
+        waitingSupportVoice: "Waiting for Support",
+        features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
+      },
       "f5-vip": {
         name: "F5 VIP",
         roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem"],
@@ -956,6 +986,25 @@ function createBot({ state, db, log, createTicket, setReady }) {
       overwrite(guild.roles.everyone.id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages]),
       overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
+    const announcementOverwrites = [
+      overwrite(guild.roles.everyone.id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory],[
+        PermissionFlagsBits.SendMessages
+      ]),
+      ...staffRoleIds.map(id=>overwrite(id,[
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.EmbedLinks
+      ])),
+      overwrite(botId,[
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.ReadMessageHistory,
+        PermissionFlagsBits.SendMessages,
+        PermissionFlagsBits.ManageChannels,
+        PermissionFlagsBits.ManageMessages
+      ])
+    ];
+
     const privateOverwrites = [
       overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel]),
       ...staffRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages])),
@@ -1034,6 +1083,34 @@ function createBot({ state, db, log, createTicket, setReady }) {
       return c;
     }
 
+    async function ensureAnnouncement(key,name,parent,overwrites){
+      const target=channelName(key,name);
+      let c=guild.channels.cache.find(x=>(x.type===ChannelType.GuildAnnouncement||x.type===ChannelType.GuildText)&&x.name===target&&x.parentId===parent.id);
+      if(!c){
+        try{
+          c=await guild.channels.create({
+            name:target,
+            type:ChannelType.GuildAnnouncement,
+            parent:parent.id,
+            permissionOverwrites:overwrites,
+            reason:"ShardNote official announcement channel"
+          });
+        }catch(error){
+          c=await guild.channels.create({
+            name:target,
+            type:ChannelType.GuildText,
+            parent:parent.id,
+            permissionOverwrites:overwrites,
+            reason:"ShardNote official announcement fallback"
+          });
+          log("warning", "Announcement channel fallback in "+guild.name+": "+error.message);
+        }
+      } else if(overwrites?.length) {
+        await c.permissionOverwrites.set(overwrites,"ShardNote official announcement permissions").catch(()=>{});
+      }
+      return c;
+    }
+
     async function ensureVoice(key,name,parent,overwrites) {
       const target=channelName(key,name);
       let c=guild.channels.cache.find(x=>x.type===ChannelType.GuildVoice&&x.name===target&&x.parentId===parent.id);
@@ -1052,7 +1129,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
     for(let i=0;i<config.categories.length;i++) {
       const baseCategoryName=config.categories[i];
       const name=localizeTemplateName(baseCategoryName);
-      const overwrites = /SUPPORT|COMMUNITY|INFORMATION|FIVEM|RUST|GAMING|STREAM|CLAN|CREATOR|SHOP|CHAT|SPIL|RP|JOBS|VOICE/i.test(name) ? publicOverwrites : privateOverwrites;
+      const overwrites = /SUPPORT|COMMUNITY|INFORMATION|FIVEM|RUST|GAMING|STREAM|CLAN|CREATOR|SHOP|CHAT|SPIL|RP|JOBS|VOICE|ANNOUNCEMENT|NEWS|SHARDNOTE/i.test(name) ? publicOverwrites : privateOverwrites;
       categories.push(await ensureCategory(name,overwrites));
     }
 
@@ -1069,10 +1146,21 @@ function createBot({ state, db, log, createTicket, setReady }) {
       if(base === "Fælles" || base.endsWith(" VC") || base.includes("Voice") || base.includes("Lounge")) continue;
       const key=base.toLowerCase().replace(/[^a-z0-9]+/g,"");
       const parent=findCategory(
-        [base.includes("support")||base.includes("ticket")?"support":null, base.includes("log")||base.includes("staff")?"staff":null, base.includes("vip")?"vip":null, base.includes("game")||base.includes("chat")||base.includes("clips")?"community":null].filter(Boolean),
+        [
+          config.announcementChannels?.includes(base) ? "announcement" : null,
+          base.includes("support")||base.includes("ticket")?"support":null,
+          base.includes("log")||base.includes("staff")||base.includes("report")||base.includes("application")?"staff":null,
+          base.includes("partner")?"partner":null,
+          base.includes("feature")||base.includes("bug")||base.includes("roadmap")||base.includes("documentation")||base.includes("product")||base.includes("status")?"shardnote":null,
+          base.includes("game")||base.includes("chat")||base.includes("clips")||base.includes("showcase")||base.includes("suggest")||base.includes("feedback")||base.includes("events")||base.includes("poll")?"community":null
+        ].filter(Boolean),
         0
       );
-      textChannels.push(await ensureText(key,localizeTemplateName(base),parent));
+      if(config.announcementChannels?.includes(base)){
+        textChannels.push(await ensureAnnouncement(key,localizeTemplateName(base),parent,announcementOverwrites));
+      } else {
+        textChannels.push(await ensureText(key,localizeTemplateName(base),parent));
+      }
     }
     const voiceNames=config.channels.filter(x=>x==="Fælles"||x.includes("VC")||x.includes("Voice")||x.includes("Lounge"));
     for(const v of voiceNames){
@@ -1170,7 +1258,31 @@ function createBot({ state, db, log, createTicket, setReady }) {
       "support-info": ["🎫 Support Information", "How support works, where to open a ticket, and when to join a support room."],
       "faq": ["❓ FAQ", "Frequently asked questions about the server and Shardnote."],
       "known-issues": ["🛠 Known Issues", "Current known issues and their status."],
-      "waiting-for-support": ["🕐 Waiting for Support", "Use the support queue while you wait for a support agent."]
+      "waiting-for-support": ["🕐 Waiting for Support", "Use the support queue while you wait for a support agent."],
+      "announceringer": ["📢 Announcements", "Official Shardnote announcements and important community updates."],
+      "annonceringer": ["📢 Announcements", "Official Shardnote announcements and important community updates."],
+      "product-news": ["🚀 Product News", "New Shardnote releases, features and product updates."],
+      "changelog": ["📝 Changelog", "A public record of important Shardnote changes."],
+      "status": ["🟢 Status", "Service status and current incidents."],
+      "security-alerts": ["🛡️ Security Alerts", "Important security notices from Shardnote."],
+      "bot-news": ["🤖 Bot News", "Shardnote Bot updates, command changes and new capabilities."],
+      "feature-requests": ["💡 Feature Requests", "Suggest improvements for Shardnote and vote on ideas."],
+      "roadmap": ["🗺️ Roadmap", "What Shardnote is working on next."],
+      "documentation": ["📚 Documentation", "Guides, setup help and useful documentation."],
+      "roles": ["🏷️ Roles", "Choose your interests and notification roles through Discord Channels & Roles."],
+      "billing": ["💳 Billing", "Questions about plans, payments and subscriptions."],
+      "account-help": ["👤 Account Help", "Help with Shardnote website accounts and access."],
+      "partner-info": ["🤝 Partner Info", "Information for current and potential Shardnote partners."],
+      "partner-requests": ["🤝 Partner Requests", "Request a partnership with Shardnote."],
+      "partner-news": ["📢 Partner News", "Partnership announcements and updates."],
+      "staff-announcements": ["🔒 Staff Announcements", "Private announcements for the Shardnote team."],
+      "applications": ["📝 Applications", "Internal staff and community applications."],
+      "off-topic": ["💬 Off Topic", "Talk about anything that does not fit the other channels."],
+      "memes": ["😂 Memes", "Share memes and funny content."],
+      "polls": ["📊 Polls", "Community polls and voting."],
+      "showcase": ["🎨 Showcase", "Show your projects, servers, designs and creations."],
+      "feedback": ["📝 Feedback", "Give feedback about Shardnote."],
+      "events": ["🎉 Events", "Community events, activities and competitions."]
     };
 
     async function seedTemplateChannel(channel, baseName) {
