@@ -1,9 +1,9 @@
 (function(){
   const TEMPLATE_PAGE="templates";
-  const TEMPLATE_TITLE="Discord-skitser";
+  const TEMPLATE_TITLE="Discord Templates";
   let selectedGuild=localStorage.getItem("shardnote_template_guild") || "";
   let selectedTemplate=localStorage.getItem("shardnote_selected_template") || "fivem-vip";
-  let selectedLanguage=localStorage.getItem("shardnote_template_language") || "da";
+  let selectedLanguage=localStorage.getItem("shardnote_template_language") || "en";
 
   const TEMPLATE_LANGUAGES=[
     ["da","🇩🇰 Dansk"],["en","🇬🇧 English"],["de","🇩🇪 Deutsch"],["fr","🇫🇷 Français"],
@@ -14,27 +14,51 @@
   ];
 
   const TEMPLATES=[
-    {key:"fivem-vip",icon:"🚓",name:"FiveM VIP",desc:"FiveM VIP-server med VIP-område, tickets, staff og gaming.",features:["AutoMod","Invite filter","Levels / XP","Economy","Anti-raid"]},
-    {key:"fivem-esx",icon:"🚔",name:"FiveM ESX",desc:"ESX-server med jobs, whitelist, Politi, EMS og staff.",features:["AutoMod","Invite filter","Anti-raid","Tickets"]},
-    {key:"fivem-rp",icon:"🎭",name:"FiveM RP",desc:"Roleplay-server med RP-info, fraktioner og support.",features:["AutoMod","Invite filter","Levels / XP","Anti-raid"]},
-    {key:"rust",icon:"⛏️",name:"Rust",desc:"Rust-server med wipe, raid, team, trade og VIP.",features:["AutoMod","Invite filter","Levels / XP","Economy","Anti-raid"]},
-    {key:"vennegruppe",icon:"👥",name:"Vennegruppe",desc:"Privat server til venner med spil, memes og voice.",features:["AutoMod","Levels / XP","Economy"]},
-    {key:"gaming",icon:"🎮",name:"Gaming Community",desc:"Generel gaming-server med events, clips og spil.",features:["AutoMod","Invite filter","Levels / XP","Economy"]},
-    {key:"clan",icon:"🏆",name:"Clan / E-sport",desc:"Clan med spillere, tryouts, scrims og staff.",features:["AutoMod","Invite filter","Levels / XP","Anti-raid"]},
-    {key:"streamer",icon:"📺",name:"Streamer / Creator",desc:"Streamer-server med live, clips, fan-art og community.",features:["AutoMod","Invite filter","Levels / XP","Economy"]},
-    {key:"community",icon:"🌐",name:"Community",desc:"Stor almindelig Discord-community med tickets og events.",features:["AutoMod","Invite filter","Levels / XP","Economy","Anti-raid"]},
-    {key:"support",icon:"🎫",name:"Support Server",desc:"Supportserver med FAQ, tickets, status og logs.",features:["AutoMod","Invite filter","Anti-raid","Tickets"]},
-    {key:"shop",icon:"🛒",name:"Shop / Marketplace",desc:"Shop-server med produkter, bestillinger, support og anmeldelser.",features:["AutoMod","Invite filter","Economy","Anti-raid","Tickets"]},
-    {key:"creator",icon:"🎨",name:"Creator Community",desc:"Creator-server med showcase, feedback og samarbejde.",features:["AutoMod","Invite filter","Levels / XP","Economy"]},
-    {key:"custom",icon:"🧰",name:"Byg selv",desc:"Vælg selv funktionerne og få en grundstruktur genereret.",features:["Vælg selv"]}
+    {key:"fivem-vip",icon:"🚓",name:"FiveM VIP",desc:"FiveM VIP server with VIP areas, support, tickets and staff.",features:["AutoMod","Invite filter","Levels / XP","Economy","Anti-raid"]},
+    {key:"fivem-esx",icon:"🚔",name:"FiveM ESX",desc:"ESX roleplay server with jobs, whitelist, police, EMS and support.",features:["AutoMod","Invite filter","Anti-raid","Tickets"]},
+    {key:"fivem-rp",icon:"🎭",name:"FiveM RP",desc:"Roleplay server with RP information, factions, support and applications.",features:["AutoMod","Invite filter","Levels / XP","Anti-raid"]},
+    {key:"rust",icon:"⛏️",name:"Rust",desc:"Rust community with wipes, raids, teams, trading and VIP.",features:["AutoMod","Invite filter","Levels / XP","Economy","Anti-raid"]},
+    {key:"vennegruppe",icon:"👥",name:"Friends Server",desc:"Private server for friends with games, memes and voice channels.",features:["AutoMod","Levels / XP","Economy"]},
+    {key:"gaming",icon:"🎮",name:"Gaming Community",desc:"General gaming community with events, clips, support and voice.",features:["AutoMod","Invite filter","Levels / XP","Economy"]},
+    {key:"clan",icon:"🏆",name:"Clan / E-sports",desc:"Competitive community with players, tryouts, scrims, support and staff.",features:["AutoMod","Invite filter","Levels / XP","Anti-raid"]},
+    {key:"streamer",icon:"📺",name:"Streamer / Creator",desc:"Creator community with live updates, clips, fan art and support.",features:["AutoMod","Invite filter","Levels / XP","Economy"]},
+    {key:"community",icon:"🌐",name:"Community",desc:"Full Discord community with announcements, events, tickets and support.",features:["AutoMod","Invite filter","Levels / XP","Economy","Anti-raid"]},
+    {key:"support",icon:"🎫",name:"Support Server",desc:"Support-focused server with ticket intake, waiting queue, support rooms and staff tools.",features:["AutoMod","Invite filter","Anti-raid","Tickets","Support rooms"]},
+    {key:"shop",icon:"🛒",name:"Shop / Marketplace",desc:"Marketplace server with products, orders, reviews and support.",features:["AutoMod","Invite filter","Economy","Anti-raid","Tickets"]},
+    {key:"creator",icon:"🎨",name:"Creator Community",desc:"Creator server with showcases, feedback, collaboration and support.",features:["AutoMod","Invite filter","Levels / XP","Economy"]},
+    {key:"custom",icon:"🧰",name:"Build Your Own",desc:"Start from a secure base and choose the features you want to enable.",features:["Choose features"]}
+  ];
+
+  const DISCORD_ROLES=[
+    ["👑","Owner"],["⚙️","Developer"],["🛡️","Administrator"],["🔨","Moderator"],
+    ["🎫","Support Manager"],["🎧","Support Lead"],["⭐","Senior Support"],["🧰","Supporter"],
+    ["🕐","Trial Support"],["🤝","Partner"],["💎","Premium"],["✅","Verified"],
+    ["👤","Member"],["🤖","Shardnote Bot"]
+  ];
+
+  const SUPPORT_VOICE_ROOMS=[
+    {name:"Waiting for Support",note:"Join here when you need a support agent."},
+    {name:"Support Room 1",note:"Private support call room."},
+    {name:"Support Room 2",note:"Private support call room."},
+    {name:"Support Room 3",note:"Private support call room."},
+    {name:"Support Room 4",note:"Private support call room."},
+    {name:"Support Room 5",note:"Private support call room."}
+  ];
+
+  const DISCORD_CHANNEL_GROUPS=[
+    {name:"INFORMATION",icon:"📌",channels:["welcome","rules","announcements","changelog","status"]},
+    {name:"COMMUNITY",icon:"💬",channels:["general","suggestions","bug-reports","showcase","partners"]},
+    {name:"SUPPORT",icon:"🎫",channels:["create-ticket","support-info","faq","known-issues","waiting-for-support"]},
+    {name:"STAFF",icon:"🔒",channels:["staff-chat","ticket-logs","mod-logs","server-logs","reports"]},
+    {name:"VOICE",icon:"🔊",channels:["Support Lounge","Waiting for Support","Support Room 1","Support Room 2","Support Room 3","Support Room 4","Support Room 5"]}
   ];
 
   const FEATURE_KEYS=[
-    ["automod_enabled","AutoMod","Stop spam og dårlig opførsel automatisk."],
-    ["invite_filter","Invite filter","Bloker Discord-invites i chatten."],
-    ["levels_enabled","Levels / XP","XP, levels og leaderboard."],
-    ["economy_enabled","Economy","Coins, daily og work."],
-    ["anti_raid_enabled","Anti-raid","Beskyt mod hurtige joins."]
+    ["automod_enabled","AutoMod","Automatically reduce spam and abusive behavior."],
+    ["invite_filter","Invite filter","Block Discord invite links in chat."],
+    ["levels_enabled","Levels / XP","XP, levels and leaderboards."],
+    ["economy_enabled","Economy","Coins, daily rewards and work commands."],
+    ["anti_raid_enabled","Anti-raid","Protect the server against rapid join raids."]
   ];
 
   function esc(value){
@@ -78,13 +102,74 @@
     if(custom) custom.style.display=key==="custom"?"block":"none";
     const result=document.getElementById("snTemplatePageResult");
     if(result) result.innerHTML="";
+    renderDiscordPreview(cfg);
   }
+  function renderDiscordPreview(cfg){
+    const host=document.getElementById("snDiscordBlueprintPreview");
+    if(!host)return;
+    const channelsHtml=DISCORD_CHANNEL_GROUPS.map(group=>{
+      const channels=group.channels.map(name=>{
+        const isVoice=["Support Lounge","Waiting for Support","Support Room 1","Support Room 2","Support Room 3","Support Room 4","Support Room 5"].includes(name);
+        return '<div style="display:flex;align-items:center;gap:7px;padding:5px 8px;border-radius:6px;color:'+(isVoice?'#cfd0d7':'#9b9da8')+';font-size:12px">'+
+          '<span style="width:16px;text-align:center">'+(isVoice?'🔊':'#')+'</span><span>'+esc(name)+'</span>'+
+          (name==="Waiting for Support"?' <span style="margin-left:auto;font-size:10px;color:#8b8d98">queue</span>':'')+
+        '</div>';
+      }).join("");
+      return '<div style="margin-top:12px"><div style="font-size:10px;font-weight:900;letter-spacing:.08em;color:#7f8190;padding:0 8px 5px">'+group.icon+' '+esc(group.name)+'</div>'+channels+'</div>';
+    }).join("");
+
+    const rolesHtml=DISCORD_ROLES.map(role=>{
+      return '<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid rgba(255,255,255,.05)">'+
+        '<span style="font-size:14px;width:18px;text-align:center">'+role[0]+'</span><span style="font-size:12px;color:#e7e8ec">'+esc(role[1])+'</span>'+
+      '</div>';
+    }).join("");
+
+    const voiceHtml=SUPPORT_VOICE_ROOMS.map(room=>{
+      return '<div style="display:flex;align-items:center;gap:9px;background:#171820;border:1px solid rgba(255,255,255,.06);border-radius:10px;padding:10px 12px">'+
+        '<span style="font-size:16px">🔊</span><div><div style="font-size:12px;font-weight:800;color:#f2f3f5">'+esc(room.name)+'</div><div style="font-size:10px;color:#8b8d98;margin-top:2px">'+esc(room.note)+'</div></div>'+
+        '<span style="margin-left:auto;font-size:10px;color:#57d99c;font-weight:800">JOIN</span>'+
+      '</div>';
+    }).join("");
+
+    host.innerHTML=
+      '<div style="border:1px solid rgba(255,255,255,.10);border-radius:18px;overflow:hidden;background:#0f1015;box-shadow:0 18px 50px rgba(0,0,0,.24)">'+
+        '<div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid rgba(255,255,255,.07);background:#12131a">'+
+          '<div><div style="font-size:11px;color:#8f91a0;letter-spacing:.08em;text-transform:uppercase">Discord Server Preview</div><div style="font-size:18px;font-weight:900;color:#fff;margin-top:3px">'+esc((cfg?.name||"Shardnote Server"))+'</div></div>'+
+          '<div style="display:flex;gap:7px;align-items:center"><span class="badge open">Preview only</span><span class="badge pending">No existing channels removed</span></div>'+
+        '</div>'+
+        '<div style="display:grid;grid-template-columns:minmax(210px,240px) minmax(0,1fr) minmax(210px,250px);min-height:640px">'+
+          '<aside style="background:#111217;padding:14px;border-right:1px solid rgba(255,255,255,.06);overflow:auto">'+
+            '<div style="font-size:12px;font-weight:900;color:#f2f3f5;padding:8px 8px 12px">Shardnote | Official</div>'+
+            channelsHtml+
+          '</aside>'+
+          '<section style="padding:18px;background:#171820;overflow:auto">'+
+            '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:18px"><div><div style="font-size:20px;font-weight:900;color:#fff"># create-ticket</div><div style="font-size:11px;color:#8f91a0;margin-top:3px">Private support intake for members.</div></div><span class="badge open">Support online</span></div>'+
+            '<div style="background:#111217;border:1px solid rgba(255,255,255,.07);border-radius:14px;padding:18px">'+
+              '<div style="font-size:16px;font-weight:900;color:#fff">🎫 Need help?</div>'+
+              '<div style="font-size:12px;color:#a7a9b4;line-height:1.6;margin-top:7px">Create a ticket for technical support, billing, setup questions, bug reports or account help.</div>'+
+              '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px"><span class="badge open">Create Ticket</span><span class="badge pending">AI First Response</span><span class="badge pending">Staff Escalation</span></div>'+
+            '</div>'+
+            '<div style="margin-top:18px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px">'+
+              '<div style="background:#111217;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px"><div style="font-size:10px;color:#8f91a0">WAITING</div><div style="font-size:20px;font-weight:900;color:#fff;margin-top:4px">Support</div></div>'+
+              '<div style="background:#111217;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px"><div style="font-size:10px;color:#8f91a0">TICKETS</div><div style="font-size:20px;font-weight:900;color:#fff;margin-top:4px">Private</div></div>'+
+              '<div style="background:#111217;border:1px solid rgba(255,255,255,.07);border-radius:12px;padding:12px"><div style="font-size:10px;color:#8f91a0">VOICE</div><div style="font-size:20px;font-weight:900;color:#fff;margin-top:4px">6 Rooms</div></div>'+
+            '</div>'+
+            '<div style="margin-top:18px"><div style="font-size:12px;font-weight:900;color:#fff;margin-bottom:10px">Joinable Support Rooms</div><div style="display:grid;gap:8px">'+voiceHtml+'</div></div>'+
+          '</section>'+
+          '<aside style="background:#111217;padding:14px;border-left:1px solid rgba(255,255,255,.06);overflow:auto">'+
+            '<div style="font-size:11px;font-weight:900;letter-spacing:.08em;color:#8f91a0;padding:8px 0 6px">ROLES</div>'+
+            rolesHtml+
+          '</aside>'+
+        '</div>'+
+      '</div>';
+  }
+
   window.selectDiscordTemplate=selectTemplate;
   async function applyTemplate(){
     const guildId=document.getElementById("snTemplatePageGuild")?.value;
     const result=document.getElementById("snTemplatePageResult");
     const button=document.getElementById("snTemplatePageApply");
-    if(!guildId){if(result)result.innerHTML='<div class="badge pending">Vælg en Discord-server først.</div>';return;}
+    if(!guildId){if(result)result.innerHTML='<div class="badge pending">Select a Discord server first.</div>';return;}
     const prefixRoles=[];
     const prefixChannels=[];
     const features={};
@@ -94,8 +179,8 @@
       const el=document.getElementById("tpl_"+item[0]);
       features[item[0]]=!!el?.checked;
     });
-    if(!confirm("Opsæt "+((TEMPLATES.find(x=>x.key===selectedTemplate)||{}).name||selectedTemplate)+" på serveren? Eksisterende ting slettes ikke."))return;
-    button.disabled=true;button.textContent="⏳ Sætter serveren op…";if(result)result.innerHTML="";
+    if(!confirm("Deploy "+((TEMPLATES.find(x=>x.key===selectedTemplate)||{}).name||selectedTemplate)+" to this server? Existing channels and roles will not be deleted."))return;
+    button.disabled=true;button.textContent="⏳ Deploying template…";if(result)result.innerHTML="";
     try{
       const response=await apiCall("/api/bot/guilds/"+encodeURIComponent(guildId)+"/templates/"+encodeURIComponent(selectedTemplate),{
         method:"POST",headers:{"Content-Type":"application/json"},
@@ -111,7 +196,7 @@
           (permissionError ? '<div style="margin-top:10px"><button type="button" class="btn small" onclick="addBotToDiscord()">🔐 Opdater bot-rettigheder</button></div>' : '');
       }
     }
-    finally{button.disabled=false;button.textContent="🚀 Opsæt denne skitse";}
+    finally{button.disabled=false;button.textContent="🚀 Deploy this template";}
   }
   async function renderPage(){
     showPage();
@@ -128,17 +213,18 @@
     }).join("");
     host.innerHTML=
       '<div class="card" style="margin-bottom:18px">'+
-        '<div class="section-title"><div><h2>Discord-skitser</h2><span>Tryk på en færdig skitse, så vælger ShardNote automatisk funktionerne.</span></div><div class="badge open">Member Plus</div></div>'+
-        '<p style="color:var(--muted);line-height:1.6;margin:0">Du får en stor liste med færdige servertyper. Nederst kan du vælge <b>Byg selv</b> og selv bestemme funktionerne.</p>'+
+        '<div class="section-title"><div><h2>Discord Templates</h2><span>Preview the full server structure before you deploy it.</span></div><div class="badge open">Member Plus</div></div>'+
+        '<p style="color:var(--muted);line-height:1.6;margin:0">Every blueprint includes the complete support setup, a waiting queue, joinable support voice rooms and the core role structure. Existing server content is not deleted.</p>'+
       '</div>'+
       '<div class="feature-grid">'+cards+'</div>'+
+      '<div id="snDiscordBlueprintPreview" style="margin-top:18px"></div>'+
       '<div class="card" style="margin-top:18px">'+
-        '<div class="section-title"><div><h2 id="selectedTemplateTitle">🚓 FiveM VIP</h2><span id="selectedTemplateDesc">Vælg en skitse ovenfor.</span></div><div class="badge open">Valgt skitse</div></div>'+
+        '<div class="section-title"><div><h2 id="selectedTemplateTitle">🚓 FiveM VIP</h2><span id="selectedTemplateDesc">Choose a template to configure and deploy.</span></div><div class="badge open">Selected template</div></div>'+
         '<div class="grid two">'+
-          '<div class="field"><label>Discord-server</label><select id="snTemplatePageGuild"></select></div>'+
-          '<div class="field"><label>Sprog til serveren</label><select id="snTemplateLanguage">'+TEMPLATE_LANGUAGES.map(function(item){return '<option value="'+item[0]+'">'+item[1]+'</option>';}).join("")+'</select></div>'+
+          '<div class="field"><label>Discord Server</label><select id="snTemplatePageGuild"></select></div>'+
+          '<div class="field"><label>Server language</label><select id="snTemplateLanguage">'+TEMPLATE_LANGUAGES.map(function(item){return '<option value="'+item[0]+'">'+item[1]+'</option>';}).join("")+'</select></div>'+
         '</div>'+
-        '<div id="customFeatures" style="display:none;margin-top:16px"><h3 style="margin-bottom:4px">🧰 Vælg funktioner</h3>'+customChecks+'</div>'+
+        '<div id="customFeatures" style="display:none;margin-top:16px"><h3 style="margin-bottom:4px">🧰 Choose features</h3>'+customChecks+'</div>'+
         '<div class="actions" style="margin-top:18px"><button type="button" class="btn primary" id="snTemplatePageApply">🚀 Opsæt denne skitse</button></div>'+
         '<div id="snTemplatePageResult" style="margin-top:12px"></div>'+
       '</div>';
