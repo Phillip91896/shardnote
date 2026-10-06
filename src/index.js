@@ -253,6 +253,31 @@ async function initDatabase() {
   await migrateProtectedIpData();
 
   await db.query(`
+    CREATE TABLE IF NOT EXISTS public.staff_applications (
+      id BIGSERIAL PRIMARY KEY,
+      full_name VARCHAR(120) NOT NULL,
+      email VARCHAR(200) NOT NULL,
+      age SMALLINT,
+      discord_username VARCHAR(120) NOT NULL,
+      discord_id VARCHAR(32),
+      country VARCHAR(120),
+      timezone VARCHAR(80),
+      applying_for VARCHAR(20) NOT NULL DEFAULT 'both',
+      previous_staff BOOLEAN NOT NULL DEFAULT FALSE,
+      availability VARCHAR(120),
+      experience TEXT,
+      why_join TEXT NOT NULL,
+      strengths TEXT,
+      conflict_handling TEXT,
+      extra_info TEXT,
+      status VARCHAR(20) NOT NULL DEFAULT 'new',
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      reviewed_at TIMESTAMPTZ
+    );
+    ALTER TABLE public.staff_applications ENABLE ROW LEVEL SECURITY;
+  `);
+
+  await db.query(`
     CREATE TABLE IF NOT EXISTS public.account_settings (
       user_id BIGINT PRIMARY KEY REFERENCES public.users(id) ON DELETE CASCADE,
       prefix VARCHAR(5) NOT NULL DEFAULT '!',
@@ -779,6 +804,81 @@ async function sendLicenseEmail({to,name,key,plan,months}) {
   return { sent: true };
 }
 
+async function sendStaffApplicationEmail(application) {
+  const apiKey = String(process.env.RESEND_API_KEY || "").trim();
+  const from = String(process.env.MAIL_FROM || "").trim();
+  const to = String(
+    process.env.STAFF_APPLICATION_EMAIL ||
+    process.env.SITE_OWNER_EMAIL ||
+    process.env.ADMIN_EMAIL ||
+    ""
+  ).trim();
+
+  if (!apiKey || !from || !to) {
+    console.warn("[Shardnote Bot] Staff application email not sent: mail environment variables are missing.");
+    return { sent: false, reason: "mail_not_configured" };
+  }
+
+  const escapeHtml = (value) => String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+  const yesNo = value => value ? "Ja" : "Nej";
+
+  const html =
+    "<div style=\"font-family:Arial,sans-serif;line-height:1.65;color:#17171f;max-width:760px\">" +
+      "<h2 style=\"margin-bottom:6px\">🛡️ Ny Shardnote staff-ansøgning</h2>" +
+      "<p style=\"color:#666\">Der er kommet en ny ansøgning via Shardnote hjemmesiden.</p>" +
+      "<h3>Personlige oplysninger</h3>" +
+      "<p><b>Navn:</b> " + escapeHtml(application.fullName) + "<br>" +
+      "<b>Email:</b> " + escapeHtml(application.email) + "<br>" +
+      "<b>Alder:</b> " + escapeHtml(application.age || "Ikke oplyst") + "<br>" +
+      "<b>Discord:</b> " + escapeHtml(application.discordUsername) + "<br>" +
+      "<b>Discord ID:</b> " + escapeHtml(application.discordId || "Ikke oplyst") + "<br>" +
+      "<b>Land:</b> " + escapeHtml(application.country || "Ikke oplyst") + "<br>" +
+      "<b>Tidszone:</b> " + escapeHtml(application.timezone || "Ikke oplyst") + "</p>" +
+      "<h3>Staff-oplysninger</h3>" +
+      "<p><b>Søger til:</b> " + escapeHtml(application.applyingFor) + "<br>" +
+      "<b>Har været staff før:</b> " + yesNo(application.previousStaff) + "<br>" +
+      "<b>Tilgængelighed:</b> " + escapeHtml(application.availability || "Ikke oplyst") + "</p>" +
+      "<h3>Erfaring</h3>" +
+      "<p style=\"white-space:pre-wrap\">" + escapeHtml(application.experience || "Ikke oplyst") + "</p>" +
+      "<h3>Hvorfor Shardnote?</h3>" +
+      "<p style=\"white-space:pre-wrap\">" + escapeHtml(application.whyJoin) + "</p>" +
+      "<h3>Styrker</h3>" +
+      "<p style=\"white-space:pre-wrap\">" + escapeHtml(application.strengths || "Ikke oplyst") + "</p>" +
+      "<h3>Konflikter og moderering</h3>" +
+      "<p style=\"white-space:pre-wrap\">" + escapeHtml(application.conflictHandling || "Ikke oplyst") + "</p>" +
+      "<h3>Ekstra</h3>" +
+      "<p style=\"white-space:pre-wrap\">" + escapeHtml(application.extraInfo || "Ikke oplyst") + "</p>" +
+      "<hr style=\"border:0;border-top:1px solid #ddd;margin:24px 0\">" +
+      "<p style=\"color:#666;font-size:13px\">Ansøgning #" + escapeHtml(application.id) + " · " + escapeHtml(new Date(application.createdAt).toLocaleString("da-DK")) + "</p>" +
+    "</div>";
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Authorization": "Bearer " + apiKey,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from,
+      to: [to],
+      reply_to: [application.email],
+      subject: "🛡️ Ny Shardnote staff-ansøgning fra " + application.fullName,
+      html
+    })
+  });
+
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error("Maillevering fejlede: " + response.status + " " + body.slice(0, 500));
+  }
+  return { sent: true };
+}
+
 function generateSerialKey() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
   const parts = [];
@@ -950,6 +1050,14 @@ function requirePlan(minimumPlan, req, res, next) {
   if (current < needed) return res.status(403).json({ requiresPlan: minimumPlan, error: "Denne funktion kræver " + minimumPlan + "." });
   next();
 }
+const staffApplicationRateLimit = new Map();
+
+function getClientIp(req) {
+  return String(req.headers["x-forwarded-for"] || req.ip || "")
+    .split(",")[0].trim()
+    .slice(0, 100);
+}
+
 async function isGuildLinkedToUser(userId, guildId) {
   if (!db) return false;
   const result = await db.query(
@@ -958,6 +1066,142 @@ async function isGuildLinkedToUser(userId, guildId) {
   );
   return result.rowCount > 0;
 }
+
+app.post("/api/staff-applications", async (req, res) => {
+  try {
+    const now = Date.now();
+    const ip = getClientIp(req);
+    const windowMs = 60 * 60 * 1000;
+    const maxSubmissions = 3;
+    const recent = staffApplicationRateLimit.get(ip) || [];
+    const active = recent.filter(ts => now - ts < windowMs);
+    if (active.length >= maxSubmissions) {
+      return res.status(429).json({ error: "Du har sendt for mange ansøgninger. Prøv igen senere." });
+    }
+    active.push(now);
+    staffApplicationRateLimit.set(ip, active);
+
+    if (String(req.body?.website || "").trim()) {
+      return res.status(400).json({ error: "Ansøgningen kunne ikke sendes." });
+    }
+
+    const fullName = String(req.body?.fullName || "").trim().slice(0, 120);
+    const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 200);
+    const ageRaw = String(req.body?.age || "").trim();
+    const age = ageRaw ? Number.parseInt(ageRaw, 10) : null;
+    const discordUsername = String(req.body?.discordUsername || "").trim().slice(0, 120);
+    const discordId = String(req.body?.discordId || "").trim().slice(0, 32);
+    const country = String(req.body?.country || "").trim().slice(0, 120);
+    const timezone = String(req.body?.timezone || "").trim().slice(0, 80);
+    const applyingFor = ["website", "bot", "both"].includes(String(req.body?.applyingFor)) ? String(req.body.applyingFor) : "both";
+    const previousStaff = String(req.body?.previousStaff || "") === "yes";
+    const availability = String(req.body?.availability || "").trim().slice(0, 120);
+    const experience = String(req.body?.experience || "").trim().slice(0, 5000);
+    const whyJoin = String(req.body?.whyJoin || "").trim().slice(0, 5000);
+    const strengths = String(req.body?.strengths || "").trim().slice(0, 5000);
+    const conflictHandling = String(req.body?.conflictHandling || "").trim().slice(0, 5000);
+    const extraInfo = String(req.body?.extraInfo || "").trim().slice(0, 5000);
+    const consent = req.body?.consent === true || String(req.body?.consent || "") === "true";
+
+    if (!fullName || !email || !discordUsername || !whyJoin || !consent) {
+      return res.status(400).json({ error: "Udfyld navn, email, Discord-navn, hvorfor du søger og acceptér betingelserne." });
+    }
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      return res.status(400).json({ error: "Skriv en gyldig emailadresse." });
+    }
+    if (ageRaw && (!Number.isInteger(age) || age < 10 || age > 100)) {
+      return res.status(400).json({ error: "Alder skal være et gyldigt tal." });
+    }
+
+    if (!db) {
+      return res.status(503).json({ error: "Ansøgningssystemet er midlertidigt utilgængeligt." });
+    }
+
+    const result = await db.query(`
+      INSERT INTO public.staff_applications
+       (full_name,email,age,discord_username,discord_id,country,timezone,applying_for,previous_staff,availability,experience,why_join,strengths,conflict_handling,extra_info)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+       RETURNING id,
+                 full_name AS "fullName",
+                 email,
+                 age,
+                 discord_username AS "discordUsername",
+                 discord_id AS "discordId",
+                 country,
+                 timezone,
+                 applying_for AS "applyingFor",
+                 previous_staff AS "previousStaff",
+                 availability,
+                 experience,
+                 why_join AS "whyJoin",
+                 strengths,
+                 conflict_handling AS "conflictHandling",
+                 extra_info AS "extraInfo",
+                 status,
+                 created_at AS "createdAt"
+    `, [
+      fullName,email,age,discordUsername,discordId || null,country || null,timezone || null,applyingFor,previousStaff,availability || null,experience || null,whyJoin,strengths || null,conflictHandling || null,extraInfo || null
+    ]);
+
+    const application = result.rows[0];
+    let emailNotification = false;
+    try {
+      const mail = await sendStaffApplicationEmail(application);
+      emailNotification = !!mail.sent;
+    } catch (mailError) {
+      console.error("[Shardnote Bot] Staff application notification failed:", mailError.message);
+    }
+
+    log("staff_application", "New staff application #" + application.id + " from " + application.fullName);
+
+    res.status(201).json({
+      ok: true,
+      id: application.id,
+      emailNotification,
+      message: "Tak! Din staff-ansøgning er sendt til Shardnote-teamet."
+    });
+  } catch (error) {
+    console.error("[Shardnote Bot] Staff application submit failed:", error);
+    res.status(500).json({ error: "Ansøgningen kunne ikke sendes. Prøv igen." });
+  }
+});
+
+app.get("/api/admin/staff-applications", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!db) return res.json([]);
+    const limitRaw = Number.parseInt(req.query.limit, 10);
+    const limit = Math.min(Math.max(Number.isFinite(limitRaw) ? limitRaw : 100, 1), 200);
+    const result = await db.query(`
+      SELECT
+         id,
+         full_name AS "fullName",
+         email,
+         age,
+         discord_username AS "discordUsername",
+         discord_id AS "discordId",
+         country,
+         timezone,
+         applying_for AS "applyingFor",
+         previous_staff AS "previousStaff",
+         availability,
+         experience,
+         why_join AS "whyJoin",
+         strengths,
+         conflict_handling AS "conflictHandling",
+         extra_info AS "extraInfo",
+         status,
+         created_at AS "createdAt",
+         reviewed_at AS "reviewedAt"
+       FROM public.staff_applications
+       ORDER BY created_at DESC
+       LIMIT $1
+    `, [limit]);
+    res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Kunne ikke hente staff-ansøgninger." });
+  }
+});
 
 async function recordTicketEvent(ticketId, actorUserId, actorName, action, metadata = {}) {
   if (!db || !ticketId) return;
@@ -3369,6 +3613,10 @@ app.patch("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, (req,re
     console.error(error);
     res.status(500).json({ error: error.message || "Serverindstillingerne kunne ikke gemmes." });
   }
+});
+
+app.get("/staff-ansogning", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/staff-application.html"));
 });
 
 const html = `<!DOCTYPE html>
