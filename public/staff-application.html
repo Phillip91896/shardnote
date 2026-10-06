@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shardnote — Staff Ansøgning</title>
+  <meta name="description" content="Ansøg om at blive en del af Shardnote staff-teamet.">
+  <style>
+    :root{--bg:#07070b;--panel:#11111a;--panel2:#171722;--border:#29293a;--text:#f8f8fb;--muted:#a4a4b7;--accent:#6d5dfc;--accent2:#9a88ff}
+    *{box-sizing:border-box}
+    body{margin:0;min-height:100vh;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:radial-gradient(circle at 50% -10%,#241c43 0,#09090e 42%,#07070b 100%);padding:32px 16px 60px}
+    .wrap{width:min(920px,100%);margin:auto}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:24px}
+    .brand{font-size:22px;font-weight:800}.back{color:#fff;text-decoration:none;border:1px solid var(--border);background:rgba(17,17,26,.8);padding:10px 14px;border-radius:12px}
+    .hero{padding:30px;border:1px solid var(--border);background:linear-gradient(180deg,rgba(20,20,31,.96),rgba(12,12,18,.96));border-radius:22px;box-shadow:0 24px 70px rgba(0,0,0,.35);margin-bottom:18px}
+    .badge{display:inline-flex;padding:7px 11px;border-radius:999px;background:rgba(109,93,252,.14);border:1px solid rgba(109,93,252,.35);color:#cfc8ff;font-size:12px;font-weight:700}
+    h1{font-size:clamp(30px,5vw,46px);line-height:1.05;margin:16px 0 10px}.hero p{color:var(--muted);font-size:16px;max-width:760px;line-height:1.65;margin:0}
+    form{display:grid;gap:18px}.section{padding:22px;border:1px solid var(--border);background:rgba(17,17,26,.92);border-radius:18px}.section h2{margin:0 0 16px;font-size:18px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:grid;gap:7px}.field.full{grid-column:1/-1}
+    label{font-weight:650;font-size:14px}.hint{color:var(--muted);font-size:12px;line-height:1.5}
+    input,select,textarea{width:100%;color:var(--text);background:var(--panel2);border:1px solid var(--border);border-radius:12px;padding:12px 13px;outline:none}
+    input:focus,select:focus,textarea:focus{border-color:rgba(109,93,252,.75);box-shadow:0 0 0 3px rgba(109,93,252,.12)}
+    textarea{min-height:130px;resize:vertical}.check{display:flex;align-items:flex-start;gap:10px;color:var(--muted);font-size:13px;line-height:1.55}.check input{width:auto;margin-top:3px}
+    .actions{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}.submit{border:0;color:#fff;background:linear-gradient(135deg,var(--accent),var(--accent2));padding:13px 20px;border-radius:12px;font-weight:800;box-shadow:0 12px 28px rgba(109,93,252,.26)}
+    .submit:disabled{opacity:.65;cursor:not-allowed}.status{display:none;padding:14px 16px;border-radius:12px;font-weight:650;margin-bottom:18px}.status.show{display:block}
+    .status.ok{background:rgba(66,211,146,.11);border:1px solid rgba(66,211,146,.3);color:#9ff0c7}.status.error{background:rgba(255,105,123,.11);border:1px solid rgba(255,105,123,.3);color:#ffb5c0}
+    .hp{position:absolute;left:-10000px;top:auto;width:1px;height:1px;overflow:hidden}
+    @media(max-width:720px){.grid{grid-template-columns:1fr}.field.full{grid-column:auto}.hero,.section{padding:18px}.top{align-items:flex-start}}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="top"><div class="brand">Shardnote</div><a class="back" href="/">← Til hjemmesiden</a></div>
+    <section class="hero">
+      <span class="badge">STAFF APPLICATION</span>
+      <h1>Bliv en del af Shardnote staff-teamet.</h1>
+      <p>Vi søger seriøse personer, som vil være med til at hjælpe med Shardnote-hjemmesiden, Discord-botten og vores community. Udfyld ansøgningen så ærligt og grundigt som muligt.</p>
+    </section>
+
+    <div id="status" class="status" role="status"></div>
+
+    <form id="staffForm">
+      <section class="section">
+        <h2>👤 Dine oplysninger</h2>
+        <div class="grid">
+          <div class="field"><label for="fullName">Fulde navn *</label><input id="fullName" name="fullName" maxlength="120" required></div>
+          <div class="field"><label for="email">Email *</label><input id="email" name="email" type="email" maxlength="200" required></div>
+          <div class="field"><label for="age">Alder</label><input id="age" name="age" type="number" min="10" max="100"></div>
+          <div class="field"><label for="discordUsername">Discord-navn *</label><input id="discordUsername" name="discordUsername" maxlength="120" placeholder="fx brugernavn eller brugernavn#0000" required></div>
+          <div class="field"><label for="discordId">Discord ID</label><input id="discordId" name="discordId" maxlength="32" inputmode="numeric" placeholder="Valgfrit"></div>
+          <div class="field"><label for="country">Land</label><input id="country" name="country" maxlength="120" placeholder="fx Danmark"></div>
+          <div class="field"><label for="timezone">Tidszone</label><input id="timezone" name="timezone" maxlength="80" placeholder="fx Europe/Copenhagen"></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <h2>🛡️ Staff-rollen</h2>
+        <div class="grid">
+          <div class="field"><label for="applyingFor">Hvad vil du helst arbejde med?</label><select id="applyingFor" name="applyingFor"><option value="both">Både hjemmeside og bot</option><option value="website">Hjemmesiden</option><option value="bot">Discord-botten</option></select></div>
+          <div class="field"><label for="availability">Hvornår kan du typisk hjælpe?</label><input id="availability" name="availability" maxlength="120" placeholder="fx hverdage 16–21 og weekender"></div>
+          <div class="field"><label for="previousStaff">Har du været staff før?</label><select id="previousStaff" name="previousStaff"><option value="no">Nej</option><option value="yes">Ja</option></select></div>
+          <div class="field"><label for="experience">Fortæl om din tidligere staff-erfaring</label><textarea id="experience" name="experience" maxlength="5000" placeholder="Servere, moderation, support, udvikling, community osv."></textarea></div>
+          <div class="field full"><label for="whyJoin">Hvorfor vil du være en del af Shardnote? *</label><textarea id="whyJoin" name="whyJoin" maxlength="5000" required placeholder="Fortæl os, hvad der motiverer dig."></textarea></div>
+          <div class="field full"><label for="strengths">Hvad er dine stærkeste sider?</label><textarea id="strengths" name="strengths" maxlength="5000" placeholder="Fx kommunikation, support, udvikling, problemløsning, ansvarlighed..."></textarea></div>
+          <div class="field full"><label for="conflictHandling">Hvordan vil du håndtere en konflikt med en bruger eller et andet staff-medlem?</label><textarea id="conflictHandling" name="conflictHandling" maxlength="5000"></textarea></div>
+          <div class="field full"><label for="extraInfo">Er der andet, vi skal vide?</label><textarea id="extraInfo" name="extraInfo" maxlength="5000"></textarea></div>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
+        <label class="check"><input id="consent" name="consent" type="checkbox" required><span>Jeg bekræfter, at oplysningerne er korrekte, og at Shardnote-teamet må bruge oplysningerne til at behandle min staff-ansøgning.</span></label>
+        <div class="actions"><div class="hint">Vi bruger dine oplysninger til at vurdere din ansøgning og kontakte dig omkring den.</div><button class="submit" id="submitBtn" type="submit">Send staff-ansøgning</button></div>
+      </section>
+    </form>
+  </div>
+
+<script>
+const form = document.getElementById("staffForm");
+const statusBox = document.getElementById("status");
+const submitBtn = document.getElementById("submitBtn");
+function showStatus(message, ok){statusBox.textContent=message;statusBox.className="status show "+(ok?"ok":"error");statusBox.scrollIntoView({behavior:"smooth",block:"center"});}
+form.addEventListener("submit", async (event)=>{
+  event.preventDefault();
+  submitBtn.disabled=true;submitBtn.textContent="Sender...";statusBox.className="status";
+  const data=Object.fromEntries(new FormData(form).entries());
+  data.consent=document.getElementById("consent").checked;
+  try{
+    const response=await fetch("/api/staff-applications",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
+    const result=await response.json().catch(()=>({}));
+    if(!response.ok) throw new Error(result.error||"Ansøgningen kunne ikke sendes.");
+    showStatus("✅ "+result.message,true);form.reset();window.scrollTo({top:0,behavior:"smooth"});
+  }catch(error){showStatus("❌ "+error.message,false);}
+  finally{submitBtn.disabled=false;submitBtn.textContent="Send staff-ansøgning";}
+});
+</script>
+</body>
+</html>
