@@ -920,9 +920,9 @@ async function ensureAdmin() {
     if (!byEmail.rowCount) {
       await db.query(
         "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, $3, $4)",
-        ["Administrator", email, "admin", hashPassword(password)]
+        ["Administrator", email, "owner", hashPassword(password)]
       );
-      log("security", `Admin account ${email} is ready in database`);
+      log("security", `Owner account ${email} is ready in database`);
       return;
     }
 
@@ -931,16 +931,16 @@ async function ensureAdmin() {
     if (configuredEmail) {
       if (hasBootstrapPassword) {
         await db.query(
-          "UPDATE users SET role = 'admin', password_hash = $1 WHERE email = $2",
+          "UPDATE users SET role = 'owner', password_hash = $1 WHERE email = $2",
           [hashPassword(password), email]
         );
       } else {
         await db.query(
-          "UPDATE users SET role = 'admin' WHERE email = $1",
+          "UPDATE users SET role = 'owner' WHERE email = $1",
           [email]
         );
       }
-      log("security", `Bootstrap admin ensured for ${email}`);
+      log("security", `Bootstrap Owner ensured for ${email}`);
     }
     return;
   }
@@ -950,7 +950,7 @@ async function ensureAdmin() {
       id: 1,
       name: "Administrator",
       email,
-      role: "admin",
+      role: "owner",
       passwordHash: hashPassword(password),
       createdAt: new Date().toISOString()
     });
@@ -961,7 +961,7 @@ async function ensureAdmin() {
   if (configuredEmail) {
     const existing = state.users.find(u => u.email.toLowerCase() === email);
     if (existing) {
-      existing.role = "admin";
+      existing.role = "owner";
       if (hasBootstrapPassword) existing.passwordHash = hashPassword(password);
       log("security", `Bootstrap admin ensured for ${email}`);
     }
