@@ -1023,7 +1023,7 @@ async function getSessionUser(req){
   Object.assign(sessionUser,row);
   return sessionUser;
 }
-function hasPaidAccess(user){return user?.role==="admin"||["active","trialing"].includes(user?.subscriptionStatus);}
+function hasPaidAccess(user){return ["admin","owner"].includes(String(user?.role||"").toLowerCase())||["active","trialing"].includes(user?.subscriptionStatus);}
 async function requireAuth(req,res,next){try{const user=await getSessionUser(req);if(!user)return res.status(401).json({error:"Du skal logge ind."});req.user=user;next();}catch(error){console.error(error);res.status(500).json({error:"Loginstatus kunne ikke hentes."});}}
 function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin" && !isSiteOwner(req.user)) return res.status(403).json({ error: "Kun administratorer har adgang." });
@@ -1054,7 +1054,7 @@ function requirePaid(req, res, next) {
   next();
 }
 function requirePlan(minimumPlan, req, res, next) {
-  if (req.user?.role === "admin") return next();
+  if (["admin","owner"].includes(String(req.user?.role || "").toLowerCase())) return next();
   const rank = { member: 0, member_plus: 1, member_pro: 2, member_premium: 3 };
   const current = rank[req.user?.plan || "member"] ?? 0;
   const needed = rank[minimumPlan] ?? 0;
