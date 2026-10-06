@@ -789,7 +789,7 @@ async function loadUsers(){
         <div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div>
         <div style="flex:1">
           <b>${escapeHtml(u.name)}</b>
-          <small>${escapeHtml(u.email)} · ${escapeHtml(u.role)} · <b>${escapeHtml(planNames[u.plan]||"Member")}</b> · ${banStatus}</small>
+          <small>${escapeHtml(u.email)} · ${escapeHtml(u.role)} · <b>${escapeHtml(planNames[u.plan]||"Member")}</b> ${u.applicationReviewer?'· <span class="badge open">Application Reviewer</span>':""} · ${banStatus}</small>
         </div>
         ${roleButton} ${planButton} ${u.role==="admin" && u.id!==currentUser?.id ? `<button class="btn small" onclick="toggleApplicationReviewer(${u.id},${u.applicationReviewer?"false":"true"})">${u.applicationReviewer?"Remove Application Reviewer":"Grant Application Reviewer"}</button>` : ""} ${moderationButtons} ${deleteButton}
       </div>`;
