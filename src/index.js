@@ -3679,7 +3679,7 @@ button,input,textarea,select{font:inherit}button{cursor:pointer}
 .table{width:100%;border-collapse:collapse}.table th,.table td{padding:12px 8px;border-bottom:1px solid #22222e;text-align:left;font-size:13px}.table th{color:var(--muted);font-weight:600}.badge{display:inline-flex;padding:5px 8px;border-radius:999px;font-size:11px;font-weight:700}.badge.open{background:rgba(66,211,146,.12);color:var(--green)}.badge.pending{background:rgba(244,201,93,.12);color:var(--yellow)}.badge.closed{background:rgba(255,102,120,.12);color:var(--red)}.log-category{border:1px solid var(--border);border-radius:12px;background:#0e0e16;margin-bottom:10px;overflow:hidden}.log-category summary{cursor:pointer;list-style:none;padding:14px 16px;display:flex;justify-content:space-between;align-items:center;font-weight:700}.log-category summary::-webkit-details-marker{display:none}.log-category summary b{background:#1c1b2b;padding:4px 8px;border-radius:999px;font-size:11px;color:var(--muted)}.log-category-body{padding:0 12px 12px}.log-category-intro{padding:10px 12px;margin-bottom:12px;border:1px dashed var(--border);border-radius:10px;color:var(--muted);font-size:12px}.log-category summary{user-select:none}.log-category-body{overflow:auto}
 .activity{display:grid;gap:11px}.activity-item{display:flex;gap:11px;align-items:flex-start;padding:10px 0;border-bottom:1px solid #22222e}.activity-item:last-child{border:0}.activity-icon{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:#1c1b2b}.activity-item b{font-size:13px}.activity-item small{display:block;color:var(--muted);margin-top:3px}
 .form-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}.field{display:grid;gap:7px}.field label{font-size:12px;color:var(--muted)}.field input,.field textarea,.field select{width:100%;border:1px solid var(--border);background:#0b0b11;color:#fff;border-radius:10px;padding:11px 12px;outline:none}.field textarea{min-height:120px;resize:vertical}.field input:focus,.field textarea:focus,.field select:focus{border-color:var(--accent)}
-.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:12px}.spot-layout{display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:18px}.spot-preview{display:grid;place-items:center;min-height:420px;background:#0b0b11;border:1px solid var(--border);border-radius:14px;padding:18px}.spot-canvas{max-width:100%;height:auto;border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.3);display:block}.spot-help{color:var(--muted);font-size:12px;line-height:1.5}@media(max-width:900px){.spot-layout{grid-template-columns:1fr}}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}.empty{padding:30px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:12px}.application-card{border:1px solid var(--border);border-radius:14px;background:#0e0e16;padding:16px}.application-card .meta{color:var(--muted);font-size:12px;line-height:1.6}.application-card .answers{display:grid;gap:10px;margin-top:14px}.application-card .answer{padding:10px 12px;border:1px solid #22222e;border-radius:10px;background:#0b0b11}.application-card .answer b{display:block;font-size:11px;color:var(--muted);margin-bottom:4px}.application-card .answer div{white-space:pre-wrap;line-height:1.5}.spot-layout{display:grid;grid-template-columns:minmax(280px,420px) 1fr;gap:18px}.spot-preview{display:grid;place-items:center;min-height:420px;background:#0b0b11;border:1px solid var(--border);border-radius:14px;padding:18px}.spot-canvas{max-width:100%;height:auto;border-radius:12px;box-shadow:0 16px 50px rgba(0,0,0,.3);display:block}.spot-help{color:var(--muted);font-size:12px;line-height:1.5}@media(max-width:900px){.spot-layout{grid-template-columns:1fr}}
 .switch-row{display:flex;align-items:center;justify-content:space-between;padding:15px 0;border-bottom:1px solid #22222e}.switch{width:48px;height:26px;border-radius:99px;background:#292936;padding:3px;transition:.2s}.switch i{display:block;width:20px;height:20px;border-radius:50%;background:#fff;transition:.2s}.switch.on{background:var(--accent)}.switch.on i{transform:translateX(22px)}.feature-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}.feature-card{background:#0e0e16;border:1px solid var(--border);border-radius:14px;padding:16px}.feature-card h3{margin:0 0 7px;font-size:14px}.feature-card p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}.feature-status{display:inline-flex;margin-top:10px;padding:5px 8px;border-radius:999px;background:rgba(66,211,146,.12);color:var(--green);font-size:11px;font-weight:800}.feature-command{display:inline-block;margin-top:10px;font-size:11px;color:var(--accent2);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.feature-select{min-height:42px}.feature-save{position:sticky;bottom:12px;z-index:3}@media(max-width:1050px){.feature-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:760px){.feature-grid{grid-template-columns:1fr}}
 
 body.locked > .app{display:none}
@@ -3708,6 +3708,7 @@ body.locked > .app{display:none}
     <button data-page="settings"><span class="icon">⚙</span><span>Indstillinger</span></button>
     <button data-page="logs"><span class="icon">◷</span><span>Logs</span></button>
     <button data-page="admin"><span class="icon">👑</span><span>Admin</span></button>
+    <button data-page="staff-applications"><span class="icon">🛡️</span><span>Staff ansøgninger</span></button>
   </nav>
   <div class="sidebar-footer">Shardnote Bot 2.0<br>Discord Control Center</div>
 </aside>
@@ -4009,6 +4010,24 @@ body.locked > .app{display:none}
       <div class="log-category-intro">Hver logtype ligger separat. Åbn kun den kategori, du vil se.</div>
       <div id="logCategoryList"></div>
     </div>
+  </div>
+</section>
+
+<section class="page" id="page-staff-applications">
+  <div class="card">
+    <div class="section-title">
+      <div><h2>🛡️ Staff ansøgninger</h2><span>Kun administratorer og Application Reviewers</span></div>
+      <button class="btn small" onclick="loadStaffApplications()">Opdater</button>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+      <select id="staffApplicationStatusFilter" style="min-width:180px">
+        <option value="all">Alle ansøgninger</option>
+        <option value="new">Nye</option>
+        <option value="reviewed">Gennemgået</option>
+      </select>
+      <span id="staffApplicationCount" class="badge pending">0 ansøgninger</span>
+    </div>
+    <div id="staffApplicationList" style="display:grid;gap:12px"></div>
   </div>
 </section>
 
