@@ -1799,7 +1799,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     const controls = new ActionRowBuilder().addComponents(
       new ButtonBuilder().setCustomId("ticket_claim:" + ticket.id).setLabel("Claim").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("ticket_close:" + ticket.id).setLabel("Luk ticket").setStyle(ButtonStyle.Danger),
+      new ButtonBuilder().setCustomId("ticket_close:" + ticket.id).setLabel("Close Ticket").setStyle(ButtonStyle.Danger),
       new ButtonBuilder().setCustomId("ticket_transcript:" + ticket.id).setLabel("Transcript").setStyle(ButtonStyle.Primary)
     );
 
@@ -1807,7 +1807,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
       embeds: [
         new EmbedBuilder()
           .setTitle("🎫 " + info.label + " #" + ticket.id)
-          .setDescription("Hej <@" + interaction.user.id + ">\n\n" + info.description)
+          .setDescription("Hi <@" + interaction.user.id + ">\n\n" + info.description)
           .addFields(
             { name: "Type", value: info.label, inline: true },
             ...(intake.subject ? [{ name:"Emne", value:String(intake.subject).slice(0, 200), inline:true }] : []),
@@ -1825,11 +1825,11 @@ function createBot({ state, db, log, createTicket, setReady }) {
       "system"
     );
 
-    return interaction.reply({ content: "✅ " + info.label + " oprettet: " + channel, ephemeral: true });
+    return interaction.reply({ content: "✅ " + info.label + " created: " + channel, ephemeral: true });
   }
 
   async function handleFeatureButton(interaction) {
-    if (!interaction.guild) return interaction.reply({ content: "Denne knap virker kun i en server.", ephemeral: true });
+    if (!interaction.guild) return interaction.reply({ content: "This button only works inside a server.", ephemeral: true });
 
     if (interaction.customId === "ticket_create" || interaction.customId.startsWith("ticket_create:")) {
       const type = interaction.customId.split(":")[1] || "support";
@@ -1837,7 +1837,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
     }
 
     if (interaction.customId.startsWith("ticket_close:")) {
-      if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageChannels)) return interaction.reply({ content: "Du mangler Manage Channels.", ephemeral: true });
+      if (!interaction.memberPermissions.has(PermissionFlagsBits.ManageChannels)) return interaction.reply({ content: "You need Manage Channels permission.", ephemeral: true });
       const id = interaction.customId.split(":")[1];
       const ticket = await getTicketForChannel(interaction.channel.id);
       if (db) await db.query("UPDATE public.tickets SET status='closed', closed_at=NOW(), resolved_at=NOW() WHERE id=$1", [id]).catch(() => {});
@@ -1846,20 +1846,20 @@ function createBot({ state, db, log, createTicket, setReady }) {
         ...[1,2,3,4,5].map(n => new ButtonBuilder().setCustomId("ticket_csat:" + id + ":" + n).setLabel(String(n) + " ⭐").setStyle(n >= 4 ? ButtonStyle.Success : n === 3 ? ButtonStyle.Secondary : ButtonStyle.Danger))
       );
       await interaction.channel.send({
-        content: ticket?.ownerUserId ? "<@" + ticket.ownerUserId + "> — hvordan gik din supportoplevelse? Vælg 1–5." : "Hvordan gik din supportoplevelse? Vælg 1–5.",
+        content: ticket?.ownerUserId ? "<@" + ticket.ownerUserId + "> — how was your support experience? Please choose 1–5." : "How was your support experience? Please choose 1–5.",
         components: [ratingRow]
       }).catch(() => {});
-      return interaction.reply("🔒 Ticket lukket. Brugeren kan nu give en 1–5 vurdering.");
+      return interaction.reply("🔒 Ticket closed. The user can now leave a 1–5 rating.");
     }
 
     if (interaction.customId.startsWith("ticket_csat:")) {
       const [, id, rawRating] = interaction.customId.split(":");
       const rating = Number(rawRating);
-      if (!Number.isInteger(rating) || rating < 1 || rating > 5) return interaction.reply({ content: "Ugyldig vurdering.", ephemeral: true });
+      if (!Number.isInteger(rating) || rating < 1 || rating > 5) return interaction.reply({ content: "Invalid rating.", ephemeral: true });
       if (db) {
         const ticket = await db.query("SELECT owner_user_id FROM public.tickets WHERE id=$1 LIMIT 1", [id]).catch(() => ({ rows: [] }));
         const ownerId = String(ticket.rows[0]?.owner_user_id || "");
-        if (ownerId && ownerId !== String(interaction.user.id)) return interaction.reply({ content: "Kun personen, der oprettede ticketen, kan give vurderingen.", ephemeral: true });
+        if (ownerId && ownerId !== String(interaction.user.id)) return interaction.reply({ content: "Only the person who created the ticket can leave the rating.", ephemeral: true });
         await db.query(
           "INSERT INTO public.ticket_feedback (ticket_id, guild_id, user_id, rating) VALUES ($1,$2,$3,$4) ON CONFLICT (ticket_id,user_id) DO UPDATE SET rating=EXCLUDED.rating, created_at=NOW()",
           [id, interaction.guild.id, interaction.user.id, rating]
@@ -2822,13 +2822,13 @@ function createBot({ state, db, log, createTicket, setReady }) {
         .setTitle(String(ticketTitles[type] || "Support").slice(0,45));
       const subjectInput = new TextInputBuilder()
         .setCustomId("ticket_subject")
-        .setLabel("Emne")
+        .setLabel("Subject")
         .setStyle(TextInputStyle.Short)
         .setRequired(true)
         .setMaxLength(100);
       const detailsInput = new TextInputBuilder()
         .setCustomId("ticket_details")
-        .setLabel("Beskriv dit problem")
+        .setLabel("Describe your problem")
         .setStyle(TextInputStyle.Paragraph)
         .setRequired(true)
         .setMaxLength(1000);
@@ -2939,13 +2939,13 @@ function createBot({ state, db, log, createTicket, setReady }) {
           embeds: [
             new EmbedBuilder()
               .setTitle("🎫 Ticket #" + ticket.id)
-              .setDescription("Hej <@" + interaction.user.id + "> — skriv her, så hjælper supporten dig.")
+              .setDescription("Hi <@" + interaction.user.id + "> — write your message here and our support team will help you.")
               .setColor(0x6d5dfc)
           ],
           components: [controls]
         });
 
-        await sendGuildLog(interaction.guild, "Ny ticket", interaction.user.tag + " oprettede ticket #" + ticket.id, "system");
+        await sendGuildLog(interaction.guild, "New ticket", interaction.user.tag + " created ticket #" + ticket.id, "system");
         return interaction.reply({ content: "✅ Din ticket er oprettet: " + channel, ephemeral: true });
       }
 
