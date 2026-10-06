@@ -97,7 +97,7 @@
     const apply=document.getElementById("snTemplatePageApply");
     if(title) title.textContent=(cfg?cfg.icon+" ":"")+((cfg&&cfg.name)||key);
     if(desc) desc.textContent=(cfg&&cfg.desc)||"";
-    if(apply) apply.textContent="🚀 Opsæt "+((cfg&&cfg.name)||"denne skitse");
+    if(apply) apply.textContent="🚀 Deploy "+((cfg&&cfg.name)||"this template");
     const custom=document.getElementById("customFeatures");
     if(custom) custom.style.display=key==="custom"?"block":"none";
     const result=document.getElementById("snTemplatePageResult");
@@ -187,13 +187,13 @@
         body:JSON.stringify({prefixRoles,prefixChannels,features,language:selectedLanguage})
       });
       const r=response.result||{};
-      if(result)result.innerHTML='<div class="badge open">✅ '+esc(r.name||selectedTemplate)+' er sat op</div>'+
-        '<div style="color:var(--muted);font-size:12px;margin-top:8px">'+esc(String(r.createdRoles||0))+' nye roller · '+esc(String((r.channels||[]).length))+' kanaler behandlet · sprog: '+esc(String(r.languageName||selectedLanguage))+'</div>';
+      if(result)result.innerHTML='<div class="badge open">✅ '+esc(r.name||selectedTemplate)+' is ready</div>'+
+        '<div style="color:var(--muted);font-size:12px;margin-top:8px">'+esc(String(r.createdRoles||0))+' new roles · '+esc(String((r.channels||[]).length))+' channels processed · language: '+esc(String(r.languageName||selectedLanguage))+'</div>';
     }catch(error){
       if(result){
         const permissionError=String(error.message||"").includes("mangler rettighederne");
         result.innerHTML='<div class="badge closed">'+esc(error.message)+'</div>'+
-          (permissionError ? '<div style="margin-top:10px"><button type="button" class="btn small" onclick="addBotToDiscord()">🔐 Opdater bot-rettigheder</button></div>' : '');
+          (permissionError ? '<div style="margin-top:10px"><button type="button" class="btn small" onclick="addBotToDiscord()">🔐 Update bot permissions</button></div>' : '');
       }
     }
     finally{button.disabled=false;button.textContent="🚀 Deploy this template";}
@@ -225,7 +225,7 @@
           '<div class="field"><label>Server language</label><select id="snTemplateLanguage">'+TEMPLATE_LANGUAGES.map(function(item){return '<option value="'+item[0]+'">'+item[1]+'</option>';}).join("")+'</select></div>'+
         '</div>'+
         '<div id="customFeatures" style="display:none;margin-top:16px"><h3 style="margin-bottom:4px">🧰 Choose features</h3>'+customChecks+'</div>'+
-        '<div class="actions" style="margin-top:18px"><button type="button" class="btn primary" id="snTemplatePageApply">🚀 Opsæt denne skitse</button></div>'+
+        '<div class="actions" style="margin-top:18px"><button type="button" class="btn primary" id="snTemplatePageApply">🚀 Deploy this template</button></div>'+
         '<div id="snTemplatePageResult" style="margin-top:12px"></div>'+
       '</div>';
 
@@ -250,10 +250,10 @@
       if(!guilds.length){select.innerHTML='<option value="">Ingen Discord-servere</option>';document.getElementById("snTemplatePageApply").disabled=true;return;}
       if(!guilds.some(function(g){return String(g.id)===String(selectedGuild);}))selectedGuild=guilds[0].id;
       localStorage.setItem("shardnote_template_guild",selectedGuild);
-      select.innerHTML=guilds.map(function(g){return '<option value="'+esc(g.id)+'"'+(String(g.id)===String(selectedGuild)?" selected":"")+'>'+esc(g.name)+' · '+g.memberCount+' medlemmer</option>';}).join("");
+      select.innerHTML=guilds.map(function(g){return '<option value="'+esc(g.id)+'"'+(String(g.id)===String(selectedGuild)?" selected":"")+'>'+esc(g.name)+' · '+g.memberCount+' members</option>';}).join("");
       const languageSelect=document.getElementById("snTemplateLanguage");
       if(languageSelect){
-        if(!TEMPLATE_LANGUAGES.some(function(item){return item[0]===selectedLanguage;})) selectedLanguage="da";
+        if(!TEMPLATE_LANGUAGES.some(function(item){return item[0]===selectedLanguage;})) selectedLanguage="en";
         languageSelect.value=selectedLanguage;
         languageSelect.addEventListener("change",function(){
           selectedLanguage=this.value;
