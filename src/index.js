@@ -3281,6 +3281,28 @@ app.post("/api/bot/guilds/:guildId/templates/:templateKey", requireAuth, require
   }
 });
 
+app.post("/api/bot/official-template", requireAuth, requireAdmin, requireSiteOwner, async (req,res) => {
+  try {
+    if (!discordReady) return res.status(503).json({ error: "The Shardnote bot is not online yet." });
+    if (!client.dashboardApplyOfficialTemplate) {
+      return res.status(503).json({ error: "The official Discord setup is not available yet." });
+    }
+    const templateKey = String(req.body?.templateKey || "support").trim().toLowerCase();
+    const allowedTemplates = ["support","community","gaming","creator","shop","fivem-vip","fivem-esx","fivem-rp","rust","clan","streamer","custom"];
+    if (!allowedTemplates.includes(templateKey)) {
+      return res.status(400).json({ error: "Invalid official Discord template." });
+    }
+    const supportedLanguages = ["da","en","de","fr","es","it","nl","pt","sv","no","fi","pl","tr","ru","uk","ja","ko","zh"];
+    const language = supportedLanguages.includes(String(req.body?.language || "")) ? String(req.body.language) : "en";
+    const result = await client.dashboardApplyOfficialTemplate(templateKey, { language });
+    log("settings", "Official Shardnote Discord template deployed", req.user?.id || null);
+    res.json({ ok: true, result });
+  } catch (error) {
+    console.error("[Shardnote] Official Discord template failed:", error);
+    res.status(500).json({ error: error.message || "The official Discord template could not be deployed." });
+  }
+});
+
 app.patch("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, (req,res,next)=>requirePlan("member_plus",req,res,next), async (req, res) => {
   try {
     if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
