@@ -166,6 +166,7 @@
 
   window.selectDiscordTemplate=selectTemplate;
   window.shardnoteDeployOfficial=deployOfficialServer;
+  window.shardnoteRefreshOfficial=refreshOfficialServer;
   async function deployOfficialServer(){
     const result=document.getElementById("snOfficialAdminResult") || document.getElementById("snTemplatePageResult");
     const button=document.getElementById("snOfficialAdminDeploy") || document.getElementById("snOfficialDeploy");
@@ -195,6 +196,38 @@
     }finally{
       button.disabled=false;
       button.textContent="🚀 Opret Shardnote-server på valgt Discord";
+    }
+  }
+
+  async function refreshOfficialServer(){
+    const result=document.getElementById("snOfficialAdminResult");
+    const button=document.getElementById("snOfficialAdminRefresh");
+    if(!button)return;
+    const language=document.getElementById("snOfficialAdminLanguage")?.value || selectedLanguage || "en";
+    const guildSelect=document.getElementById("snOfficialAdminGuild");
+    const guildId=guildSelect?.value || "";
+    const guildName=guildSelect?.selectedOptions?.[0]?.textContent || guildId;
+    if(!guildId){
+      if(result) result.innerHTML='<div class="badge pending">Vælg en Discord-server først.</div>';
+      return;
+    }
+    if(!confirm("Opdater Discord-skitse på "+guildName+"? Dette synkroniserer Shardnote-kanaler, roller og tilladelser uden at slette eksisterende indhold."))return;
+    button.disabled=true;
+    button.textContent="⏳ Opdaterer Discord-skitse…";
+    try{
+      const response=await apiCall("/api/bot/official-template",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({templateKey:"official",language,guildId})
+      });
+      const r=response.result||{};
+      if(result) result.innerHTML='<div class="badge open">✅ Discord-skitse opdateret</div>'+
+        '<div style="color:var(--muted);font-size:12px;margin-top:8px">'+esc(String((r.channels||[]).length))+' kanaler behandlet · '+esc(String(r.createdRoles||0))+' nye roller · '+esc(String((r.staffVoiceRooms||[]).length))+' support rooms · '+esc(String(r.languageName||language))+'</div>';
+    }catch(error){
+      if(result) result.innerHTML='<div class="badge closed">'+esc(error.message)+'</div>';
+    }finally{
+      button.disabled=false;
+      button.textContent="🔄 Opdater Discord-skitse";
     }
   }
 
