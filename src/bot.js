@@ -1085,11 +1085,11 @@ function createBot({ state, db, log, createTicket, setReady }) {
     }
 
     const panelByChannel = {
-      "ticket-panel": { title: "🎫 Support tickets", description: "Har du brug for hjælp? Tryk på knappen for at oprette en privat ticket.", customId: "ticket_create:support", label: "🎫 Opret support-ticket" },
-      "support": { title: "🎫 Support", description: "Få hjælp fra vores supportteam via en privat ticket.", customId: "ticket_create:support", label: "🎫 Opret support-ticket" },
-      "support-room-1": { title: "🎫 Support room 1", description: "Brug dette område til support. Opret en privat ticket, hvis sagen kræver staff.", customId: "ticket_create:support", label: "🎫 Opret support-ticket" },
-      "support-room-2": { title: "🎫 Support room 2", description: "Brug dette område til support. Opret en privat ticket, hvis sagen kræver staff.", customId: "ticket_create:support", label: "🎫 Opret support-ticket" },
-      "support-room-3": { title: "🎫 Support room 3", description: "Brug dette område til support. Opret en privat ticket, hvis sagen kræver staff.", customId: "ticket_create:support", label: "🎫 Opret support-ticket" },
+      "ticket-panel": { title: "🎫 Support Tickets", description: "Need help? Create a private support ticket and our team will assist you.", customId: "ticket_create:support", label: "🎫 Create Support Ticket" },
+      "support": { title: "🎫 Support", description: "Get help from the Shardnote support team through a private ticket.", customId: "ticket_create:support", label: "🎫 Create Support Ticket" },
+      "support-room-1": { title: "🎫 Support Room 1", description: "Use this area for support. Create a private ticket when staff assistance is required.", customId: "ticket_create:support", label: "🎫 Create Support Ticket" },
+      "support-room-2": { title: "🎫 Support Room 2", description: "Use this area for support. Create a private ticket when staff assistance is required.", customId: "ticket_create:support", label: "🎫 Create Support Ticket" },
+      "support-room-3": { title: "🎫 Support Room 3", description: "Use this area for support. Create a private ticket when staff assistance is required.", customId: "ticket_create:support", label: "🎫 Create Support Ticket" },
       "bug-reports": { title: "🐞 Fejlrapporter", description: "Har du fundet en fejl? Tryk herunder og opret en privat fejlrapport-ticket.", customId: "ticket_create:bug", label: "🐞 Opret fejlrapport" },
       "player-reports": { title: "🚨 Player reports", description: "Rapportér en spiller. Din sag bliver oprettet som en privat ticket til staff.", customId: "ticket_create:report", label: "🚨 Opret player report" },
       "ban-appeals": { title: "⚖️ Ban appeals", description: "Vil du anke en straf? Opret en privat ticket til staff.", customId: "ticket_create:appeal", label: "⚖️ Opret ban appeal" },
@@ -1145,7 +1145,11 @@ function createBot({ state, db, log, createTicket, setReady }) {
       "feedback": ["📝 Feedback", "Send feedback til serveren."],
       "samarbejde": ["🤝 Samarbejde", "Find andre til samarbejde."],
       "fan-art": ["🎨 Fan art", "Del fan art og kreativt indhold."],
-      "events": ["🎉 Events", "Serverevents og aktiviteter."]
+      "events": ["🎉 Events", "Server events and activities."],
+      "support-info": ["🎫 Support Information", "How support works, where to open a ticket, and when to join a support room."],
+      "faq": ["❓ FAQ", "Frequently asked questions about the server and Shardnote."],
+      "known-issues": ["🛠 Known Issues", "Current known issues and their status."],
+      "waiting-for-support": ["🕐 Waiting for Support", "Use the support queue while you wait for a support agent."]
     };
 
     async function seedTemplateChannel(channel, baseName) {
