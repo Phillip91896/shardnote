@@ -9,6 +9,7 @@ const {
   ButtonStyle,
   AttachmentBuilder,
   ModalBuilder,
+  StringSelectMenuBuilder,
   TextInputBuilder,
   TextInputStyle,
   Partials
@@ -483,7 +484,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
         ],
         categories: [
           "📌 INFORMATION","📢 ANNOUNCEMENTS","🚀 SHARDNOTE","💬 COMMUNITY",
-          "🎫 SUPPORT","🤝 PARTNERS","🔊 VOICE","🔒 STAFF"
+          "🎫 SUPPORT","🎟️ TICKETS","🤝 PARTNERS","🔊 VOICE","🔒 STAFF"
         ],
         channels: [
           "velkommen","regler","server-info","how-to-join","faq","roles",
@@ -1195,7 +1196,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
     }
 
     const panelByChannel = {
-      "ticket-panel": { title: "🎫 Support Tickets", description: "Need help? Create a private support ticket and our team will assist you.", customId: "ticket_create:support", label: "🎫 Create Support Ticket" },
+      "ticket-panel": { title: "🎫 Shardnote Support Center", description: "Choose what you need help with below. Shardnote will create a private ticket channel for you.", customId: "ticket_type_select", label: "🎫 Choose ticket type", select: true },
       "support": { title: "🎫 Support", description: "Get help from the Shardnote support team through a private ticket.", customId: "ticket_create:support", label: "🎫 Create Support Ticket" },
       "support-room-1": { title: "🎫 Support Room 1", description: "Use this area for support. Create a private ticket when staff assistance is required.", customId: "ticket_create:support", label: "🎫 Create Support Ticket" },
       "support-room-2": { title: "🎫 Support Room 2", description: "Use this area for support. Create a private ticket when staff assistance is required.", customId: "ticket_create:support", label: "🎫 Create Support Ticket" },
@@ -1212,6 +1213,56 @@ function createBot({ state, db, log, createTicket, setReady }) {
       "forslag": { title: "💡 Forslag", description: "Her kan communityet dele forslag og idéer.", customId: null, label: null },
       "suggestions": { title: "💡 Suggestions", description: "Her kan communityet dele forslag og idéer.", customId: null, label: null }
     };
+
+    function buildTicketTypeMenu() {
+      const options = [
+        { label:"General Support", value:"support", description:"Questions, setup help and general assistance.", emoji:"🎫" },
+        { label:"Bug Report", value:"bug", description:"Report a website or bot bug.", emoji:"🐞" },
+        { label:"Player / User Report", value:"report", description:"Report a user or server incident.", emoji:"🚨" },
+        { label:"Ban Appeal", value:"appeal", description:"Ask staff to review a moderation action.", emoji:"⚖️" },
+        { label:"Billing & Payments", value:"billing", description:"Plans, payments, refunds and billing questions.", emoji:"💳" },
+        { label:"Account Help", value:"account", description:"Login, account or website access issues.", emoji:"👤" },
+        { label:"Partnership", value:"partnership", description:"Business and partnership requests.", emoji:"🤝" },
+        { label:"Feature Request", value:"feature", description:"Suggest a new Shardnote feature or improvement.", emoji:"💡" }
+      ];
+      return new ActionRowBuilder().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId("ticket_type_select")
+          .setPlaceholder("Vælg hvad din ticket handler om…")
+          .setMinValues(1)
+          .setMaxValues(1)
+          .addOptions(options.map(item => ({
+            label: item.label,
+            value: item.value,
+            description: item.description,
+            emoji: item.emoji
+          })))
+      );
+    }
+
+    async function ensureTicketPanel(channel) {
+      if (!channel?.isTextBased?.()) return;
+      const embeds = [
+        new EmbedBuilder()
+          .setTitle("🎫 Shardnote Support Center")
+          .setDescription("Har du brug for hjælp? Vælg nedenfor, hvad din ticket handler om. Botten opretter derefter en privat ticket-kanal til dig.")
+          .addFields(
+            { name:"Sådan virker det", value:"1. Vælg ticket-type\n2. Beskriv dit problem\n3. Din private kanal bliver oprettet\n4. Staff hjælper dig", inline:false },
+            { name:"Ticket-typer", value:"🎫 Support · 🐞 Bug · 🚨 Report · ⚖️ Appeal · 💳 Billing · 👤 Account · 🤝 Partnership · 💡 Feature", inline:false }
+          )
+          .setColor(0x6d5dfc)
+      ];
+      const messages = await channel.messages.fetch({ limit: 25 }).catch(() => null);
+      const existing = messages?.find(message =>
+        message.author?.id === client.user?.id &&
+        message.embeds?.some(embed => String(embed.title || "").includes("Shardnote Support Center"))
+      );
+      if (existing) {
+        await existing.edit({ embeds, components:[buildTicketTypeMenu()] }).catch(() => {});
+      } else {
+        await channel.send({ embeds, components:[buildTicketTypeMenu()] }).catch(() => {});
+      }
+    }
 
     const genericIntro = {
       "velkommen": ["👋 Velkommen", "Velkommen til serveren! Læs reglerne og brug de relevante kanaler nedenfor."],
@@ -1288,6 +1339,10 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     async function seedTemplateChannel(channel, baseName) {
       if (!channel?.isTextBased?.()) return;
+      if (baseName === "ticket-panel" || baseName === "support") {
+        await ensureTicketPanel(channel);
+        return;
+      }
       const panel = panelByChannel[baseName];
       const intro = genericIntro[baseName];
       const needle = panel?.title || intro?.[0] || config.name;
@@ -1357,8 +1412,8 @@ function createBot({ state, db, log, createTicket, setReady }) {
         await verification.send({embeds:[new EmbedBuilder().setTitle("✅ Verification").setDescription("Tryk for at få "+memberRole+"-rollen.").setColor(0x42d392)],components:[new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("verify").setLabel("✅ Verificer mig").setStyle(ButtonStyle.Success))]}).catch(()=>{});
       }
     }
-    if(ticketPanel && !(await hasPanel(ticketPanel, "ShardNote Ticket"))){
-      await ticketPanel.send({embeds:[new EmbedBuilder().setTitle("🎫 ShardNote Ticket").setDescription("Tryk på knappen for at oprette en privat support-ticket.").setColor(0x6d5dfc)],components:[new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("ticket_create").setLabel("🎫 Opret ticket").setStyle(ButtonStyle.Primary))]}).catch(()=>{});
+    if(ticketPanel){
+      await ensureTicketPanel(ticketPanel);
     }
 
     const current = await getGuildSettings(guild.id);
@@ -1433,19 +1488,22 @@ function createBot({ state, db, log, createTicket, setReady }) {
     }
   }
 
-  async function createTicketChannel(guild, user, title) {
+  async function createTicketChannel(guild, user, title, type = "support", ticketId = Date.now()) {
     const settings = await getGuildSettings(guild.id);
     const permissions = [
       { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
-      { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles] },
+      { id: user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.AttachFiles, PermissionFlagsBits.EmbedLinks] },
       { id: guild.client.user.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.ManageMessages] }
     ];
     if (settings.support_role_id) {
-      permissions.push({ id: settings.support_role_id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory] });
+      permissions.push({ id: settings.support_role_id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.EmbedLinks] });
     }
-    const safe = String(title || "support").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 32) || "support";
+    const safeType = String(type || "support").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 18) || "support";
+    const safeTitle = String(title || safeType).toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 22) || safeType;
+    const userPart = String(user.username || "user").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 16) || "user";
+    const channelName = ("ticket-" + String(ticketId) + "-" + safeType + "-" + userPart).slice(0, 95);
     return guild.channels.create({
-      name: "ticket-" + safe,
+      name: channelName,
       type: ChannelType.GuildText,
       parent: settings.ticket_category_id || undefined,
       permissionOverwrites: permissions,
@@ -1696,14 +1754,18 @@ function createBot({ state, db, log, createTicket, setReady }) {
     );
   }
 
-  async function openTemplateTicket(interaction, type = "support") {
+  async function openTemplateTicket(interaction, type = "support", intake = {}) {
     const ticketTypes = {
-      support: { title: "Support", label: "Support", description: "Beskriv dit spørgsmål eller problem, så hjælper supporten dig." },
-      bug: { title: "Fejlrapport", label: "Fejlrapport", description: "Beskriv fejlen, hvad du gjorde, og hvad du forventede skulle ske." },
-      report: { title: "Player report", label: "Player report", description: "Beskriv spilleren, hændelsen og vedhæft dokumentation, hvis du har det." },
-      appeal: { title: "Ban appeal", label: "Ban appeal", description: "Beskriv hvorfor din straf bør vurderes igen." },
-      whitelist: { title: "Whitelist ansøgning", label: "Whitelist", description: "Din ansøgning oprettes som en privat ticket til whitelist-teamet." },
-      application: { title: "Ansøgning", label: "Ansøgning", description: "Din ansøgning oprettes som en privat ticket til staff." }
+      support: { title:"Support", label:"Support", description:"Beskriv dit spørgsmål eller problem, så hjælper supporten dig.", priority:"normal" },
+      bug: { title:"Fejlrapport", label:"Fejlrapport", description:"Beskriv fejlen, hvad du gjorde, og hvad du forventede skulle ske.", priority:"high" },
+      report: { title:"Player report", label:"Player report", description:"Beskriv brugeren, hændelsen og vedhæft dokumentation.", priority:"high" },
+      appeal: { title:"Ban appeal", label:"Ban appeal", description:"Beskriv hvorfor din straf bør vurderes igen.", priority:"high" },
+      billing: { title:"Billing", label:"Billing & Payments", description:"Fortæl os om betaling, abonnement, refundering eller fakturering.", priority:"normal" },
+      account: { title:"Account", label:"Account Help", description:"Fortæl os om login, adgang eller problemer med din Shardnote-konto.", priority:"normal" },
+      partnership: { title:"Partnership", label:"Partnership", description:"Fortæl os om din virksomhed eller dit partnerskabsforslag.", priority:"normal" },
+      feature: { title:"Feature Request", label:"Feature Request", description:"Beskriv funktionen eller forbedringen, du gerne vil se.", priority:"normal" },
+      whitelist: { title:"Whitelist ansøgning", label:"Whitelist", description:"Din ansøgning oprettes som en privat ticket til whitelist-teamet.", priority:"normal" },
+      application: { title:"Ansøgning", label:"Ansøgning", description:"Din ansøgning oprettes som en privat ticket til staff.", priority:"normal" }
     };
     const info = ticketTypes[type] || ticketTypes.support;
     const safeTitle = info.title.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 28) || "support";
@@ -1719,12 +1781,12 @@ function createBot({ state, db, log, createTicket, setReady }) {
           title: info.title,
           user: interaction.user.tag,
           status: "open",
-          priority: type === "bug" || type === "report" ? "high" : "normal",
+          priority: info.priority || "normal",
           guildId: interaction.guild.id
         })
       : { id: Date.now(), title: info.title };
 
-    const channel = await createTicketChannel(interaction.guild, interaction.user, safeTitle);
+    const channel = await createTicketChannel(interaction.guild, interaction.user, safeTitle, type, ticket.id);
     if (db) {
       await db.query(
         "UPDATE public.tickets SET guild_id=$1, user_id=$2, channel_id=$3 WHERE id=$4",
@@ -1743,7 +1805,11 @@ function createBot({ state, db, log, createTicket, setReady }) {
         new EmbedBuilder()
           .setTitle("🎫 " + info.label + " #" + ticket.id)
           .setDescription("Hej <@" + interaction.user.id + ">\n\n" + info.description)
-          .addFields({ name: "Type", value: info.label, inline: true })
+          .addFields(
+            { name: "Type", value: info.label, inline: true },
+            ...(intake.subject ? [{ name:"Emne", value:String(intake.subject).slice(0, 200), inline:true }] : []),
+            ...(intake.details ? [{ name:"Beskrivelse", value:String(intake.details).slice(0, 1000), inline:false }] : [])
+          )
           .setColor(0x6d5dfc)
       ],
       components: [controls]
@@ -1918,12 +1984,16 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     if (command === "ticket-panel") {
       if (!requirePermission(PermissionFlagsBits.ManageGuild)) return true;
-      const row = new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId("ticket_create").setLabel("🎫 Opret ticket").setStyle(ButtonStyle.Primary)
-      );
+      const embeds = [
+        new EmbedBuilder()
+          .setTitle("🎫 Shardnote Support Center")
+          .setDescription("Vælg nedenfor, hvad din ticket handler om. Botten opretter derefter en privat ticket-kanal til dig.")
+          .addFields({ name:"Ticket-typer", value:"🎫 Support · 🐞 Bug · 🚨 Report · ⚖️ Appeal · 💳 Billing · 👤 Account · 🤝 Partnership · 💡 Feature" })
+          .setColor(0x6d5dfc)
+      ];
       await interaction.channel.send({
-        embeds: [new EmbedBuilder().setTitle("🎫 Support").setDescription("Tryk på knappen for at åbne en privat support-ticket.").setColor(0x6d5dfc)],
-        components: [row]
+        embeds,
+        components: [buildTicketTypeMenu()]
       });
       await interaction.reply({ content: "✅ Ticket-panel sendt.", ephemeral: true });
       return true;
@@ -2737,9 +2807,45 @@ function createBot({ state, db, log, createTicket, setReady }) {
   });
 
   client.on("interactionCreate", async (interaction) => {
+    if (interaction.isStringSelectMenu() && interaction.customId === "ticket_type_select") {
+      if (!interaction.guild) return interaction.reply({ content:"Denne menu virker kun i en server.", ephemeral:true });
+      const type = interaction.values?.[0] || "support";
+      const ticketTitles = {
+        support:"General Support", bug:"Bug Report", report:"Player / User Report", appeal:"Ban Appeal",
+        billing:"Billing & Payments", account:"Account Help", partnership:"Partnership", feature:"Feature Request"
+      };
+      const modal = new ModalBuilder()
+        .setCustomId("ticket_form:" + type)
+        .setTitle(String(ticketTitles[type] || "Support").slice(0,45));
+      const subjectInput = new TextInputBuilder()
+        .setCustomId("ticket_subject")
+        .setLabel("Emne")
+        .setStyle(TextInputStyle.Short)
+        .setRequired(true)
+        .setMaxLength(100);
+      const detailsInput = new TextInputBuilder()
+        .setCustomId("ticket_details")
+        .setLabel("Beskriv dit problem")
+        .setStyle(TextInputStyle.Paragraph)
+        .setRequired(true)
+        .setMaxLength(1000);
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(subjectInput),
+        new ActionRowBuilder().addComponents(detailsInput)
+      );
+      return interaction.showModal(modal);
+    }
+
     if (interaction.isButton()) return handleFeatureButton(interaction).catch(error => log("error", "Button error: " + error.message));
     if (interaction.isModalSubmit()) {
-      if (!interaction.guild || !interaction.customId.startsWith("form_submit:")) return;
+      if (!interaction.guild) return;
+      if (interaction.customId.startsWith("ticket_form:")) {
+        const type = interaction.customId.split(":")[1] || "support";
+        const subject = interaction.fields.getTextInputValue("ticket_subject");
+        const details = interaction.fields.getTextInputValue("ticket_details");
+        return openTemplateTicket(interaction, type, { subject, details });
+      }
+      if (!interaction.customId.startsWith("form_submit:")) return;
       try {
         const panelId = interaction.customId.split(":")[1];
         const name = interaction.fields.getTextInputValue("form_name");
@@ -2812,7 +2918,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
             })
           : { id: Date.now(), title, status: "open" };
 
-        const channel = await createTicketChannel(interaction.guild, interaction.user, title);
+        const channel = await createTicketChannel(interaction.guild, interaction.user, title, "support", ticket.id);
         if (db) {
           await db.query(
             "UPDATE public.tickets SET guild_id=$1,user_id=$2,channel_id=$3 WHERE id=$4",
