@@ -155,8 +155,16 @@ function install() {
             }
           }
           if (!productId) return res.status(503).json({ error: 'SellAuth-produktet kunne ikke findes. Sæt SELLAUTH_PRODUCT_MAP i Render.' });
-          const cartItem = { product_id: productId, quantity: 1 }; if (variantId) cartItem.variant_id = variantId;
-          const checkout = await sellauthRequest('POST', `/v1/shops/${encodeURIComponent(SHOP_ID)}/checkout`, { cart: [cartItem], email: user.email, newsletter: false });
+          // SellAuth Checkout API expects camelCase catalog identifiers.
+          // Using product_id / variant_id causes a 422 because the API only accepts
+          // productId + variantId for catalog items (or name + price for custom items).
+          const cartItem = { productId, quantity: 1 };
+          if (variantId) cartItem.variantId = variantId;
+          const checkout = await sellauthRequest('POST', `/v1/shops/${encodeURIComponent(SHOP_ID)}/checkout`, {
+            cart: [cartItem],
+            email: user.email,
+            newsletter: false
+          });
           const url = checkout?.url || checkout?.checkout_url || checkout?.checkoutUrl || checkout?.data?.url || checkout?.data?.checkout_url || checkout?.data?.checkoutUrl;
           if (!url) throw new Error('SellAuth returnerede ikke en checkout-URL.');
           return res.json({ url, plan, months });
