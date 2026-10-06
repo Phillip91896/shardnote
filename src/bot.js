@@ -939,13 +939,14 @@ function createBot({ state, db, log, createTicket, setReady }) {
       .map(r => roles[r.key]?.id)
       .filter(Boolean);
     const memberRoleIds = roleList.map(r=>r.id);
-    const staffVoiceRoleIds = [...new Set([
+    const extendedStaffRoleIds = [...new Set([
       ...staffRoleIds,
       ...extraRoleSpecs
-        .filter(r => /support|moderator|developer/i.test(String(r.name)))
+        .filter(r => /support|moderator|developer|manager|event|media|content|translator/i.test(String(r.name)))
         .map(r => guild.roles.cache.find(role => role.name === r.name)?.id)
         .filter(Boolean)
     ])];
+    const staffVoiceRoleIds = extendedStaffRoleIds;
     async function ensureDepartmentSection(department) {
       const allowedIds = [
         ...staffRoleIds,
@@ -1007,7 +1008,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     const privateOverwrites = [
       overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel]),
-      ...staffRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages])),
+      ...extendedStaffRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages])),
       overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
     const communityOverwrites = [
