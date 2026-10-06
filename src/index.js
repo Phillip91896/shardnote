@@ -3288,7 +3288,7 @@ app.post("/api/bot/official-template", requireAuth, requireAdmin, requireSiteOwn
       return res.status(503).json({ error: "The official Discord setup is not available yet." });
     }
     const templateKey = String(req.body?.templateKey || "support").trim().toLowerCase();
-    const allowedTemplates = ["support","community","gaming","creator","shop","fivem-vip","fivem-esx","fivem-rp","rust","clan","streamer","custom"];
+    const allowedTemplates = ["official","support","community","gaming","creator","shop","fivem-vip","fivem-esx","fivem-rp","rust","clan","streamer","custom"];
     if (!allowedTemplates.includes(templateKey)) {
       return res.status(400).json({ error: "Invalid official Discord template." });
     }
