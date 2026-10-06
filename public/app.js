@@ -1,5 +1,5 @@
-const pages = ["dashboard","spot","tickets","messages","commands","features","templates","upgrades","store","activate","music","settings","logs","admin"];
-const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord Templates",upgrades:"Opgraderinger",store:"Store",activate:"Aktivér key",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel"};
+const pages = ["dashboard","spot","tickets","messages","commands","features","templates","upgrades","store","activate","music","settings","logs","admin","staff-applications"];
+const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord Templates",upgrades:"Opgraderinger",store:"Store",activate:"Aktivér key",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel","staff-applications":"Staff ansøgninger"};
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true,buttonLabels:{}};
 let ticketCache = [];
 let adminTicketCache = [];
@@ -25,6 +25,7 @@ document.addEventListener("click",function(event){
 function navigate(page){
   if(!pages.includes(page)) return;
   if(page==="settings" && currentUser && currentUser.role!=="admin" && currentUser.plan!=="member_pro") return;
+  if(page==="staff-applications" && currentUser && currentUser.role!=="admin" && !currentUser.applicationReviewer) return;
   pages.forEach(p=>{
     const el=document.getElementById("page-"+p);
     if(el) el.classList.toggle("active",p===page);
@@ -42,6 +43,7 @@ function navigate(page){
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
   if(page==="admin"){ loadAdminTickets(); loadUsers(); loadDatabaseSummary(); loadIpCenter(); loadSerialGuilds(); loadSerialKeysList(); }
+  if(page==="staff-applications") loadStaffApplications();
 }
 
 
@@ -789,9 +791,55 @@ async function loadUsers(){
           <b>${escapeHtml(u.name)}</b>
           <small>${escapeHtml(u.email)} · ${escapeHtml(u.role)} · <b>${escapeHtml(planNames[u.plan]||"Member")}</b> · ${banStatus}</small>
         </div>
-        ${roleButton} ${planButton} ${moderationButtons} ${deleteButton}
+        ${roleButton} ${planButton} ${u.role==="admin" && u.id!==currentUser?.id ? `<button class="btn small" onclick="toggleApplicationReviewer(${u.id},${u.applicationReviewer?"false":"true"})">${u.applicationReviewer?"Remove Application Reviewer":"Grant Application Reviewer"}</button>` : ""} ${moderationButtons} ${deleteButton}
       </div>`;
     }).join("")||'<div class="empty">Ingen brugere.</div>';
+  }catch(e){toast(e.message)}
+}
+
+async function loadStaffApplications(){
+  const node=document.getElementById("staffApplicationList");
+  if(!node) return;
+  try{
+    const items=await api("/api/admin/staff-applications");
+    const filter=document.getElementById("staffApplicationStatusFilter")?.value || "all";
+    const filtered=filter==="all"?items:items.filter(item=>item.status===filter);
+    const count=document.getElementById("staffApplicationCount");
+    if(count) count.textContent=filtered.length+" ansøgning"+(filtered.length===1?"":"er");
+    node.innerHTML=filtered.length?filtered.map(app=>{
+      const statusBadge=app.status==="reviewed"?'<span class="badge open">Gennemgået</span>':'<span class="badge pending">Ny</span>';
+      const target=app.applyingFor==="both"?"Website + Bot":app.applyingFor==="website"?"Website":"Bot";
+      return '<div class="application-card">'+
+        '<div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap">'+
+          '<div><b style="font-size:16px">'+escapeHtml(app.fullName)+'</b><div class="meta">'+escapeHtml(app.email)+' · '+escapeHtml(app.discordUsername)+' · '+escapeHtml(target)+'</div></div>'+
+          '<div>'+statusBadge+'</div>'+
+        '</div>'+
+        '<div class="answers">'+
+          '<div class="answer"><b>Personlige oplysninger</b><div>Alder: '+escapeHtml(app.age||"Ikke oplyst")+'\nLand: '+escapeHtml(app.country||"Ikke oplyst")+'\nTidszone: '+escapeHtml(app.timezone||"Ikke oplyst")+'\nDiscord ID: '+escapeHtml(app.discordId||"Ikke oplyst")+'</div></div>'+
+          '<div class="answer"><b>Tilgængelighed</b><div>'+escapeHtml(app.availability||"Ikke oplyst")+'</div></div>'+
+          '<div class="answer"><b>Erfaring</b><div>'+escapeHtml(app.experience||"Ikke oplyst")+'</div></div>'+
+          '<div class="answer"><b>Hvorfor Shardnote?</b><div>'+escapeHtml(app.whyJoin)+'</div></div>'+
+          '<div class="answer"><b>Styrker</b><div>'+escapeHtml(app.strengths||"Ikke oplyst")+'</div></div>'+
+          '<div class="answer"><b>Konflikthåndtering</b><div>'+escapeHtml(app.conflictHandling||"Ikke oplyst")+'</div></div>'+
+          '<div class="answer"><b>Ekstra information</b><div>'+escapeHtml(app.extraInfo||"Ikke oplyst")+'</div></div>'+
+        '</div>'+
+        '<div class="actions"><button class="btn small" onclick="setStaffApplicationStatus('+app.id+',\''+(app.status==="reviewed"?"new":"reviewed")+'\')">'+(app.status==="reviewed"?"Markér som ny":"Markér som gennemgået")+'</button></div>'+
+      '</div>';
+    }).join(""):'<div class="empty">Ingen staff-ansøgninger.</div>';
+  }catch(e){node.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';}
+}
+async function setStaffApplicationStatus(id,status){
+  try{
+    await api("/api/admin/staff-applications/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
+    toast("✅ Ansøgning opdateret");
+    loadStaffApplications();
+  }catch(e){toast(e.message)}
+}
+async function toggleApplicationReviewer(id,enabled){
+  try{
+    await api("/api/admin/users/"+id+"/application-reviewer",{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({enabled})});
+    toast(enabled?"✅ Application Reviewer granted":"✅ Application Reviewer removed");
+    loadUsers();
   }catch(e){toast(e.message)}
 }
 
@@ -941,6 +989,7 @@ async function activateLicenseKey(){
 }
 
 let currentUser=null;
+document.addEventListener("change",function(event){ if(event.target?.id==="staffApplicationStatusFilter") loadStaffApplications(); });
 async function checkLogin(){
   try{
     const r=await fetch("/api/me");
@@ -960,6 +1009,10 @@ async function checkLogin(){
 function unlockDashboard(){
   document.getElementById("loginScreen")?.remove();
   document.body.classList.remove("locked");
+  if(currentUser?.role!=="admin" && !currentUser?.applicationReviewer){
+    document.querySelector('[data-page="staff-applications"]')?.remove();
+    document.getElementById("page-staff-applications")?.remove();
+  }
   if(currentUser?.role!=="admin"){
     document.querySelector('[data-page="admin"]')?.remove();
     document.querySelector('[data-page="logs"]')?.remove();
