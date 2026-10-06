@@ -3735,8 +3735,14 @@ body.locked > .app{display:none}
       <div class="badge open">OWNER ONLY</div>
     </div>
     <p style="color:var(--muted);line-height:1.6;margin:0 0 14px">
-      Opret den tomme Discord-server fra din egen Discord-konto først. Tilføj derefter Shardnote Bot til serveren og tryk på knappen. Botten opsætter roller, kategorier, kanaler, waiting queue og Support Room 1–5 på den officielle server.
+      Opret den tomme Discord-server fra din egen Discord-konto først. Tilføj derefter Shardnote Bot til serveren og tryk på knappen. Botten opsætter den officielle Shardnote-struktur uden at slette eksisterende indhold.
     </p>
+    <div class="grid four" style="margin-top:14px">
+      <div class="card"><b>25+</b><div style="color:var(--muted);font-size:11px;margin-top:3px">roller</div></div>
+      <div class="card"><b>42</b><div style="color:var(--muted);font-size:11px;margin-top:3px">kanaler</div></div>
+      <div class="card"><b>8</b><div style="color:var(--muted);font-size:11px;margin-top:3px">announcement-kanaler</div></div>
+      <div class="card"><b>6+</b><div style="color:var(--muted);font-size:11px;margin-top:3px">support voice rooms</div></div>
+    </div>
     <div class="grid two" style="margin-bottom:12px">
       <div class="field">
         <label>Server language</label>
