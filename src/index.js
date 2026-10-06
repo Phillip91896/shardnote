@@ -4078,8 +4078,9 @@ body.locked > .app{display:none}
         <input value="Support + tickets + waiting queue + 6 voice rooms" disabled>
       </div>
     </div>
-    <div class="actions" style="margin-top:0">
+    <div class="actions" style="margin-top:0;display:flex;gap:8px;flex-wrap:wrap">
       <button type="button" class="btn primary" id="snOfficialAdminDeploy" onclick="window.shardnoteDeployOfficial && window.shardnoteDeployOfficial()">🚀 Opret Shardnote-server på valgt Discord</button>
+      <button type="button" class="btn" id="snOfficialAdminRefresh" onclick="window.shardnoteRefreshOfficial && window.shardnoteRefreshOfficial()">🔄 Opdater Discord-skitse</button>
     </div>
     <div id="snOfficialAdminResult" style="margin-top:12px"></div>
     <div style="color:var(--muted);font-size:11px;margin-top:9px">Discord-serveren skal oprettes i Discord først. Denne knap konfigurerer Shardnote-strukturen på den valgte Discord-server. Kun ejeren kan bruge knappen.</div>
