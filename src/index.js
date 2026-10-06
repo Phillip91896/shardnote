@@ -3393,7 +3393,7 @@ body.locked > .app{display:none}
     <button data-page="messages"><span class="icon">✉</span><span>Beskeder</span></button>
     <button data-page="commands"><span class="icon">⌘</span><span>Commands</span></button>
     <button data-page="features"><span class="icon">🧩</span><span>Bot-funktioner</span></button>
-    <button data-page="templates"><span class="icon">🧱</span><span>Discord-skitser</span></button>
+    <button data-page="templates"><span class="icon">🧱</span><span>Discord Templates</span></button>
     <button data-page="upgrades"><span class="icon">🚀</span><span>Opgraderinger</span></button>
     <button data-page="music"><span class="icon">♫</span><span>Musik</span></button>
     <button data-page="settings"><span class="icon">⚙</span><span>Indstillinger</span></button>
