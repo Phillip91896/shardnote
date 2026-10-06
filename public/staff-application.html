@@ -29,69 +29,92 @@
 </head>
 <body>
   <div class="wrap">
-    <div class="top"><div class="brand">Shardnote</div><a class="back" href="/">← Til hjemmesiden</a></div>
+    <div class="top"><div class="brand">Shardnote</div><div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><select id="languagePicker" aria-label="Language" style="min-width:150px"><option value="da">Dansk</option><option value="en">English</option><option value="de">Deutsch</option><option value="fr">Français</option><option value="es">Español</option><option value="it">Italiano</option><option value="nl">Nederlands</option><option value="pt">Português</option><option value="sv">Svenska</option><option value="no">Norsk</option><option value="fi">Suomi</option><option value="pl">Polski</option><option value="tr">Türkçe</option><option value="ru">Русский</option><option value="uk">Українська</option><option value="ja">日本語</option><option value="ko">한국어</option><option value="zh">中文</option></select><a class="back" href="/">← Til hjemmesiden</a></div></div>
     <section class="hero">
-      <span class="badge">STAFF APPLICATION</span>
-      <h1>Bliv en del af Shardnote staff-teamet.</h1>
-      <p>Vi søger seriøse personer, som vil være med til at hjælpe med Shardnote-hjemmesiden, Discord-botten og vores community. Udfyld ansøgningen så ærligt og grundigt som muligt.</p>
+      <span id="badgeText" class="badge">STAFF APPLICATION</span>
+      <h1 id="heroTitle">Bliv en del af Shardnote staff-teamet.</h1>
+      <p id="heroText">Vi søger seriøse personer, som vil være med til at hjælpe med Shardnote-hjemmesiden, Discord-botten og vores community. Udfyld ansøgningen så ærligt og grundigt som muligt.</p>
     </section>
 
     <div id="status" class="status" role="status"></div>
 
     <form id="staffForm">
       <section class="section">
-        <h2>👤 Dine oplysninger</h2>
+        <h2 id="personalTitle">👤 Dine oplysninger</h2>
         <div class="grid">
-          <div class="field"><label for="fullName">Fulde navn *</label><input id="fullName" name="fullName" maxlength="120" required></div>
-          <div class="field"><label for="email">Email *</label><input id="email" name="email" type="email" maxlength="200" required></div>
-          <div class="field"><label for="age">Alder</label><input id="age" name="age" type="number" min="10" max="100"></div>
-          <div class="field"><label for="discordUsername">Discord-navn *</label><input id="discordUsername" name="discordUsername" maxlength="120" placeholder="fx brugernavn eller brugernavn#0000" required></div>
-          <div class="field"><label for="discordId">Discord ID</label><input id="discordId" name="discordId" maxlength="32" inputmode="numeric" placeholder="Valgfrit"></div>
-          <div class="field"><label for="country">Land</label><input id="country" name="country" maxlength="120" placeholder="fx Danmark"></div>
-          <div class="field"><label for="timezone">Tidszone</label><input id="timezone" name="timezone" maxlength="80" placeholder="fx Europe/Copenhagen"></div>
+          <div class="field"><label id="fullNameLabel" for="fullName">Fulde navn *</label><input id="fullName" name="fullName" maxlength="120" required></div>
+          <div class="field"><label id="emailLabel" for="email">Email *</label><input id="email" name="email" type="email" maxlength="200" required></div>
+          <div class="field"><label id="ageLabel" for="age">Alder</label><input id="age" name="age" type="number" min="10" max="100"></div>
+          <div class="field"><label id="discordUsernameLabel" for="discordUsername">Discord-navn *</label><input id="discordUsername" name="discordUsername" maxlength="120" placeholder="fx brugernavn eller brugernavn#0000" required></div>
+          <div class="field"><label id="discordIdLabel" for="discordId">Discord ID</label><input id="discordId" name="discordId" maxlength="32" inputmode="numeric" placeholder="Valgfrit"></div>
+          <div class="field"><label id="countryLabel" for="country">Land</label><input id="country" name="country" maxlength="120" placeholder="fx Danmark"></div>
+          <div class="field"><label id="timezoneLabel" for="timezone">Tidszone</label><input id="timezone" name="timezone" maxlength="80" placeholder="fx Europe/Copenhagen"></div>
         </div>
       </section>
 
       <section class="section">
-        <h2>🛡️ Staff-rollen</h2>
+        <h2 id="staffTitle">🛡️ Staff-rollen</h2>
         <div class="grid">
-          <div class="field"><label for="applyingFor">Hvad vil du helst arbejde med?</label><select id="applyingFor" name="applyingFor"><option value="both">Både hjemmeside og bot</option><option value="website">Hjemmesiden</option><option value="bot">Discord-botten</option></select></div>
-          <div class="field"><label for="availability">Hvornår kan du typisk hjælpe?</label><input id="availability" name="availability" maxlength="120" placeholder="fx hverdage 16–21 og weekender"></div>
-          <div class="field"><label for="previousStaff">Har du været staff før?</label><select id="previousStaff" name="previousStaff"><option value="no">Nej</option><option value="yes">Ja</option></select></div>
-          <div class="field"><label for="experience">Fortæl om din tidligere staff-erfaring</label><textarea id="experience" name="experience" maxlength="5000" placeholder="Servere, moderation, support, udvikling, community osv."></textarea></div>
-          <div class="field full"><label for="whyJoin">Hvorfor vil du være en del af Shardnote? *</label><textarea id="whyJoin" name="whyJoin" maxlength="5000" required placeholder="Fortæl os, hvad der motiverer dig."></textarea></div>
-          <div class="field full"><label for="strengths">Hvad er dine stærkeste sider?</label><textarea id="strengths" name="strengths" maxlength="5000" placeholder="Fx kommunikation, support, udvikling, problemløsning, ansvarlighed..."></textarea></div>
-          <div class="field full"><label for="conflictHandling">Hvordan vil du håndtere en konflikt med en bruger eller et andet staff-medlem?</label><textarea id="conflictHandling" name="conflictHandling" maxlength="5000"></textarea></div>
-          <div class="field full"><label for="extraInfo">Er der andet, vi skal vide?</label><textarea id="extraInfo" name="extraInfo" maxlength="5000"></textarea></div>
+          <div class="field"><label id="applyingForLabel" for="applyingFor">Hvad vil du helst arbejde med?</label><select id="applyingFor" name="applyingFor"><option id="bothOption" value="both">Både hjemmeside og bot</option><option id="websiteOption" value="website">Hjemmesiden</option><option id="botOption" value="bot">Discord-botten</option></select></div>
+          <div class="field"><label id="availabilityLabel" for="availability">Hvornår kan du typisk hjælpe?</label><input id="availability" name="availability" maxlength="120" placeholder="fx hverdage 16–21 og weekender"></div>
+          <div class="field"><label id="previousStaffLabel" for="previousStaff">Har du været staff før?</label><select id="previousStaff" name="previousStaff"><option id="prevNoOption" value="no">Nej</option><option id="prevYesOption" value="yes">Ja</option></select></div>
+          <div class="field"><label id="experienceLabel" for="experience">Fortæl om din tidligere staff-erfaring</label><textarea id="experience" name="experience" maxlength="5000" placeholder="Servere, moderation, support, udvikling, community osv."></textarea></div>
+          <div class="field full"><label id="whyJoinLabel" for="whyJoin">Hvorfor vil du være en del af Shardnote? *</label><textarea id="whyJoin" name="whyJoin" maxlength="5000" required placeholder="Fortæl os, hvad der motiverer dig."></textarea></div>
+          <div class="field full"><label id="strengthsLabel" for="strengths">Hvad er dine stærkeste sider?</label><textarea id="strengths" name="strengths" maxlength="5000" placeholder="Fx kommunikation, support, udvikling, problemløsning, ansvarlighed..."></textarea></div>
+          <div class="field full"><label id="conflictHandlingLabel" for="conflictHandling">Hvordan vil du håndtere en konflikt med en bruger eller et andet staff-medlem?</label><textarea id="conflictHandling" name="conflictHandling" maxlength="5000"></textarea></div>
+          <div class="field full"><label id="extraInfoLabel" for="extraInfo">Er der andet, vi skal vide?</label><textarea id="extraInfo" name="extraInfo" maxlength="5000"></textarea></div>
         </div>
       </section>
 
       <section class="section">
         <div class="hp" aria-hidden="true"><label for="website">Website</label><input id="website" name="website" tabindex="-1" autocomplete="off"></div>
-        <label class="check"><input id="consent" name="consent" type="checkbox" required><span>Jeg bekræfter, at oplysningerne er korrekte, og at Shardnote-teamet må bruge oplysningerne til at behandle min staff-ansøgning.</span></label>
-        <div class="actions"><div class="hint">Vi bruger dine oplysninger til at vurdere din ansøgning og kontakte dig omkring den.</div><button class="submit" id="submitBtn" type="submit">Send staff-ansøgning</button></div>
+        <label class="check"><input id="consent" name="consent" type="checkbox" required><span id="consentText">Jeg bekræfter, at oplysningerne er korrekte, og at Shardnote-teamet må bruge oplysningerne til at behandle min staff-ansøgning.</span></label>
+        <div class="actions"><div id="hintText" class="hint">Vi bruger dine oplysninger til at vurdere din ansøgning og kontakte dig omkring den.</div><button class="submit" id="submitBtn" type="submit">Send staff-ansøgning</button></div>
       </section>
     </form>
   </div>
 
 <script>
-const form = document.getElementById("staffForm");
-const statusBox = document.getElementById("status");
-const submitBtn = document.getElementById("submitBtn");
-function showStatus(message, ok){statusBox.textContent=message;statusBox.className="status show "+(ok?"ok":"error");statusBox.scrollIntoView({behavior:"smooth",block:"center"});}
-form.addEventListener("submit", async (event)=>{
-  event.preventDefault();
-  submitBtn.disabled=true;submitBtn.textContent="Sender...";statusBox.className="status";
-  const data=Object.fromEntries(new FormData(form).entries());
-  data.consent=document.getElementById("consent").checked;
-  try{
-    const response=await fetch("/api/staff-applications",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});
-    const result=await response.json().catch(()=>({}));
-    if(!response.ok) throw new Error(result.error||"Ansøgningen kunne ikke sendes.");
-    showStatus("✅ "+result.message,true);form.reset();window.scrollTo({top:0,behavior:"smooth"});
-  }catch(error){showStatus("❌ "+error.message,false);}
-  finally{submitBtn.disabled=false;submitBtn.textContent="Send staff-ansøgning";}
-});
+const form=document.getElementById("staffForm"), statusBox=document.getElementById("status"), submitBtn=document.getElementById("submitBtn"), languagePicker=document.getElementById("languagePicker");
+const K=["badgeText","heroTitle","heroText","personalTitle","staffTitle","fullNameLabel","emailLabel","ageLabel","discordUsernameLabel","discordIdLabel","countryLabel","timezoneLabel","applyingForLabel","availabilityLabel","previousStaffLabel","experienceLabel","whyJoinLabel","strengthsLabel","conflictHandlingLabel","extraInfoLabel","bothOption","websiteOption","botOption","prevNoOption","prevYesOption","consentText","hintText"];
+const X={
+da:["STAFF APPLICATION","Bliv en del af Shardnote staff-teamet.","Vi søger seriøse personer, som vil være med til at hjælpe med Shardnote-hjemmesiden, Discord-botten og vores community.","👤 Dine oplysninger","🛡️ Staff-rollen","Fulde navn *","Email *","Alder","Discord-navn *","Discord ID","Land","Tidszone","Hvad vil du helst arbejde med?","Hvornår kan du typisk hjælpe?","Har du været staff før?","Fortæl om din tidligere staff-erfaring","Hvorfor vil du være en del af Shardnote? *","Hvad er dine stærkeste sider?","Hvordan vil du håndtere en konflikt med en bruger eller et andet staff-medlem?","Er der andet, vi skal vide?","Både hjemmeside og bot","Hjemmesiden","Discord-botten","Nej","Ja","Jeg bekræfter, at oplysningerne er korrekte, og at Shardnote-teamet må bruge oplysningerne til at behandle min staff-ansøgning.","Vi bruger dine oplysninger til at vurdere din ansøgning og kontakte dig omkring den."],
+en:["STAFF APPLICATION","Join the Shardnote staff team.","We are looking for reliable people to help with the Shardnote website, Discord bot and community.","👤 Your information","🛡️ Staff role","Full name *","Email *","Age","Discord username *","Discord ID","Country","Time zone","What would you like to work with?","When are you usually available?","Have you been staff before?","Tell us about your previous staff experience","Why do you want to join Shardnote? *","What are your strongest qualities?","How would you handle a conflict with a user or another staff member?","Is there anything else we should know?","Website and bot","Website","Discord bot","No","Yes","I confirm that the information is correct and that the Shardnote team may use it to process my staff application.","We use your information to review your application and contact you."],
+de:["STAFF-BEWERBUNG","Werde Teil des Shardnote-Staff-Teams.","Wir suchen zuverlässige Personen für Website, Discord-Bot und Community.","👤 Deine Angaben","🛡️ Staff-Rolle","Vollständiger Name *","E-Mail *","Alter","Discord-Name *","Discord-ID","Land","Zeitzone","Woran möchtest du arbeiten?","Wann bist du verfügbar?","Warst du schon einmal Staff?","Deine bisherige Staff-Erfahrung","Warum möchtest du Shardnote beitreten? *","Was sind deine Stärken?","Wie würdest du einen Konflikt lösen?","Gibt es noch etwas?","Website und Bot","Website","Discord-Bot","Nein","Ja","Ich bestätige, dass die Angaben korrekt sind und zur Bearbeitung der Bewerbung verwendet werden dürfen.","Wir verwenden deine Angaben zur Prüfung und Kontaktaufnahme."],
+fr:["CANDIDATURE STAFF","Rejoins l'équipe staff de Shardnote.","Nous recherchons des personnes sérieuses pour aider avec le site, le bot Discord et la communauté.","👤 Tes informations","🛡️ Rôle staff","Nom complet *","E-mail *","Âge","Nom Discord *","ID Discord","Pays","Fuseau horaire","Sur quoi veux-tu travailler ?","Quand es-tu disponible ?","As-tu déjà été staff ?","Ton expérience staff","Pourquoi veux-tu rejoindre Shardnote ? *","Tes points forts","Comment gérerais-tu un conflit ?","Autre chose ?","Site et bot","Site","Bot Discord","Non","Oui","Je confirme que les informations sont correctes et peuvent être utilisées pour traiter ma candidature.","Nous utilisons tes informations pour évaluer ta candidature et te contacter."],
+es:["SOLICITUD DE STAFF","Únete al equipo staff de Shardnote.","Buscamos personas responsables para ayudar con la web, el bot de Discord y la comunidad.","👤 Tus datos","🛡️ Rol de staff","Nombre completo *","Correo *","Edad","Nombre de Discord *","ID de Discord","País","Zona horaria","¿Con qué quieres trabajar?","¿Cuándo estás disponible?","¿Has sido staff antes?","Tu experiencia como staff","¿Por qué quieres unirte a Shardnote? *","¿Cuáles son tus puntos fuertes?","¿Cómo gestionarías un conflicto?","¿Algo más que debamos saber?","Web y bot","Web","Bot de Discord","No","Sí","Confirmo que la información es correcta y puede usarse para procesar mi solicitud.","Usamos tus datos para revisar la solicitud y contactarte."],
+it:["CANDIDATURA STAFF","Entra nel team staff di Shardnote.","Cerchiamo persone affidabili per aiutare con sito, bot Discord e community.","👤 Le tue informazioni","🛡️ Ruolo staff","Nome completo *","Email *","Età","Nome Discord *","ID Discord","Paese","Fuso orario","Su cosa vuoi lavorare?","Quando sei disponibile?","Hai già fatto parte dello staff?","La tua esperienza staff","Perché vuoi entrare in Shardnote? *","I tuoi punti di forza","Come gestiresti un conflitto?","Altro?","Sito e bot","Sito","Bot Discord","No","Sì","Confermo che le informazioni sono corrette e possono essere usate per la candidatura.","Usiamo le informazioni per valutare la candidatura e contattarti."],
+nl:["STAFFSOLLICITATIE","Word lid van het Shardnote staffteam.","We zoeken betrouwbare mensen voor website, Discord-bot en community.","👤 Jouw gegevens","🛡️ Staffrol","Volledige naam *","E-mail *","Leeftijd","Discord-naam *","Discord-ID","Land","Tijdzone","Waar wil je aan werken?","Wanneer ben je beschikbaar?","Ben je eerder staff geweest?","Je eerdere staffervaring","Waarom wil je bij Shardnote? *","Wat zijn je sterke punten?","Hoe pak je een conflict aan?","Nog iets?","Website en bot","Website","Discord-bot","Nee","Ja","Ik bevestig dat de informatie klopt en gebruikt mag worden voor mijn sollicitatie.","We gebruiken je gegevens om je sollicitatie te beoordelen en contact op te nemen."],
+pt:["CANDIDATURA STAFF","Faça parte da equipe staff da Shardnote.","Procuramos pessoas responsáveis para ajudar com site, bot Discord e comunidade.","👤 Suas informações","🛡️ Função de staff","Nome completo *","E-mail *","Idade","Nome do Discord *","ID do Discord","País","Fuso horário","Com o que quer trabalhar?","Quando está disponível?","Já foi staff antes?","Sua experiência como staff","Por que quer entrar na Shardnote? *","Seus pontos fortes","Como lidaria com um conflito?","Mais alguma coisa?","Site e bot","Site","Bot do Discord","Não","Sim","Confirmo que as informações estão corretas e podem ser usadas para processar minha candidatura.","Usamos suas informações para avaliar a candidatura e entrar em contato."],
+sv:["STAFFANSÖKAN","Bli en del av Shardnotes staffteam.","Vi söker pålitliga personer för webbplats, Discord-bot och community.","👤 Dina uppgifter","🛡️ Staffroll","Fullständigt namn *","E-post *","Ålder","Discord-namn *","Discord-ID","Land","Tidszon","Vad vill du arbeta med?","När är du tillgänglig?","Har du varit staff tidigare?","Din tidigare staff-erfarenhet","Varför vill du gå med i Shardnote? *","Dina styrkor","Hur skulle du hantera en konflikt?","Något mer?","Webbplats och bot","Webbplats","Discord-bot","Nej","Ja","Jag bekräftar att informationen är korrekt och får användas för min ansökan.","Vi använder dina uppgifter för att granska ansökan och kontakta dig."],
+no:["STAFFSØKNAD","Bli en del av Shardnotes staffteam.","Vi søker pålitelige personer for nettsted, Discord-bot og fellesskap.","👤 Din informasjon","🛡️ Staffrolle","Fullt navn *","E-post *","Alder","Discord-navn *","Discord-ID","Land","Tidssone","Hva vil du jobbe med?","Når er du tilgjengelig?","Har du vært staff før?","Din staff-erfaring","Hvorfor vil du bli med i Shardnote? *","Dine styrker","Hvordan håndterer du en konflikt?","Noe mer?","Nettsted og bot","Nettsted","Discord-bot","Nei","Ja","Jeg bekrefter at informasjonen er korrekt og kan brukes til søknaden.","Vi bruker opplysningene til å vurdere søknaden og kontakte deg."],
+fi:["STAFF-HAKEMUS","Liity Shardnoten staff-tiimiin.","Etsimme luotettavia henkilöitä sivuston, Discord-botin ja yhteisön avuksi.","👤 Tietosi","🛡️ Staff-rooli","Koko nimi *","Sähköposti *","Ikä","Discord-nimi *","Discord ID","Maa","Aikavyöhyke","Minkä parissa haluat työskennellä?","Milloin olet käytettävissä?","Oletko ollut staffina aiemmin?","Aiempi staff-kokemuksesi","Miksi haluat liittyä Shardnoteen? *","Vahvuutesi","Miten käsittelisit konfliktin?","Muuta?","Sivusto ja botti","Sivusto","Discord-botti","Ei","Kyllä","Vahvistan, että tiedot ovat oikein ja niitä saa käyttää hakemukseni käsittelyyn.","Käytämme tietojasi hakemuksen arviointiin ja yhteydenottoon."],
+pl:["PODANIE DO STAFF","Dołącz do zespołu staff Shardnote.","Szukamy odpowiedzialnych osób do pomocy przy stronie, bocie Discord i społeczności.","👤 Twoje dane","🛡️ Rola staff","Imię i nazwisko *","E-mail *","Wiek","Nazwa Discord *","ID Discord","Kraj","Strefa czasowa","Przy czym chcesz pracować?","Kiedy jesteś dostępny?","Czy byłeś wcześniej staffem?","Twoje doświadczenie staff","Dlaczego chcesz dołączyć do Shardnote? *","Twoje mocne strony","Jak rozwiążesz konflikt?","Coś jeszcze?","Strona i bot","Strona","Bot Discord","Nie","Tak","Potwierdzam, że informacje są prawdziwe i mogą być użyte do rozpatrzenia podania.","Używamy danych do oceny podania i kontaktu."],
+tr:["YETKİLİ BAŞVURUSU","Shardnote yetkili ekibine katıl.","Web sitesi, Discord botu ve topluluğa yardım edecek kişiler arıyoruz.","👤 Bilgilerin","🛡️ Yetkili rolü","Ad soyad *","E-posta *","Yaş","Discord kullanıcı adı *","Discord ID","Ülke","Saat dilimi","Ne üzerinde çalışmak istiyorsun?","Ne zaman müsaitsin?","Daha önce yetkili oldun mu?","Önceki yetkili deneyimin","Neden Shardnote'a katılmak istiyorsun? *","Güçlü yönlerin","Bir anlaşmazlığı nasıl yönetirsin?","Başka bir şey?","Site ve bot","Site","Discord botu","Hayır","Evet","Bilgilerin doğru olduğunu ve başvurumu işlemek için kullanılabileceğini onaylıyorum.","Bilgilerini başvuruyu değerlendirmek ve sana ulaşmak için kullanıyoruz."],
+ru:["ЗАЯВКА В STAFF","Вступите в команду Shardnote.","Мы ищем ответственных людей для помощи с сайтом, Discord-ботом и сообществом.","👤 Ваши данные","🛡️ Роль staff","Полное имя *","Email *","Возраст","Имя в Discord *","Discord ID","Страна","Часовой пояс","С чем вы хотите работать?","Когда вы доступны?","Вы раньше были staff?","Ваш опыт staff","Почему вы хотите присоединиться к Shardnote? *","Ваши сильные стороны","Как вы решите конфликт?","Что-то ещё?","Сайт и бот","Сайт","Discord-бот","Нет","Да","Я подтверждаю, что информация верна и может использоваться для рассмотрения моей заявки.","Мы используем данные для оценки заявки и связи."],
+uk:["ЗАЯВКА В STAFF","Приєднуйся до команди Shardnote.","Ми шукаємо відповідальних людей для допомоги з сайтом, Discord-ботом і спільнотою.","👤 Твої дані","🛡️ Роль staff","Повне ім'я *","Email *","Вік","Ім'я в Discord *","Discord ID","Країна","Часовий пояс","З чим ти хочеш працювати?","Коли ти доступний?","Ти раніше був staff?","Твій досвід staff","Чому ти хочеш приєднатися до Shardnote? *","Твої сильні сторони","Як ти вирішиш конфлікт?","Щось ще?","Сайт і бот","Сайт","Discord-бот","Ні","Так","Я підтверджую, що інформація правильна і може використовуватися для розгляду заявки.","Ми використовуємо дані для оцінки заявки та зв'язку з тобою."],
+ja:["STAFF 応募","Shardnote のスタッフチームに参加しよう。","サイト、Discord ボット、コミュニティを手伝ってくれる人を募集しています。","👤 あなたの情報","🛡️ スタッフ役割","氏名 *","メール *","年齢","Discord ユーザー名 *","Discord ID","国","タイムゾーン","何を担当したいですか？","いつ対応できますか？","以前スタッフをしたことがありますか？","スタッフ経験","なぜ Shardnote に参加したいですか？ *","あなたの強み","トラブルをどう解決しますか？","他にありますか？","サイトとボット","サイト","Discord ボット","いいえ","はい","情報が正確であり、応募審査に使用されることに同意します。","応募の審査と連絡のために情報を使用します。"],
+ko:["스태프 지원","Shardnote 스태프 팀에 합류하세요.","웹사이트, Discord 봇 및 커뮤니티를 도와줄 분을 찾고 있습니다.","👤 개인 정보","🛡️ 스태프 역할","이름 *","이메일 *","나이","Discord 이름 *","Discord ID","국가","시간대","어떤 업무를 맡고 싶나요?","언제 도움을 줄 수 있나요?","이전에 스태프였나요?","스태프 경험","왜 Shardnote에 참여하고 싶나요? *","강점","갈등을 어떻게 해결하겠나요?","추가 정보","웹사이트와 봇","웹사이트","Discord 봇","아니요","예","정보가 정확하며 지원서 처리에 사용할 수 있음을 확인합니다.","지원서 검토와 연락을 위해 정보를 사용합니다."],
+zh:["STAFF 申请","加入 Shardnote 工作人员团队。","我们正在寻找可靠的人来帮助网站、Discord 机器人和社区。","👤 你的信息","🛡️ Staff 角色","姓名 *","邮箱 *","年龄","Discord 用户名 *","Discord ID","国家","时区","你想负责什么？","你通常什么时候有空？","你以前做过 Staff 吗？","你的 Staff 经验","你为什么想加入 Shardnote？ *","你的优势","你会如何处理冲突？","还有其他信息吗？","网站和机器人","网站","Discord 机器人","否","是","我确认信息真实准确，并同意用于处理我的申请。","我们使用信息审核申请并联系你。"]
+};
+function applyLanguage(lang){
+ const v=X[lang]||X.en; document.documentElement.lang=lang; localStorage.setItem("shardnote_staff_language",lang); languagePicker.value=lang;
+ K.forEach((id,i)=>{const el=document.getElementById(id);if(el)el.textContent=v[i];});
+ document.querySelector(".back").textContent=({da:"← Til hjemmesiden",en:"← Back to website",de:"← Zur Website",fr:"← Retour au site",es:"← Volver al sitio",it:"← Torna al sito",nl:"← Terug naar website",pt:"← Voltar ao site",sv:"← Till webbplatsen",no:"← Til nettstedet",fi:"← Takaisin sivustolle",pl:"← Wróć na stronę",tr:"← Siteye dön",ru:"← На сайт",uk:"← На сайт",ja:"← サイトへ戻る",ko:"← 사이트로 돌아가기",zh:"← 返回网站"}[lang]);
+ submitBtn.dataset.normal=({da:"Send staff-ansøgning",en:"Submit staff application",de:"Staff-Bewerbung senden",fr:"Envoyer la candidature",es:"Enviar solicitud",it:"Invia candidatura",nl:"Staffsollicitatie versturen",pt:"Enviar candidatura",sv:"Skicka staffansökan",no:"Send staffsøknad",fi:"Lähetä hakemus",pl:"Wyślij podanie",tr:"Başvuruyu gönder",ru:"Отправить заявку",uk:"Надіслати заявку",ja:"スタッフ応募を送信",ko:"스태프 지원서 제출",zh:"提交 Staff 申请"}[lang]);
+ submitBtn.textContent=submitBtn.dataset.normal;
+}
+languagePicker.addEventListener("change",()=>applyLanguage(languagePicker.value));
+applyLanguage(localStorage.getItem("shardnote_staff_language")||"da");
+function showStatus(message,ok){statusBox.textContent=message;statusBox.className="status show "+(ok?"ok":"error");statusBox.scrollIntoView({behavior:"smooth",block:"center"});}
+form.addEventListener("submit",async event=>{
+ event.preventDefault();submitBtn.disabled=true;submitBtn.textContent="…";statusBox.className="status";
+ const data=Object.fromEntries(new FormData(form).entries());data.consent=document.getElementById("consent").checked;data.language=languagePicker.value;
+ try{const response=await fetch("/api/staff-applications",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(data)});const result=await response.json().catch(()=>({}));if(!response.ok)throw new Error(result.error||"The application could not be sent.");showStatus("✅ "+(result.message||"Submitted"),true);form.reset();applyLanguage(languagePicker.value);window.scrollTo({top:0,behavior:"smooth"});}
+ catch(error){showStatus("❌ "+error.message,false);}
+ finally{submitBtn.disabled=false;submitBtn.textContent=submitBtn.dataset.normal||"Submit";}});
 </script>
+</body>
+</html>
 </body>
 </html>
