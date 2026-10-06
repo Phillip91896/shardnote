@@ -171,14 +171,21 @@
     const button=document.getElementById("snOfficialAdminDeploy") || document.getElementById("snOfficialDeploy");
     if(!button)return;
     const language=document.getElementById("snOfficialAdminLanguage")?.value || document.getElementById("snTemplateLanguage")?.value || selectedLanguage;
-    if(!confirm("Deploy the selected support template to the official Shardnote Discord? Existing channels and roles will not be deleted."))return;
+    const guildSelect=document.getElementById("snOfficialAdminGuild");
+    const guildId=guildSelect?.value || "";
+    const guildName=guildSelect?.selectedOptions?.[0]?.textContent || guildId;
+    if(!guildId){
+      if(result) result.innerHTML='<div class="badge pending">Vælg en Discord-server først.</div>';
+      return;
+    }
+    if(!confirm("Opret Shardnote-serveren på "+guildName+"? Eksisterende kanaler og roller slettes ikke."))return;
     button.disabled=true;
     button.textContent="⏳ Deploying official server…";
     try{
       const response=await apiCall("/api/bot/official-template",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({templateKey:"official",language})
+        body:JSON.stringify({templateKey:"official",language,guildId})
       });
       const r=response.result||{};
       if(result) result.innerHTML='<div class="badge open">✅ Official Shardnote server is ready</div>'+
@@ -187,7 +194,7 @@
       if(result) result.innerHTML='<div class="badge closed">'+esc(error.message)+'</div>';
     }finally{
       button.disabled=false;
-      button.textContent="🚀 Deploy official Shardnote server";
+      button.textContent="🚀 Opret Shardnote-server på valgt Discord";
     }
   }
 
@@ -299,6 +306,17 @@
         card.style.display="block";
         const language=document.getElementById("snOfficialAdminLanguage");
         if(language) language.value=selectedLanguage;
+        const guildSelect=document.getElementById("snOfficialAdminGuild");
+        if(guildSelect){
+          try{
+            const guilds=await apiCall("/api/bot/guilds");
+            guildSelect.innerHTML=guilds.length
+              ? guilds.map(function(g){ return '<option value="'+esc(g.id)+'">'+esc(g.name)+' · '+esc(String(g.memberCount||0))+' members</option>'; }).join("")
+              : '<option value="">Ingen Discord-servere fundet</option>';
+          }catch(error){
+            guildSelect.innerHTML='<option value="">Kunne ikke hente Discord-servere</option>';
+          }
+        }
       }
     }catch(error){
       console.warn("Official admin setup visibility could not be loaded:",error);
