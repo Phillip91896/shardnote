@@ -178,11 +178,11 @@
       const response=await apiCall("/api/bot/official-template",{
         method:"POST",
         headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({templateKey:"support",language})
+        body:JSON.stringify({templateKey:"official",language})
       });
       const r=response.result||{};
       if(result) result.innerHTML='<div class="badge open">✅ Official Shardnote server is ready</div>'+
-        '<div style="color:var(--muted);font-size:12px;margin-top:8px">'+esc(String(r.createdRoles||0))+' roles · '+esc(String((r.channels||[]).length))+' channels · language: '+esc(String(r.languageName||language))+'</div>';
+        '<div style="color:var(--muted);font-size:12px;margin-top:8px">'+esc(String(r.createdRoles||0))+' roles · '+esc(String((r.channels||[]).length))+' channels · '+esc(String((r.staffVoiceRooms||[]).length))+' support rooms · '+esc(String(r.languageName||language))+'</div>';
     }catch(error){
       if(result) result.innerHTML='<div class="badge closed">'+esc(error.message)+'</div>';
     }finally{
