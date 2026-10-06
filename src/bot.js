@@ -1129,9 +1129,19 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     const categories=[];
     for(let i=0;i<config.categories.length;i++) {
-      const baseCategoryName=config.categories[i];
+      const baseCategoryName=String(config.categories[i] || "");
       const name=localizeTemplateName(baseCategoryName);
-      const overwrites = /SUPPORT|COMMUNITY|INFORMATION|FIVEM|RUST|GAMING|STREAM|CLAN|CREATOR|SHOP|CHAT|SPIL|RP|JOBS|VOICE|ANNOUNCEMENT|NEWS|SHARDNOTE/i.test(name) ? publicOverwrites : privateOverwrites;
+      let overwrites = publicOverwrites;
+      if (/TICKETS|STAFF/i.test(baseCategoryName)) {
+        overwrites = privateOverwrites;
+      } else if (/VOICE/i.test(baseCategoryName)) {
+        overwrites = voiceOverwrites;
+      } else if (/INFORMATION|ANNOUNCEMENT|SHARDNOTE|SUPPORT|PARTNERS/i.test(baseCategoryName)) {
+        // Information/support/news areas are visible but read-only for regular members.
+        overwrites = announcementOverwrites;
+      } else if (/COMMUNITY/i.test(baseCategoryName)) {
+        overwrites = publicOverwrites;
+      }
       categories.push(await ensureCategory(name,overwrites));
     }
 
@@ -1141,6 +1151,28 @@ function createBot({ state, db, log, createTicket, setReady }) {
       );
       return categories[index >= 0 ? index : fallbackIndex] || categories[0];
     };
+
+    const publicWritableChannels = new Set([
+      "chat","off-topic","memes","showcase","clips","suggestions","feedback","events","polls",
+      "feature-requests","bug-reports","partner-requests"
+    ]);
+    const publicReadOnlyChannels = new Set([
+      "velkommen","regler","server-info","how-to-join","faq","roles",
+      "annonceringer","product-news","changelog","status","security-alerts","bot-news",
+      "known-issues","roadmap","documentation","support","ticket-panel","support-info",
+      "waiting-for-support","billing","account-help","partner-info","partner-news"
+    ]);
+    const privateChannels = new Set([
+      "staff-chat","staff-announcements","ticket-logs","mod-logs","server-logs","reports","applications"
+    ]);
+
+    function textChannelOverwrites(base, parentOverwrites) {
+      const key = String(base || "").toLowerCase();
+      if (privateChannels.has(key)) return privateOverwrites;
+      if (publicWritableChannels.has(key)) return publicOverwrites;
+      if (publicReadOnlyChannels.has(key)) return announcementOverwrites;
+      return parentOverwrites || publicOverwrites;
+    }
 
     let textIndex=0;
     const textChannels=[];
@@ -1158,10 +1190,13 @@ function createBot({ state, db, log, createTicket, setReady }) {
         ].filter(Boolean),
         0
       );
+      const channelOverwrites = textChannelOverwrites(base, categories[config.categories.findIndex(categoryName =>
+        String(categoryName).toLowerCase() === String(config.categories[parent ? config.categories.indexOf(parent?.name) : -1] || "").toLowerCase()
+      )]);
       if(config.announcementChannels?.includes(base)){
         textChannels.push(await ensureAnnouncement(key,localizeTemplateName(base),parent,announcementOverwrites));
       } else {
-        textChannels.push(await ensureText(key,localizeTemplateName(base),parent));
+        textChannels.push(await ensureText(key,localizeTemplateName(base),parent,channelOverwrites));
       }
     }
     const voiceNames=config.channels.filter(x=>x==="Fælles"||x.includes("VC")||x.includes("Voice")||x.includes("Lounge"));
