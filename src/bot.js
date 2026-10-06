@@ -1228,7 +1228,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
       return new ActionRowBuilder().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId("ticket_type_select")
-          .setPlaceholder("Vælg hvad din ticket handler om…")
+          .setPlaceholder("Choose what your ticket is about…")
           .setMinValues(1)
           .setMaxValues(1)
           .addOptions(options.map(item => ({
@@ -1245,10 +1245,10 @@ function createBot({ state, db, log, createTicket, setReady }) {
       const embeds = [
         new EmbedBuilder()
           .setTitle("🎫 Shardnote Support Center")
-          .setDescription("Har du brug for hjælp? Vælg nedenfor, hvad din ticket handler om. Botten opretter derefter en privat ticket-kanal til dig.")
+          .setDescription("Need help? Choose what your ticket is about below. The bot will then create a private ticket channel for you.")
           .addFields(
-            { name:"Sådan virker det", value:"1. Vælg ticket-type\n2. Beskriv dit problem\n3. Din private kanal bliver oprettet\n4. Staff hjælper dig", inline:false },
-            { name:"Ticket-typer", value:"🎫 Support · 🐞 Bug · 🚨 Report · ⚖️ Appeal · 💳 Billing · 👤 Account · 🤝 Partnership · 💡 Feature", inline:false }
+            { name:"How it works", value:"1. Choose a ticket type\n2. Describe your problem\n3. Your private channel is created\n4. Staff will help you", inline:false },
+            { name:"Ticket types", value:"🎫 Support · 🐞 Bug · 🚨 Report · ⚖️ Appeal · 💳 Billing · 👤 Account · 🤝 Partnership · 💡 Feature", inline:false }
           )
           .setColor(0x6d5dfc)
       ];
