@@ -697,6 +697,38 @@ function createBot({ state, db, log, createTicket, setReady }) {
     }
     if (!config) throw new Error("Ukendt Discord-skitse.");
 
+    const standardSupportRoles = [
+      "Support Manager",
+      "Support Lead",
+      "Senior Support",
+      "Supporter",
+      "Trial Support"
+    ];
+    const standardSupportVoiceRooms = [
+      "Support Room 1",
+      "Support Room 2",
+      "Support Room 3",
+      "Support Room 4",
+      "Support Room 5"
+    ];
+    config = {
+      ...config,
+      roles: [...new Set([...(config.roles || []), "Support"])],
+      extraRoles: [...new Set([...(config.extraRoles || []), ...standardSupportRoles])],
+      categories: [...new Set([...(config.categories || []), "🎫 SUPPORT", "🔊 VOICE"])],
+      channels: [...new Set([
+        ...(config.channels || []),
+        "support",
+        "ticket-panel",
+        "support-info",
+        "faq",
+        "known-issues",
+        "waiting-for-support"
+      ])],
+      staffVoiceRooms: [...new Set([...(config.staffVoiceRooms || []), ...standardSupportVoiceRooms])],
+      waitingSupportVoice: config.waitingSupportVoice || "Waiting for Support"
+    };
+
     const me = guild.members.me || await guild.members.fetchMe().catch(() => null);
     const required = [PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages];
     if (!me || !me.permissions.has(required)) {
