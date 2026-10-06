@@ -218,6 +218,7 @@ async function initDatabase() {
 
   await db.query(`
     ALTER TABLE public.users
+      ADD COLUMN IF NOT EXISTS application_reviewer BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS subscription_status VARCHAR(30) NOT NULL DEFAULT 'inactive',
       ADD COLUMN IF NOT EXISTS trial_used BOOLEAN NOT NULL DEFAULT FALSE,
       ADD COLUMN IF NOT EXISTS plan VARCHAR(30) NOT NULL DEFAULT 'member',
@@ -1013,7 +1014,7 @@ async function getSessionUser(req){
   if(!sessionUser) return null;
   if(!db) return sessionUser;
   const result=await db.query(
-    `SELECT id,name,email,role,plan,subscription_status AS "subscriptionStatus",trial_used AS "trialUsed",stripe_customer_id AS "stripeCustomerId",stripe_subscription_id AS "stripeSubscriptionId",subscription_current_period_end AS "subscriptionCurrentPeriodEnd"
+    `SELECT id,name,email,role,plan,application_reviewer AS "applicationReviewer",subscription_status AS "subscriptionStatus",trial_used AS "trialUsed",stripe_customer_id AS "stripeCustomerId",stripe_subscription_id AS "stripeSubscriptionId",subscription_current_period_end AS "subscriptionCurrentPeriodEnd"
      FROM public.users WHERE id=$1 LIMIT 1`,
     [sessionUser.id]
   );
@@ -1026,6 +1027,10 @@ function hasPaidAccess(user){return user?.role==="admin"||["active","trialing"].
 async function requireAuth(req,res,next){try{const user=await getSessionUser(req);if(!user)return res.status(401).json({error:"Du skal logge ind."});req.user=user;next();}catch(error){console.error(error);res.status(500).json({error:"Loginstatus kunne ikke hentes."});}}
 function requireAdmin(req, res, next) {
   if (req.user?.role !== "admin") return res.status(403).json({ error: "Kun administratorer har adgang." });
+  next();
+}
+function requireApplicationReviewer(req, res, next) {
+  if (req.user?.role !== "admin" && !req.user?.applicationReviewer) return res.status(403).json({ error: "Kun administratorer eller Application Reviewers har adgang." });
   next();
 }
 function getSiteOwnerEmail() {
@@ -1166,7 +1171,7 @@ app.post("/api/staff-applications", async (req, res) => {
   }
 });
 
-app.get("/api/admin/staff-applications", requireAuth, requireAdmin, async (req, res) => {
+app.get("/api/admin/staff-applications", requireAuth, requireApplicationReviewer, async (req, res) => {
   try {
     if (!db) return res.json([]);
     const limitRaw = Number.parseInt(req.query.limit, 10);
@@ -1390,7 +1395,8 @@ app.post("/api/login", async (req, res) => {
         trialUsed: !!user.trialUsed,
         plan: user.plan || "member",
         hasPaidAccess: hasPaidAccess(user),
-         isOwner: isSiteOwner(user)
+         isOwner: isSiteOwner(user),
+        applicationReviewer: !!user.applicationReviewer
       }
     });
   } catch (error) {
@@ -1585,7 +1591,7 @@ app.get("/api/me", async (req,res)=>{
   const user=await getSessionUser(req);
   if(!user)return res.status(401).json({error:"Ikke logget ind."});
   if(stripe&&user.stripeSubscriptionId)await refreshSubscriptionFromStripe(user);
-  res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role,plan:user.plan||"member",subscriptionStatus:user.subscriptionStatus||"inactive",trialUsed:!!user.trialUsed,hasPaidAccess:hasPaidAccess(user),isOwner:isSiteOwner(user)}});
+  res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role,applicationReviewer:!!user.applicationReviewer,plan:user.plan||"member",subscriptionStatus:user.subscriptionStatus||"inactive",trialUsed:!!user.trialUsed,hasPaidAccess:hasPaidAccess(user),isOwner:isSiteOwner(user)}});
 });
 
 app.get("/api/admin/login-history", requireAuth, requireAdmin, async (req, res) => {
@@ -1659,7 +1665,7 @@ app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
     if (db) {
       const result = await db.query(
         `SELECT
-           id, name, email, role, plan,
+           id, name, email, role, plan, application_reviewer AS "applicationReviewer",
            banned,
            ban_type AS "banType",
            banned_at AS "bannedAt",
@@ -1733,6 +1739,35 @@ app.post("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Brugeren kunne ikke oprettes." });
+  }
+});
+
+app.patch("/api/admin/users/:id/application-reviewer", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    await ensureAdmin();
+    if (String(req.params.id) === String(req.user.id)) {
+      return res.status(400).json({ error: "Du kan ikke ændre din egen Application Reviewer-rolle." });
+    }
+    const enabled = req.body?.enabled === true || String(req.body?.enabled) === "true";
+    if (db) {
+      const result = await db.query(
+        "UPDATE public.users SET application_reviewer = $1 WHERE id = $2 AND role = 'admin' RETURNING id, name, email, role, application_reviewer AS \"applicationReviewer\"",
+        [enabled, req.params.id]
+      );
+      if (!result.rowCount) return res.status(404).json({ error: "Kun andre administratorer kan få denne rolle." });
+      const user = result.rows[0];
+      log("security", "Admin " + req.user.email + " " + (enabled ? "granted" : "removed") + " Application Reviewer for " + user.email);
+      return res.json(user);
+    }
+    const id = Number(req.params.id);
+    const user = state.users.find(u => u.id === id && u.role === "admin");
+    if (!user) return res.status(404).json({ error: "Kun andre administratorer kan få denne rolle." });
+    user.applicationReviewer = enabled;
+    log("security", "Admin " + req.user.email + " " + (enabled ? "granted" : "removed") + " Application Reviewer for " + user.email);
+    res.json({ id:user.id, name:user.name, email:user.email, role:user.role, applicationReviewer:!!user.applicationReviewer });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ error: "Application Reviewer-rollen kunne ikke ændres." });
   }
 });
 
