@@ -3145,13 +3145,17 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
   client.dashboardApplyDiscordTemplate = async (guildId, templateKey, options) => applyDiscordTemplate(guildId, templateKey, options);
   client.dashboardApplyOfficialTemplate = async (templateKey, options = {}) => {
-    const inviteCode = String(process.env.SHARDNOTE_OFFICIAL_INVITE_CODE || "vjspxG4Bk").trim();
-    if (!inviteCode) throw new Error("The Shardnote official Discord invite is not configured.");
-    const invite = await client.fetchInvite(inviteCode);
-    const guildId = invite?.guild?.id;
-    if (!guildId) throw new Error("The official Shardnote Discord server could not be resolved from the invite.");
-    const guild = client.guilds.cache.get(String(guildId));
-    if (!guild) throw new Error("The Shardnote bot is not in the official Discord server yet.");
+    const selectedGuildId = String(options.guildId || "").trim();
+    let guild = selectedGuildId ? client.guilds.cache.get(selectedGuildId) : null;
+    if (!guild) {
+      const inviteCode = String(process.env.SHARDNOTE_OFFICIAL_INVITE_CODE || "vjspxG4Bk").trim();
+      if (!inviteCode) throw new Error("The Shardnote official Discord invite is not configured.");
+      const invite = await client.fetchInvite(inviteCode);
+      const inviteGuildId = invite?.guild?.id;
+      if (!inviteGuildId) throw new Error("The official Shardnote Discord server could not be resolved from the invite.");
+      guild = client.guilds.cache.get(String(inviteGuildId));
+    }
+    if (!guild) throw new Error("The Shardnote bot is not in the selected Discord server.");
     return applyDiscordTemplate(guild.id, templateKey || "support", options);
   };
 
