@@ -165,6 +165,31 @@
   }
 
   window.selectDiscordTemplate=selectTemplate;
+  async function deployOfficialServer(){
+    const result=document.getElementById("snTemplatePageResult");
+    const button=document.getElementById("snOfficialDeploy");
+    if(!button)return;
+    const language=document.getElementById("snTemplateLanguage")?.value || selectedLanguage;
+    if(!confirm("Deploy the selected support template to the official Shardnote Discord? Existing channels and roles will not be deleted."))return;
+    button.disabled=true;
+    button.textContent="⏳ Deploying official server…";
+    try{
+      const response=await apiCall("/api/bot/official-template",{
+        method:"POST",
+        headers:{"Content-Type":"application/json"},
+        body:JSON.stringify({templateKey:"support",language})
+      });
+      const r=response.result||{};
+      if(result) result.innerHTML='<div class="badge open">✅ Official Shardnote server is ready</div>'+
+        '<div style="color:var(--muted);font-size:12px;margin-top:8px">'+esc(String(r.createdRoles||0))+' roles · '+esc(String((r.channels||[]).length))+' channels · language: '+esc(String(r.languageName||language))+'</div>';
+    }catch(error){
+      if(result) result.innerHTML='<div class="badge closed">'+esc(error.message)+'</div>';
+    }finally{
+      button.disabled=false;
+      button.textContent="🚀 Deploy official Shardnote server";
+    }
+  }
+
   async function applyTemplate(){
     const guildId=document.getElementById("snTemplatePageGuild")?.value;
     const result=document.getElementById("snTemplatePageResult");
@@ -224,7 +249,7 @@
           '<div class="field"><label>Discord Server</label><select id="snTemplatePageGuild"></select></div>'+
           '<div class="field"><label>Server language</label><select id="snTemplateLanguage">'+TEMPLATE_LANGUAGES.map(function(item){return '<option value="'+item[0]+'">'+item[1]+'</option>';}).join("")+'</select></div>'+
         '</div>'+
-        '<div id="customFeatures" style="display:none;margin-top:16px"><h3 style="margin-bottom:4px">🧰 Choose features</h3>'+customChecks+'</div>'+
+        '<div id="customFeatures" style="display:none;margin-top:16px"><h3 style="margin-bottom:4px">🧰 Choose features</h3>'+customChecks+'</div>'+        '<div class="actions" style="margin-top:12px"><button type="button" class="btn small" id="snOfficialDeploy">🚀 Deploy official Shardnote server</button></div>'+
         '<div class="actions" style="margin-top:18px"><button type="button" class="btn primary" id="snTemplatePageApply">🚀 Deploy this template</button></div>'+
         '<div id="snTemplatePageResult" style="margin-top:12px"></div>'+
       '</div>';
@@ -262,6 +287,7 @@
       }
       select.addEventListener("change",function(){selectedGuild=this.value;localStorage.setItem("shardnote_template_guild",selectedGuild);});
       document.getElementById("snTemplatePageApply").addEventListener("click",applyTemplate);
+      document.getElementById("snOfficialDeploy")?.addEventListener("click",deployOfficialServer);
     }catch(error){document.getElementById("snTemplatePageResult").innerHTML='<div class="badge closed">'+esc(error.message)+'</div>';}
   }
   const oldNavigate=window.navigate;
