@@ -1255,7 +1255,10 @@ function createBot({ state, db, log, createTicket, setReady }) {
       const messages = await channel.messages.fetch({ limit: 25 }).catch(() => null);
       const existing = messages?.find(message =>
         message.author?.id === client.user?.id &&
-        message.embeds?.some(embed => String(embed.title || "").includes("Shardnote Support Center"))
+        message.embeds?.some(embed => {
+          const title = String(embed.title || "");
+          return title.includes("Shardnote Support Center") || title.includes("ShardNote Ticket");
+        })
       );
       if (existing) {
         await existing.edit({ embeds, components:[buildTicketTypeMenu()] }).catch(() => {});
