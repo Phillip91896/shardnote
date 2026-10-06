@@ -1026,18 +1026,24 @@ async function getSessionUser(req){
 function hasPaidAccess(user){return user?.role==="admin"||["active","trialing"].includes(user?.subscriptionStatus);}
 async function requireAuth(req,res,next){try{const user=await getSessionUser(req);if(!user)return res.status(401).json({error:"Du skal logge ind."});req.user=user;next();}catch(error){console.error(error);res.status(500).json({error:"Loginstatus kunne ikke hentes."});}}
 function requireAdmin(req, res, next) {
-  if (req.user?.role !== "admin") return res.status(403).json({ error: "Kun administratorer har adgang." });
+  if (req.user?.role !== "admin" && !isSiteOwner(req.user)) return res.status(403).json({ error: "Kun administratorer har adgang." });
+  next();
+}
+function requireOwner(req, res, next) {
+  if (!isSiteOwner(req.user)) return res.status(403).json({ error: "Kun Owner har adgang." });
   next();
 }
 function requireApplicationReviewer(req, res, next) {
-  if (req.user?.role !== "admin" && !req.user?.applicationReviewer) return res.status(403).json({ error: "Kun administratorer eller Application Reviewers har adgang." });
+  if (!isSiteOwner(req.user) && !req.user?.applicationReviewer) return res.status(403).json({ error: "Kun Owner eller Application Reviewers har adgang." });
   next();
 }
 function getSiteOwnerEmail() {
   return String(process.env.SITE_OWNER_EMAIL || process.env.ADMIN_EMAIL || "admin@Shardnote Bot.local").trim().toLowerCase();
 }
 function isSiteOwner(user) {
-  return !!user?.email && String(user.email).trim().toLowerCase() === getSiteOwnerEmail();
+  if (!user) return false;
+  if (String(user.role || "").trim().toLowerCase() === "owner") return true;
+  return !!user.email && String(user.email).trim().toLowerCase() === getSiteOwnerEmail();
 }
 function requireSiteOwner(req, res, next) {
   if (!isSiteOwner(req.user)) return res.status(403).json({ error: "Kun ejeren af Shardnote Bot har adgang til IP-adresser." });
@@ -1742,7 +1748,7 @@ app.post("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-app.patch("/api/admin/users/:id/application-reviewer", requireAuth, requireAdmin, async (req, res) => {
+app.patch("/api/admin/users/:id/application-reviewer", requireAuth, requireOwner, async (req, res) => {
   try {
     await ensureAdmin();
     if (String(req.params.id) === String(req.user.id)) {
@@ -1771,7 +1777,7 @@ app.patch("/api/admin/users/:id/application-reviewer", requireAuth, requireAdmin
   }
 });
 
-app.patch("/api/admin/users/:id/role", requireAuth, requireAdmin, async (req, res) => {
+app.patch("/api/admin/users/:id/role", requireAuth, requireOwner, async (req, res) => {
   try {
     await ensureAdmin();
 
