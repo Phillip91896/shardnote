@@ -760,8 +760,8 @@ async function loadUsers(){
     const users=await api("/api/admin/users");
     const planNames={member:"Member",member_plus:"Member Plus",member_pro:"Member Pro"};
     document.getElementById("userList").innerHTML=users.map(u=>{
-      const roleButton=u.id!==currentUser?.id
-        ? `<button class="btn small" onclick="toggleUserRole(${u.id},'${u.role}')">${u.role==="admin"?"Gør til member":"Gør til admin"}</button>`
+      const roleButton=currentUser?.isOwner && u.id!==currentUser?.id
+        ? '<button class="btn small" onclick="toggleUserRole('+u.id+',\''+u.role+'\')">'+(u.role==="admin"?"Gør til member":"Gør til admin")+'</button>'
         : "";
 
       const nextPlan={member:"member_plus",member_plus:"member_pro",member_pro:"member"}[u.plan||"member"] || "member";
@@ -791,7 +791,7 @@ async function loadUsers(){
           <b>${escapeHtml(u.name)}</b>
           <small>${escapeHtml(u.email)} · ${escapeHtml(u.role)} · <b>${escapeHtml(planNames[u.plan]||"Member")}</b> ${u.applicationReviewer?'· <span class="badge open">Application Reviewer</span>':""} · ${banStatus}</small>
         </div>
-        ${roleButton} ${planButton} ${u.role==="admin" && u.id!==currentUser?.id ? `<button class="btn small" onclick="toggleApplicationReviewer(${u.id},${u.applicationReviewer?"false":"true"})">${u.applicationReviewer?"Remove Application Reviewer":"Grant Application Reviewer"}</button>` : ""} ${moderationButtons} ${deleteButton}
+        ${roleButton} ${planButton} ${currentUser?.isOwner && u.role==="admin" && u.id!==currentUser?.id ? `<button class="btn small" onclick="toggleApplicationReviewer(${u.id},${u.applicationReviewer?"false":"true"})">${u.applicationReviewer?"Remove Application Reviewer":"Grant Application Reviewer"}</button>` : ""} ${moderationButtons} ${deleteButton}
       </div>`;
     }).join("")||'<div class="empty">Ingen brugere.</div>';
   }catch(e){toast(e.message)}
