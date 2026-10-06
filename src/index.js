@@ -3294,8 +3294,12 @@ app.post("/api/bot/official-template", requireAuth, requireAdmin, requireSiteOwn
     }
     const supportedLanguages = ["da","en","de","fr","es","it","nl","pt","sv","no","fi","pl","tr","ru","uk","ja","ko","zh"];
     const language = supportedLanguages.includes(String(req.body?.language || "")) ? String(req.body.language) : "en";
-    const result = await client.dashboardApplyOfficialTemplate(templateKey, { language });
-    log("settings", "Official Shardnote Discord template deployed", req.user?.id || null);
+    const guildId = String(req.body?.guildId || "").trim();
+    if (!guildId) return res.status(400).json({ error: "Vælg en Discord-server først." });
+    const selectedGuild = client.guilds.cache.get(guildId);
+    if (!selectedGuild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
+    const result = await client.dashboardApplyOfficialTemplate(templateKey, { language, guildId });
+    log("settings", "Official Shardnote Discord template deployed to " + selectedGuild.name, req.user?.id || null);
     res.json({ ok: true, result });
   } catch (error) {
     console.error("[Shardnote] Official Discord template failed:", error);
@@ -3745,6 +3749,12 @@ body.locked > .app{display:none}
     </div>
     <div class="grid two" style="margin-bottom:12px">
       <div class="field">
+        <label>Discord-server</label>
+        <select id="snOfficialAdminGuild">
+          <option value="">Indlæser Discord-servere…</option>
+        </select>
+      </div>
+      <div class="field">
         <label>Server language</label>
         <select id="snOfficialAdminLanguage">
           <option value="da">🇩🇰 Dansk</option><option value="en">🇬🇧 English</option><option value="de">🇩🇪 Deutsch</option>
@@ -3761,10 +3771,10 @@ body.locked > .app{display:none}
       </div>
     </div>
     <div class="actions" style="margin-top:0">
-      <button type="button" class="btn primary" id="snOfficialAdminDeploy" onclick="window.shardnoteDeployOfficial && window.shardnoteDeployOfficial()">🚀 Opret vores officielle Discord</button>
+      <button type="button" class="btn primary" id="snOfficialAdminDeploy" onclick="window.shardnoteDeployOfficial && window.shardnoteDeployOfficial()">🚀 Opret Shardnote-server på valgt Discord</button>
     </div>
     <div id="snOfficialAdminResult" style="margin-top:12px"></div>
-    <div style="color:var(--muted);font-size:11px;margin-top:9px">Discord-serveren skal oprettes i Discord først. Denne knap konfigurerer derefter kun vores officielle Shardnote-server.</div>
+    <div style="color:var(--muted);font-size:11px;margin-top:9px">Discord-serveren skal oprettes i Discord først. Denne knap konfigurerer Shardnote-strukturen på den valgte Discord-server. Kun ejeren kan bruge knappen.</div>
   </div>
   <div class="card" style="margin-bottom:18px">
     <div class="section-title">
