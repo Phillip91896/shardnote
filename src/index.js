@@ -3381,10 +3381,10 @@ const html = `<!DOCTYPE html>
 }
 *{box-sizing:border-box}body{margin:0;font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:radial-gradient(circle at 20% 0%,#19152e 0,#07070b 35%),var(--bg);color:var(--text);min-height:100vh}
 button,input,textarea,select{font:inherit}button{cursor:pointer}
-.app{display:flex;min-height:100vh}.sidebar{width:255px;position:fixed;inset:0 auto 0 0;background:rgba(10,10,16,.92);backdrop-filter:blur(18px);border-right:1px solid var(--border);padding:22px 15px;z-index:10}
-.brand{display:flex;align-items:center;gap:10px;padding:8px 10px 25px;font-size:23px;font-weight:800}.brand-mark{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),#a855f7);box-shadow:0 8px 24px rgba(109,93,252,.3)}
-.nav{display:grid;gap:7px}.nav button{border:1px solid transparent;background:transparent;color:#a5a5b5;text-align:left;padding:12px 13px;border-radius:11px;transition:.2s}.nav button:hover{background:#171722;color:#fff}.nav button.active{background:linear-gradient(90deg,rgba(109,93,252,.23),rgba(109,93,252,.07));border-color:rgba(109,93,252,.3);color:#fff}.nav .icon{display:inline-block;width:25px}
-.sidebar-footer{position:absolute;left:15px;right:15px;bottom:18px;padding:13px;border:1px solid var(--border);border-radius:12px;background:#0e0e16;color:var(--muted);font-size:12px}
+.app{display:flex;min-height:100vh}.sidebar{width:255px;position:fixed;inset:0 auto 0 0;background:rgba(10,10,16,.92);backdrop-filter:blur(18px);border-right:1px solid var(--border);padding:22px 15px;z-index:10;display:flex;flex-direction:column;overflow:hidden}
+.brand{display:flex;align-items:center;gap:10px;padding:8px 10px 25px;font-size:23px;font-weight:800;flex:0 0 auto}.brand-mark{width:36px;height:36px;border-radius:11px;display:grid;place-items:center;background:linear-gradient(135deg,var(--accent),#a855f7);box-shadow:0 8px 24px rgba(109,93,252,.3)}
+.nav{display:grid;gap:7px;flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:2px 3px 12px;scrollbar-width:thin;scrollbar-color:#3a3950 transparent}.nav::-webkit-scrollbar{width:7px}.nav::-webkit-scrollbar-thumb{background:#3a3950;border-radius:99px}.nav button{border:1px solid transparent;background:transparent;color:#a5a5b5;text-align:left;padding:12px 13px;border-radius:11px;transition:.2s}.nav button:hover{background:#171722;color:#fff}.nav button.active{background:linear-gradient(90deg,rgba(109,93,252,.23),rgba(109,93,252,.07));border-color:rgba(109,93,252,.3);color:#fff}.nav .icon{display:inline-block;width:25px}
+.sidebar-footer{flex:0 0 auto;margin-top:10px;padding:13px;border:1px solid var(--border);border-radius:12px;background:#0e0e16;color:var(--muted);font-size:12px}
 .main{margin-left:255px;width:calc(100% - 255px);padding:28px;max-width:1500px}.topbar{display:flex;align-items:center;justify-content:space-between;gap:20px;margin-bottom:28px}.eyebrow{color:var(--accent2);font-size:12px;text-transform:uppercase;letter-spacing:.12em;font-weight:800}.topbar h1{margin:5px 0 0;font-size:30px}.status{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--panel);border:1px solid var(--border);border-radius:12px}.dot{width:9px;height:9px;border-radius:50%;background:var(--yellow);box-shadow:0 0 15px currentColor}.dot.online{background:var(--green)}
 .page{display:none}.page.active{display:block}.grid{display:grid;gap:18px}.stats{grid-template-columns:repeat(4,minmax(0,1fr))}.card{background:linear-gradient(180deg,rgba(22,22,33,.96),rgba(13,13,20,.96));border:1px solid var(--border);border-radius:16px;padding:20px;box-shadow:var(--shadow)}.stat-title{color:var(--muted);font-size:13px}.stat-value{font-size:30px;font-weight:800;margin-top:8px}.stat-foot{font-size:12px;color:var(--green);margin-top:7px}
 .two{grid-template-columns:1.35fr 1fr}.section-title{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}.section-title h2{font-size:17px;margin:0}.section-title span{font-size:12px;color:var(--muted)}
@@ -3726,6 +3726,40 @@ body.locked > .app{display:none}
 </section>
 
 <section class="page" id="page-admin">
+  <div class="card" id="snOfficialAdminCard" style="margin-bottom:18px;display:none">
+    <div class="section-title">
+      <div>
+        <h2>👑 Official Shardnote Discord</h2>
+        <span>Kun ejeren af Shardnote kan bruge denne opsætning.</span>
+      </div>
+      <div class="badge open">OWNER ONLY</div>
+    </div>
+    <p style="color:var(--muted);line-height:1.6;margin:0 0 14px">
+      Opret den tomme Discord-server fra din egen Discord-konto først. Tilføj derefter Shardnote Bot til serveren og tryk på knappen. Botten opsætter roller, kategorier, kanaler, waiting queue og Support Room 1–5 på den officielle server.
+    </p>
+    <div class="grid two" style="margin-bottom:12px">
+      <div class="field">
+        <label>Server language</label>
+        <select id="snOfficialAdminLanguage">
+          <option value="da">🇩🇰 Dansk</option><option value="en">🇬🇧 English</option><option value="de">🇩🇪 Deutsch</option>
+          <option value="fr">🇫🇷 Français</option><option value="es">🇪🇸 Español</option><option value="it">🇮🇹 Italiano</option>
+          <option value="nl">🇳🇱 Nederlands</option><option value="pt">🇵🇹 Português</option><option value="sv">🇸🇪 Svenska</option>
+          <option value="no">🇳🇴 Norsk</option><option value="fi">🇫🇮 Suomi</option><option value="pl">🇵🇱 Polski</option>
+          <option value="tr">🇹🇷 Türkçe</option><option value="ru">🇷🇺 Русский</option><option value="uk">🇺🇦 Українська</option>
+          <option value="ja">🇯🇵 日本語</option><option value="ko">🇰🇷 한국어</option><option value="zh">🇨🇳 中文</option>
+        </select>
+      </div>
+      <div class="field">
+        <label>Opsætning</label>
+        <input value="Support + tickets + waiting queue + 6 voice rooms" disabled>
+      </div>
+    </div>
+    <div class="actions" style="margin-top:0">
+      <button type="button" class="btn primary" id="snOfficialAdminDeploy" onclick="window.shardnoteDeployOfficial && window.shardnoteDeployOfficial()">🚀 Opret vores officielle Discord</button>
+    </div>
+    <div id="snOfficialAdminResult" style="margin-top:12px"></div>
+    <div style="color:var(--muted);font-size:11px;margin-top:9px">Discord-serveren skal oprettes i Discord først. Denne knap konfigurerer derefter kun vores officielle Shardnote-server.</div>
+  </div>
   <div class="card" style="margin-bottom:18px">
     <div class="section-title">
       <div>
