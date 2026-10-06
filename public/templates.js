@@ -249,7 +249,8 @@
           '<div class="field"><label>Discord Server</label><select id="snTemplatePageGuild"></select></div>'+
           '<div class="field"><label>Server language</label><select id="snTemplateLanguage">'+TEMPLATE_LANGUAGES.map(function(item){return '<option value="'+item[0]+'">'+item[1]+'</option>';}).join("")+'</select></div>'+
         '</div>'+
-        '<div id="customFeatures" style="display:none;margin-top:16px"><h3 style="margin-bottom:4px">🧰 Choose features</h3>'+customChecks+'</div>'+        '<div class="actions" style="margin-top:12px"><button type="button" class="btn small" id="snOfficialDeploy">🚀 Deploy official Shardnote server</button></div>'+
+        '<div id="customFeatures" style="display:none;margin-top:16px"><h3 style="margin-bottom:4px">🧰 Choose features</h3>'+customChecks+'</div>'+
+        '<div id="snOfficialSetup" style="display:none;margin-top:16px"></div>'+
         '<div class="actions" style="margin-top:18px"><button type="button" class="btn primary" id="snTemplatePageApply">🚀 Deploy this template</button></div>'+
         '<div id="snTemplatePageResult" style="margin-top:12px"></div>'+
       '</div>';
@@ -287,7 +288,24 @@
       }
       select.addEventListener("change",function(){selectedGuild=this.value;localStorage.setItem("shardnote_template_guild",selectedGuild);});
       document.getElementById("snTemplatePageApply").addEventListener("click",applyTemplate);
-      document.getElementById("snOfficialDeploy")?.addEventListener("click",deployOfficialServer);
+
+      try{
+        const me=await apiCall("/api/me");
+        const ownerArea=document.getElementById("snOfficialSetup");
+        if(me?.user?.isOwner && ownerArea){
+          ownerArea.style.display="block";
+          ownerArea.innerHTML=
+            '<div class="card" style="border:1px solid rgba(109,93,252,.35);background:linear-gradient(135deg,rgba(109,93,252,.08),rgba(31,35,51,.18))">'+
+              '<div class="section-title"><div><h3 style="margin:0">👑 Official Shardnote Discord</h3><span>Only the Shardnote owner can use this setup.</span></div><div class="badge open">OWNER ONLY</div></div>'+
+              '<p style="color:var(--muted);line-height:1.6;margin:0 0 12px">Create the blank Discord server in Discord first. Then add Shardnote Bot to it and press the button below. The bot will create the roles, categories, channels, waiting queue and joinable support rooms on that server.</p>'+
+              '<div class="actions"><button type="button" class="btn small" id="snOfficialDeploy">🚀 Set up our official Discord</button></div>'+
+              '<div id="snOfficialHint" style="color:var(--muted);font-size:11px;margin-top:9px">Discord itself must be created from your Discord account; the bot can configure it after it exists.</div>'+
+            '</div>';
+          document.getElementById("snOfficialDeploy")?.addEventListener("click",deployOfficialServer);
+        }
+      }catch(error){
+        console.warn("Owner setup visibility could not be loaded:",error);
+      }
     }catch(error){document.getElementById("snTemplatePageResult").innerHTML='<div class="badge closed">'+esc(error.message)+'</div>';}
   }
   const oldNavigate=window.navigate;
