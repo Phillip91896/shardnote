@@ -174,7 +174,7 @@ function install() {
         }
       });
     }
-    if (path === '/api/billing/webhook' || path === '/api/sellauth/deliver') {
+    if (path === '/api/sellauth/deliver') {
       return ORIGINAL_POST.call(this, path, express.raw({ type: 'application/json', limit: '2mb' }), async (req, res) => {
         try {
           const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
