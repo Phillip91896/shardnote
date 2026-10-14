@@ -1740,3 +1740,68 @@ setInterval(()=>{if(currentUser)loadStats()},15000);
   else start();
 })();
 
+
+/* ShardNote compact sidebar: reduce navigation height and allow collapse. */
+(function installCompactSidebar(){
+  const style = document.createElement("style");
+  style.id = "shardnote-compact-sidebar-style";
+  style.textContent = `
+    .sidebar{width:220px;padding:16px 12px;transition:width .18s ease,padding .18s ease}
+    .main{margin-left:220px;width:calc(100% - 220px);transition:margin-left .18s ease,width .18s ease}
+    .nav{gap:4px}
+    .nav button{padding:9px 10px;font-size:13px;min-height:36px}
+    .nav .icon{width:22px}
+    .sidebar-footer{padding:10px;margin-top:7px}
+    .sidebar-toggle{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;margin:0 0 10px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:#151521;color:var(--muted);font:inherit;font-size:12px}
+    .sidebar-toggle:hover{color:#fff;border-color:var(--accent)}
+    body.shardnote-sidebar-collapsed .sidebar{width:70px;padding:16px 8px}
+    body.shardnote-sidebar-collapsed .main{margin-left:70px;width:calc(100% - 70px)}
+    body.shardnote-sidebar-collapsed .brand{justify-content:center}
+    body.shardnote-sidebar-collapsed .brand>span,
+    body.shardnote-sidebar-collapsed .nav button span:not(.icon),
+    body.shardnote-sidebar-collapsed .sidebar-footer,
+    body.shardnote-sidebar-collapsed .sidebar-toggle .toggle-label{display:none}
+    body.shardnote-sidebar-collapsed .nav button{text-align:center;padding:10px 4px}
+    body.shardnote-sidebar-collapsed .nav .icon{width:auto}
+    @media(max-width:760px){
+      .sidebar{width:70px;padding:15px 8px}
+      .main{margin-left:70px;width:calc(100% - 70px);padding:18px}
+      .brand{justify-content:center}
+      .brand>span,.nav button span:not(.icon),.sidebar-footer{display:none}
+      .nav button{text-align:center;padding:10px 4px}
+      .nav .icon{width:auto}
+      .sidebar-toggle .toggle-label{display:none}
+    }
+  `;
+  (document.head || document.documentElement).appendChild(style);
+
+  function init(){
+    const sidebar=document.querySelector(".sidebar");
+    const nav=sidebar?.querySelector(".nav");
+    if(!sidebar || !nav || sidebar.querySelector(".sidebar-toggle")) return;
+    const button=document.createElement("button");
+    button.type="button";
+    button.className="sidebar-toggle";
+    button.setAttribute("aria-label","Skift størrelse på menu");
+    button.innerHTML='<span class="toggle-icon" aria-hidden="true">⇔</span><span class="toggle-label">Gør menu smallere</span>';
+    sidebar.insertBefore(button,nav);
+    const collapsed=localStorage.getItem("shardnote_sidebar_collapsed")==="true";
+    document.body.classList.toggle("shardnote-sidebar-collapsed",collapsed);
+    function update(){
+      const isCollapsed=document.body.classList.contains("shardnote-sidebar-collapsed");
+      button.querySelector(".toggle-icon").textContent=isCollapsed?"⇔":"⇤";
+      button.querySelector(".toggle-label").textContent=isCollapsed?"Udvid menu":"Gør menu smallere";
+      button.title=isCollapsed?"Udvid menu":"Gør menu smallere";
+      button.setAttribute("aria-expanded",String(!isCollapsed));
+    }
+    button.addEventListener("click",()=>{
+      const next=!document.body.classList.contains("shardnote-sidebar-collapsed");
+      document.body.classList.toggle("shardnote-sidebar-collapsed",next);
+      localStorage.setItem("shardnote_sidebar_collapsed",String(next));
+      update();
+    });
+    update();
+  }
+  if(document.readyState==="loading") document.addEventListener("DOMContentLoaded",init,{once:true});
+  else init();
+})();
