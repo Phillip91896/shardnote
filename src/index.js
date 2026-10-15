@@ -942,65 +942,77 @@ function parseCookies(req) {
 }
 
 async function ensureAdmin() {
-  const configuredEmail = String(process.env.ADMIN_EMAIL || "").trim().toLowerCase();
-  const email = (configuredEmail || "admin@Shardnote Bot.local");
+  const configuredEmail = String(process.env.SITE_OWNER_EMAIL || process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+  const placeholderEmail = "admin@shardnote bot.local";
   const hasBootstrapPassword = Object.prototype.hasOwnProperty.call(process.env, "ADMIN_PASSWORD");
-  const password = hasBootstrapPassword ? String(process.env.ADMIN_PASSWORD || "") : "change-me-now";
+  const password = hasBootstrapPassword ? String(process.env.ADMIN_PASSWORD || "") : "";
 
   if (db) {
-    const byEmail = await db.query(
-      "SELECT id, role FROM users WHERE email = $1 LIMIT 1",
-      [email]
-    );
-
-    if (!byEmail.rowCount) {
-      await db.query(
-        "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, $3, $4)",
-        ["Administrator", email, "owner", hashPassword(password)]
-      );
-      log("security", `Owner account ${email} is ready in database`);
-      return;
-    }
-
-    // ADMIN_EMAIL can be used to bootstrap an existing account into an admin.
-    // ADMIN_PASSWORD is only used to replace that account's password when explicitly set.
     if (configuredEmail) {
-      if (hasBootstrapPassword) {
+      const byEmail = await db.query(
+        "SELECT id, role FROM users WHERE LOWER(email) = $1 LIMIT 1",
+        [configuredEmail]
+      );
+
+      if (!byEmail.rowCount) {
+        if (!hasBootstrapPassword || password.length < 8) {
+          console.warn("[Shardnote Bot] Owner account not created: set ADMIN_PASSWORD (at least 8 characters) for the configured SITE_OWNER_EMAIL/ADMIN_EMAIL.");
+          return;
+        }
         await db.query(
-          "UPDATE users SET role = 'owner', password_hash = $1 WHERE email = $2",
-          [hashPassword(password), email]
+          "INSERT INTO users (name, email, role, password_hash) VALUES ($1, $2, $3, $4)",
+          ["Owner", configuredEmail, "owner", hashPassword(password)]
+        );
+        log("security", "Configured Owner account created");
+        return;
+      }
+
+      if (hasBootstrapPassword) {
+        if (password.length < 8) throw new Error("ADMIN_PASSWORD must be at least 8 characters.");
+        await db.query(
+          "UPDATE users SET role = 'owner', password_hash = $1 WHERE LOWER(email) = $2",
+          [hashPassword(password), configuredEmail]
         );
       } else {
         await db.query(
-          "UPDATE users SET role = 'owner' WHERE email = $1",
-          [email]
+          "UPDATE users SET role = 'owner' WHERE LOWER(email) = $1",
+          [configuredEmail]
         );
       }
-      log("security", `Bootstrap Owner ensured for ${email}`);
+      return;
     }
-    return;
-  }
 
-  if (!state.users.length) {
-    state.users.push({
-      id: 1,
-      name: "Administrator",
-      email,
-      role: "owner",
-      passwordHash: hashPassword(password),
-      createdAt: new Date().toISOString()
-    });
-    log("security", "Initial admin account is ready in memory");
+    // Without an explicit owner email, promote the earliest real account.
+    // Never create a fake, publicly guessable default administrator account.
+    const existingOwner = await db.query(
+      "SELECT id FROM users WHERE LOWER(email) <> $1 AND LOWER(role) = 'owner' ORDER BY id ASC LIMIT 1",
+      [placeholderEmail]
+    );
+    if (existingOwner.rowCount) return;
+
+    const firstRealUser = await db.query(
+      "SELECT id FROM users WHERE LOWER(email) <> $1 ORDER BY id ASC LIMIT 1",
+      [placeholderEmail]
+    );
+    if (firstRealUser.rowCount) {
+      await db.query("UPDATE users SET role = 'owner' WHERE id = $1", [firstRealUser.rows[0].id]);
+      log("security", "Owner access assigned to the earliest existing account");
+    }
     return;
   }
 
   if (configuredEmail) {
-    const existing = state.users.find(u => u.email.toLowerCase() === email);
+    const existing = state.users.find(u => String(u.email || "").trim().toLowerCase() === configuredEmail);
     if (existing) {
       existing.role = "owner";
-      if (hasBootstrapPassword) existing.passwordHash = hashPassword(password);
-      log("security", `Bootstrap admin ensured for ${email}`);
+      if (hasBootstrapPassword && password.length >= 8) existing.passwordHash = hashPassword(password);
     }
+    return;
+  }
+
+  const realUsers = state.users.filter(u => String(u.email || "").trim().toLowerCase() !== placeholderEmail);
+  if (!realUsers.some(u => String(u.role || "").toLowerCase() === "owner") && realUsers.length) {
+    realUsers[0].role = "owner";
   }
 }
 const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
@@ -1522,9 +1534,15 @@ app.post("/api/register", async (req, res) => {
         activatedFromKey = true;
       }
 
+      const configuredOwnerEmail = String(process.env.SITE_OWNER_EMAIL || process.env.ADMIN_EMAIL || "").trim().toLowerCase();
+      const ownerBootstrap = await db.query(
+        "SELECT id FROM public.users WHERE LOWER(email) <> $1 ORDER BY id ASC LIMIT 1",
+        ["admin@shardnote bot.local"]
+      );
+      const shouldBeOwner = !configuredOwnerEmail && !ownerBootstrap.rowCount;
       const result = await db.query(
-        "INSERT INTO users (name, email, role, password_hash, plan, subscription_status, trial_used) VALUES ($1, $2, 'member', $3, $4, $5, $6) RETURNING id, name, email, role, plan, subscription_status, trial_used, created_at, banned",
-        [name, email, hashPassword(password), activatedPlan, activatedFromKey ? "active" : "inactive", activatedFromKey]
+        "INSERT INTO users (name, email, role, password_hash, plan, subscription_status, trial_used) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id, name, email, role, plan, subscription_status, trial_used, created_at, banned",
+        [name, email, shouldBeOwner ? "owner" : "member", hashPassword(password), activatedPlan, activatedFromKey ? "active" : "inactive", activatedFromKey]
       );
 
       user = result.rows[0];
@@ -1827,6 +1845,9 @@ app.patch("/api/admin/users/:id/role", requireAuth, requireOwner, async (req, re
     const role = req.body.role === "admin" ? "admin" : "member";
 
     if (db) {
+      const targetResult = await db.query("SELECT id, name, email, role FROM users WHERE id = $1 LIMIT 1", [req.params.id]);
+      if (!targetResult.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
+      if (isSiteOwner(targetResult.rows[0])) return res.status(403).json({ error: "Owner-kontoen kan ikke degraderes." });
       const result = await db.query(
         "UPDATE users SET role = $1 WHERE id = $2 RETURNING id, name, email, role, created_at",
         [role, req.params.id]
@@ -2159,6 +2180,9 @@ app.delete("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) =
     }
 
     if (db) {
+      const target = await db.query("SELECT id, email, role FROM users WHERE id = $1 LIMIT 1", [req.params.id]);
+      if (!target.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
+      if (isSiteOwner(target.rows[0])) return res.status(403).json({ error: "Owner-kontoen kan ikke slettes." });
       const result = await db.query("DELETE FROM users WHERE id = $1 RETURNING id", [req.params.id]);
       if (!result.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
     } else {
