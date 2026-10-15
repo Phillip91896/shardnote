@@ -12,6 +12,42 @@ const PUBLIC_SITE_URL = String(process.env.PUBLIC_SITE_URL || "https://shardnote
 
 app.set("trust proxy", 1);
 
+// Baseline browser security headers. Keep CSP separate until all inline UI scripts are migrated.
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (req.secure || process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
+
+// Per-process login throttling. For multi-instance deployments, move this to shared storage.
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+function loginRateLimit(req, res, next) {
+  const now = Date.now();
+  const key = String(req.ip || req.socket?.remoteAddress || "unknown");
+  const entry = loginAttempts.get(key);
+  if (!entry || entry.resetAt <= now) {
+    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return next();
+  }
+  if (entry.count >= LOGIN_MAX_ATTEMPTS) {
+    res.setHeader("Retry-After", String(Math.ceil((entry.resetAt - now) / 1000)));
+    return res.status(429).json({ error: "For mange loginforsøg. Prøv igen om lidt." });
+  }
+  entry.count += 1;
+  next();
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of loginAttempts) if (entry.resetAt <= now) loginAttempts.delete(key);
+}, LOGIN_WINDOW_MS).unref();
+
 app.post("/api/billing/webhook", express.raw({ type: "application/json" }), async (req,res)=>{
   if(!stripe||!process.env.STRIPE_WEBHOOK_SECRET)return res.status(503).send("Stripe webhook is not configured.");
   let event;
@@ -967,7 +1003,7 @@ async function ensureAdmin() {
     }
   }
 }
-const SESSION_SECRET = process.env.SESSION_SECRET || process.env.DISCORD_TOKEN || process.env.STRIPE_SECRET_KEY || process.env.DATABASE_URL || "Shardnote Bot-session-secret";
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
 
 function signSessionUserId(userId) {
   return crypto.createHmac("sha256", SESSION_SECRET).update(String(userId)).digest("hex");
@@ -1298,7 +1334,7 @@ const client = createBot({
   }
 });
 
-app.post("/api/login", async (req, res) => {
+app.post("/api/login", loginRateLimit, async (req, res) => {
   try {
     await ensureAdmin();
 
@@ -1388,7 +1424,7 @@ app.post("/api/login", async (req, res) => {
       banned: !!user.banned
     });
 
-    res.setHeader("Set-Cookie", `ShardNote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    res.setHeader("Set-Cookie", `ShardNote_session=${sid}; HttpOnly; Path=/; SameSite=Lax; Max-Age=28800${req.secure || process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
     await recordLoginAudit({ req, user, success: true, eventType: "login" });
     log("security", `User ${user.email} logged in`);
     res.json({
@@ -1589,7 +1625,7 @@ app.post("/api/logout", (req, res) => {
     logsUnlocks.delete(sid);
     ipUnlocks.delete(sid);
   }
-  res.setHeader("Set-Cookie", "ShardNote_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+  res.setHeader("Set-Cookie", `ShardNote_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${req.secure || process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
   res.json({ ok: true });
 });
 
