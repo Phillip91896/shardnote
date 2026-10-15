@@ -3,6 +3,7 @@ const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true,buttonLabels:{}};
 let ticketCache = [];
 let adminTicketCache = [];
+const isAdminOrOwner = user => ["admin", "owner"].includes(String(user?.role || "").toLowerCase());
 
 async function addBotToDiscord(){
   try{
@@ -24,8 +25,8 @@ document.addEventListener("click",function(event){
 
 function navigate(page){
   if(!pages.includes(page)) return;
-  if(page==="settings" && currentUser && currentUser.role!=="admin" && currentUser.plan!=="member_pro") return;
-  if(page==="staff-applications" && currentUser && currentUser.role!=="admin" && !currentUser.applicationReviewer) return;
+  if(page==="settings" && currentUser && !isAdminOrOwner(currentUser) && currentUser.plan!=="member_pro") return;
+  if(page==="staff-applications" && currentUser && !isAdminOrOwner(currentUser) && !currentUser.applicationReviewer) return;
   pages.forEach(p=>{
     const el=document.getElementById("page-"+p);
     if(el) el.classList.toggle("active",p===page);
@@ -251,7 +252,7 @@ async function loadTickets(){
   bindTicketFilterEvents("tickets","loadTickets");
   try{
     ticketCache=await api("/api/tickets");
-    renderTicketTable(ticketCache,"ticketList",currentUser?.role==="admin","tickets");
+    renderTicketTable(ticketCache,"ticketList",isAdminOrOwner(currentUser),"tickets");
     loadTicketOverview();
   }catch(e){node.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';}
 }
@@ -292,7 +293,7 @@ async function openTicketReply(id){
   try{
     const messages=await api("/api/tickets/"+id+"/messages");
     const ticket=(await api("/api/tickets")).find(t=>String(t.id)===String(id));
-    const isAdmin=currentUser?.role==="admin";
+    const isAdmin=isAdminOrOwner(currentUser);
     const modal=document.createElement("div");
     modal.id="ticketChatModal";
     modal.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px";
@@ -760,12 +761,12 @@ async function loadUsers(){
     const users=await api("/api/admin/users");
     const planNames={member:"Member",member_plus:"Member Plus",member_pro:"Member Pro"};
     document.getElementById("userList").innerHTML=users.map(u=>{
-      const roleButton=currentUser?.isOwner && u.id!==currentUser?.id
+      const roleButton=currentUser?.isOwner && u.role!=="owner" && u.id!==currentUser?.id
         ? '<button class="btn small" onclick="toggleUserRole('+u.id+',\''+u.role+'\')">'+(u.role==="admin"?"Gør til member":"Gør til admin")+'</button>'
         : "";
 
       const nextPlan={member:"member_plus",member_plus:"member_pro",member_pro:"member"}[u.plan||"member"] || "member";
-      const planButton=u.role!=="admin"
+      const planButton=!["admin","owner"].includes(String(u.role||"").toLowerCase())
         ? `<button class="btn small" onclick="toggleUserPlan(${u.id},'${nextPlan}')">${u.plan==="member_pro"?"Gør til Member":u.plan==="member_plus"?"Gør til Member Pro":"Gør til Member Plus"}</button>`
         : "";
 
@@ -786,7 +787,7 @@ async function loadUsers(){
         : `<span class="badge open">Aktiv</span>`;
 
       return `<div class="activity-item">
-        <div class="activity-icon">${u.role==="admin"?"👑":"👤"}</div>
+        <div class="activity-icon">${["admin","owner"].includes(String(u.role||"").toLowerCase())?"👑":"👤"}</div>
         <div style="flex:1">
           <b>${escapeHtml(u.name)}</b>
           <small>${escapeHtml(u.email)} · ${escapeHtml(u.role)} · <b>${escapeHtml(planNames[u.plan]||"Member")}</b> ${u.applicationReviewer?'· <span class="badge open">Application Reviewer</span>':""} · ${banStatus}</small>
@@ -996,7 +997,7 @@ async function checkLogin(){
     if(!r.ok) throw new Error();
     const data=await r.json();
     currentUser=data.user;
-    if(!currentUser.hasPaidAccess && currentUser.role!=="admin"){
+    if(!currentUser.hasPaidAccess && !isAdminOrOwner(currentUser)){
       showPaywall();
       return;
     }
@@ -1009,18 +1010,18 @@ async function checkLogin(){
 function unlockDashboard(){
   document.getElementById("loginScreen")?.remove();
   document.body.classList.remove("locked");
-  if(currentUser?.role!=="admin" && !currentUser?.applicationReviewer){
+  if(!isAdminOrOwner(currentUser) && !currentUser?.applicationReviewer){
     document.querySelector('[data-page="staff-applications"]')?.remove();
     document.getElementById("page-staff-applications")?.remove();
   }
-  if(currentUser?.role!=="admin"){
+  if(!isAdminOrOwner(currentUser)){
     document.querySelector('[data-page="admin"]')?.remove();
     document.querySelector('[data-page="logs"]')?.remove();
-    if(currentUser?.role!=="admin" && currentUser?.plan!=="member_pro"){
+    if(!isAdminOrOwner(currentUser) && currentUser?.plan!=="member_pro"){
       document.querySelector('[data-page="settings"]')?.remove();
       document.getElementById("page-settings")?.remove();
     }
-    if(currentUser?.plan!=="member_plus" && currentUser?.plan!=="member_pro" && currentUser?.role!=="admin"){
+    if(currentUser?.plan!=="member_plus" && currentUser?.plan!=="member_pro" && !isAdminOrOwner(currentUser)){
       document.querySelector('[data-page="features"]')?.remove();
       document.getElementById("page-features")?.remove();
       document.querySelector('[data-page="templates"]')?.remove();
@@ -1391,7 +1392,7 @@ async function login(e){
     const r=await fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email:document.getElementById("loginEmail").value,password:document.getElementById("loginPassword").value})});
     const data=await r.json(); if(!r.ok) throw new Error(data.error||"Login fejlede");
     currentUser=data.user;
-    if(currentUser.hasPaidAccess || currentUser.role==="admin") unlockDashboard();
+    if(currentUser.hasPaidAccess || isAdminOrOwner(currentUser)) unlockDashboard();
     else showPaywall();
   }catch(err){error.textContent=err.message}
 }
@@ -1417,7 +1418,7 @@ async function register(e){
 
     currentUser=data.user;
     toast("✅ Konto oprettet");
-    if(currentUser.hasPaidAccess || currentUser.role==="admin") unlockDashboard();
+    if(currentUser.hasPaidAccess || isAdminOrOwner(currentUser)) unlockDashboard();
     else showPaywall();
   }catch(err){
     error.textContent=err.message;
