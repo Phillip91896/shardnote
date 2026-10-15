@@ -1867,6 +1867,7 @@ app.patch("/api/admin/users/:id/role", requireAuth, requireOwner, async (req, re
     const id = Number(req.params.id);
     const user = state.users.find(u => u.id === id);
     if (!user) return res.status(404).json({ error: "Bruger ikke fundet." });
+    if (isSiteOwner(user)) return res.status(403).json({ error: "Owner-kontoen kan ikke degraderes." });
 
     user.role = role;
     log("security", `Admin ${req.user.email} changed ${user.email} role to ${role}`);
@@ -2187,11 +2188,10 @@ app.delete("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) =
       if (!result.rowCount) return res.status(404).json({ error: "Bruger ikke fundet." });
     } else {
       const id = Number(req.params.id);
-      const before = state.users.length;
+      const target = state.users.find(u => u.id === id);
+      if (!target) return res.status(404).json({ error: "Bruger ikke fundet." });
+      if (isSiteOwner(target)) return res.status(403).json({ error: "Owner-kontoen kan ikke slettes." });
       state.users = state.users.filter(u => u.id !== id);
-      if (before === state.users.length) {
-        return res.status(404).json({ error: "Bruger ikke fundet." });
-      }
     }
 
     log("security", `Admin ${req.user.email} deleted user #${req.params.id}`);
