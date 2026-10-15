@@ -12,6 +12,42 @@ const PUBLIC_SITE_URL = String(process.env.PUBLIC_SITE_URL || "https://shardnote
 
 app.set("trust proxy", 1);
 
+// Baseline browser security headers. Keep CSP separate until all inline UI scripts are migrated.
+app.use((req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  if (req.secure || process.env.NODE_ENV === "production") {
+    res.setHeader("Strict-Transport-Security", "max-age=31536000; includeSubDomains");
+  }
+  next();
+});
+
+// Per-process login throttling. For multi-instance deployments, move this to shared storage.
+const loginAttempts = new Map();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_MAX_ATTEMPTS = 10;
+function loginRateLimit(req, res, next) {
+  const now = Date.now();
+  const key = String(req.ip || req.socket?.remoteAddress || "unknown");
+  const entry = loginAttempts.get(key);
+  if (!entry || entry.resetAt <= now) {
+    loginAttempts.set(key, { count: 1, resetAt: now + LOGIN_WINDOW_MS });
+    return next();
+  }
+  if (entry.count >= LOGIN_MAX_ATTEMPTS) {
+    res.setHeader("Retry-After", String(Math.ceil((entry.resetAt - now) / 1000)));
+    return res.status(429).json({ error: "For mange loginforsøg. Prøv igen om lidt." });
+  }
+  entry.count += 1;
+  next();
+}
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, entry] of loginAttempts) if (entry.resetAt <= now) loginAttempts.delete(key);
+}, LOGIN_WINDOW_MS).unref();
+
 app.post("/api/billing/webhook", express.raw({ type: "application/json" }), async (req,res)=>{
   if(!stripe||!process.env.STRIPE_WEBHOOK_SECRET)return res.status(503).send("Stripe webhook is not configured.");
   let event;
@@ -967,7 +1003,7 @@ async function ensureAdmin() {
     }
   }
 }
-const SESSION_SECRET = process.env.SESSION_SECRET || process.env.DISCORD_TOKEN || process.env.STRIPE_SECRET_KEY || process.env.DATABASE_URL || "Shardnote Bot-session-secret";
+const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
 
 function signSessionUserId(userId) {
   return crypto.createHmac("sha256", SESSION_SECRET).update(String(userId)).digest("hex");
@@ -1025,8 +1061,11 @@ async function getSessionUser(req){
 }
 function hasPaidAccess(user){return ["admin","owner"].includes(String(user?.role||"").toLowerCase())||["active","trialing"].includes(user?.subscriptionStatus);}
 async function requireAuth(req,res,next){try{const user=await getSessionUser(req);if(!user)return res.status(401).json({error:"Du skal logge ind."});req.user=user;next();}catch(error){console.error(error);res.status(500).json({error:"Loginstatus kunne ikke hentes."});}}
+function isStaff(user) {
+  return String(user?.role || "").trim().toLowerCase() === "admin" || isSiteOwner(user);
+}
 function requireAdmin(req, res, next) {
-  if (req.user?.role !== "admin" && !isSiteOwner(req.user)) return res.status(403).json({ error: "Kun administratorer har adgang." });
+  if (!isStaff(req.user)) return res.status(403).json({ error: "Kun administratorer har adgang." });
   next();
 }
 function requireOwner(req, res, next) {
@@ -1298,7 +1337,7 @@ const client = createBot({
   }
 });
 
-app.post("/api/login", async (req, res) => {
+app.post("/api/login", loginRateLimit, async (req, res) => {
   try {
     await ensureAdmin();
 
@@ -1388,7 +1427,7 @@ app.post("/api/login", async (req, res) => {
       banned: !!user.banned
     });
 
-    res.setHeader("Set-Cookie", `ShardNote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    res.setHeader("Set-Cookie", `ShardNote_session=${sid}; HttpOnly; Path=/; SameSite=Lax; Max-Age=28800${req.secure || process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
     await recordLoginAudit({ req, user, success: true, eventType: "login" });
     log("security", `User ${user.email} logged in`);
     res.json({
@@ -1589,7 +1628,7 @@ app.post("/api/logout", (req, res) => {
     logsUnlocks.delete(sid);
     ipUnlocks.delete(sid);
   }
-  res.setHeader("Set-Cookie", "ShardNote_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax");
+  res.setHeader("Set-Cookie", `ShardNote_session=; HttpOnly; Path=/; Max-Age=0; SameSite=Lax${req.secure || process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
   res.json({ ok: true });
 });
 
@@ -2448,7 +2487,7 @@ async function generateTicketAiReply(ticket, messages) {
 app.get("/api/tickets", async (req, res) => {
   try {
     if (db) {
-      const result = req.user?.role === "admin"
+      const result = isStaff(req.user)
         ? await db.query(`
             SELECT id, title, user_name AS "user", status, priority, category, description, handler,
                    panel_name AS "panelName", tags, claimed_by AS "claimedBy",
@@ -2470,7 +2509,7 @@ app.get("/api/tickets", async (req, res) => {
           `, [req.user.id]);
       state.tickets = result.rows;
     }
-    res.json(req.user?.role === "admin"
+    res.json(isStaff(req.user)
       ? state.tickets
       : state.tickets.filter(item => String(item.ownerUserId || "") === String(req.user.id)));
   } catch (error) {
@@ -2482,8 +2521,8 @@ app.get("/api/tickets", async (req, res) => {
 app.get("/api/tickets/overview", async (req,res)=>{
   try{
     if(!db) return res.json({total:state.tickets.length,open:0,pending:0,resolved:0,closed:0,avgResponseMinutes:null,activity:[]});
-    const where=req.user?.role==="admin" ? "" : " WHERE owner_user_id = $1";
-    const params=req.user?.role==="admin" ? [] : [req.user.id];
+    const where=isStaff(req.user) ? "" : " WHERE owner_user_id = $1";
+    const params=isStaff(req.user) ? [] : [req.user.id];
     const counts=await db.query(
       `SELECT
         COUNT(*)::int AS total,
@@ -2700,11 +2739,15 @@ app.post("/api/tickets/:id/claim", requireAdmin, async (req,res)=>{
     const result=await db.query(
       `UPDATE public.tickets
        SET claimed_by=$1,last_activity_at=NOW()
-       WHERE id=$2
+       WHERE id=$2 AND (claimed_by IS NULL OR claimed_by=$1)
        RETURNING id,claimed_by AS "claimedBy"`,
       [String(req.user.id),req.params.id]
     );
-    if(!result.rowCount) return res.status(404).json({error:"Ticket not found"});
+    if(!result.rowCount) {
+      const exists = await db.query("SELECT id FROM public.tickets WHERE id=$1 LIMIT 1", [req.params.id]);
+      if (!exists.rowCount) return res.status(404).json({error:"Ticket not found"});
+      return res.status(409).json({error:"Ticketen er allerede overtaget af en anden medarbejder."});
+    }
     await recordTicketEvent(req.params.id,req.user.id,req.user.name||req.user.email,"claimed",{claimedBy:String(req.user.id)}).catch(()=>{});
     res.json({ok:true,claimedBy:String(req.user.id)});
   } catch(error){console.error(error);res.status(500).json({error:"Ticket kunne ikke claimes."});}
@@ -2776,7 +2819,7 @@ app.get("/api/tickets/:id/events", async (req,res)=>{
 
 app.get("/api/tickets/:id/transcript", async (req,res)=>{
   try {
-    const check=await db.query('SELECT id,title,user_name AS "user" FROM public.tickets WHERE id=$1 AND (owner_user_id=$2 OR $3=TRUE) LIMIT 1',[req.params.id,req.user.id,req.user.role==="admin"]);
+    const check=await db.query('SELECT id,title,user_name AS "user" FROM public.tickets WHERE id=$1 AND (owner_user_id=$2 OR $3=TRUE) LIMIT 1',[req.params.id,req.user.id,isStaff(req.user)]);
     if(!check.rowCount) return res.status(404).json({error:"Ticket not found"});
     const result=await db.query(
       'SELECT author_name AS "authorName",author_role AS "authorRole",content,created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id=$1 ORDER BY created_at ASC LIMIT 2000',
@@ -2787,7 +2830,7 @@ app.get("/api/tickets/:id/transcript", async (req,res)=>{
       "Titel: "+(check.rows[0].title||"Ticket"),
       "Bruger: "+(check.rows[0].user||""),
       "",
-      ...result.rows.map(m=>"["+new Date(m.createdAt).toLocaleString("da-DK")+"] "+(m.authorRole==="ai"?"AI":m.authorRole==="admin"?"Admin":m.authorRole==="internal"?"Intern note":"Kunde")+": "+m.content)
+      ...result.rows.filter(m => isStaff(req.user) || m.authorRole !== "internal").map(m=>"["+new Date(m.createdAt).toLocaleString("da-DK")+"] "+(m.authorRole==="ai"?"AI":m.authorRole==="admin"?"Admin":m.authorRole==="internal"?"Intern note":"Kunde")+": "+m.content)
     ];
     res.setHeader("Content-Type","text/plain; charset=utf-8");
     res.setHeader("Content-Disposition",`attachment; filename="ticket-${req.params.id}-transcript.txt"`);
@@ -2800,10 +2843,10 @@ app.get("/api/tickets/:id/messages", async (req, res) => {
     if (!db) return res.json([]);
     const check = await db.query(
       "SELECT id FROM public.tickets WHERE id = $1 AND (owner_user_id = $2 OR $3 = TRUE) LIMIT 1",
-      [req.params.id, req.user.id, req.user.role === "admin"]
+      [req.params.id, req.user.id, isStaff(req.user)]
     );
     if (!check.rowCount) return res.status(404).json({ error: "Ticket not found" });
-    const result = req.user.role === "admin"
+    const result = isStaff(req.user)
       ? await db.query(
           'SELECT id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 200',
           [req.params.id]
@@ -2854,7 +2897,7 @@ app.post("/api/tickets/:id/reply", async (req, res) => {
       [req.params.id, req.user.id, req.user.role === "admin"]
     );
     if (!check.rowCount) return res.status(404).json({ error: "Ticket not found" });
-    const role = req.user.role === "admin" ? "admin" : "user";
+    const role = isStaff(req.user) ? "admin" : "user";
     const authorName = req.user.name || req.user.email || "Bruger";
     const result = await db.query(
       'INSERT INTO public.ticket_messages (ticket_id, author_user_id, author_name, author_role, content) VALUES ($1,$2,$3,$4,$5) RETURNING id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt"',
