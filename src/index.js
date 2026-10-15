@@ -1061,8 +1061,11 @@ async function getSessionUser(req){
 }
 function hasPaidAccess(user){return ["admin","owner"].includes(String(user?.role||"").toLowerCase())||["active","trialing"].includes(user?.subscriptionStatus);}
 async function requireAuth(req,res,next){try{const user=await getSessionUser(req);if(!user)return res.status(401).json({error:"Du skal logge ind."});req.user=user;next();}catch(error){console.error(error);res.status(500).json({error:"Loginstatus kunne ikke hentes."});}}
+function isStaff(user) {
+  return String(user?.role || "").trim().toLowerCase() === "admin" || isSiteOwner(user);
+}
 function requireAdmin(req, res, next) {
-  if (req.user?.role !== "admin" && !isSiteOwner(req.user)) return res.status(403).json({ error: "Kun administratorer har adgang." });
+  if (!isStaff(req.user)) return res.status(403).json({ error: "Kun administratorer har adgang." });
   next();
 }
 function requireOwner(req, res, next) {
@@ -2484,7 +2487,7 @@ async function generateTicketAiReply(ticket, messages) {
 app.get("/api/tickets", async (req, res) => {
   try {
     if (db) {
-      const result = req.user?.role === "admin"
+      const result = isStaff(req.user)
         ? await db.query(`
             SELECT id, title, user_name AS "user", status, priority, category, description, handler,
                    panel_name AS "panelName", tags, claimed_by AS "claimedBy",
@@ -2506,7 +2509,7 @@ app.get("/api/tickets", async (req, res) => {
           `, [req.user.id]);
       state.tickets = result.rows;
     }
-    res.json(req.user?.role === "admin"
+    res.json(isStaff(req.user)
       ? state.tickets
       : state.tickets.filter(item => String(item.ownerUserId || "") === String(req.user.id)));
   } catch (error) {
@@ -2518,8 +2521,8 @@ app.get("/api/tickets", async (req, res) => {
 app.get("/api/tickets/overview", async (req,res)=>{
   try{
     if(!db) return res.json({total:state.tickets.length,open:0,pending:0,resolved:0,closed:0,avgResponseMinutes:null,activity:[]});
-    const where=req.user?.role==="admin" ? "" : " WHERE owner_user_id = $1";
-    const params=req.user?.role==="admin" ? [] : [req.user.id];
+    const where=isStaff(req.user) ? "" : " WHERE owner_user_id = $1";
+    const params=isStaff(req.user) ? [] : [req.user.id];
     const counts=await db.query(
       `SELECT
         COUNT(*)::int AS total,
@@ -2736,11 +2739,15 @@ app.post("/api/tickets/:id/claim", requireAdmin, async (req,res)=>{
     const result=await db.query(
       `UPDATE public.tickets
        SET claimed_by=$1,last_activity_at=NOW()
-       WHERE id=$2
+       WHERE id=$2 AND (claimed_by IS NULL OR claimed_by=$1)
        RETURNING id,claimed_by AS "claimedBy"`,
       [String(req.user.id),req.params.id]
     );
-    if(!result.rowCount) return res.status(404).json({error:"Ticket not found"});
+    if(!result.rowCount) {
+      const exists = await db.query("SELECT id FROM public.tickets WHERE id=$1 LIMIT 1", [req.params.id]);
+      if (!exists.rowCount) return res.status(404).json({error:"Ticket not found"});
+      return res.status(409).json({error:"Ticketen er allerede overtaget af en anden medarbejder."});
+    }
     await recordTicketEvent(req.params.id,req.user.id,req.user.name||req.user.email,"claimed",{claimedBy:String(req.user.id)}).catch(()=>{});
     res.json({ok:true,claimedBy:String(req.user.id)});
   } catch(error){console.error(error);res.status(500).json({error:"Ticket kunne ikke claimes."});}
@@ -2812,7 +2819,7 @@ app.get("/api/tickets/:id/events", async (req,res)=>{
 
 app.get("/api/tickets/:id/transcript", async (req,res)=>{
   try {
-    const check=await db.query('SELECT id,title,user_name AS "user" FROM public.tickets WHERE id=$1 AND (owner_user_id=$2 OR $3=TRUE) LIMIT 1',[req.params.id,req.user.id,req.user.role==="admin"]);
+    const check=await db.query('SELECT id,title,user_name AS "user" FROM public.tickets WHERE id=$1 AND (owner_user_id=$2 OR $3=TRUE) LIMIT 1',[req.params.id,req.user.id,isStaff(req.user)]);
     if(!check.rowCount) return res.status(404).json({error:"Ticket not found"});
     const result=await db.query(
       'SELECT author_name AS "authorName",author_role AS "authorRole",content,created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id=$1 ORDER BY created_at ASC LIMIT 2000',
@@ -2823,7 +2830,7 @@ app.get("/api/tickets/:id/transcript", async (req,res)=>{
       "Titel: "+(check.rows[0].title||"Ticket"),
       "Bruger: "+(check.rows[0].user||""),
       "",
-      ...result.rows.map(m=>"["+new Date(m.createdAt).toLocaleString("da-DK")+"] "+(m.authorRole==="ai"?"AI":m.authorRole==="admin"?"Admin":m.authorRole==="internal"?"Intern note":"Kunde")+": "+m.content)
+      ...result.rows.filter(m => isStaff(req.user) || m.authorRole !== "internal").map(m=>"["+new Date(m.createdAt).toLocaleString("da-DK")+"] "+(m.authorRole==="ai"?"AI":m.authorRole==="admin"?"Admin":m.authorRole==="internal"?"Intern note":"Kunde")+": "+m.content)
     ];
     res.setHeader("Content-Type","text/plain; charset=utf-8");
     res.setHeader("Content-Disposition",`attachment; filename="ticket-${req.params.id}-transcript.txt"`);
@@ -2836,10 +2843,10 @@ app.get("/api/tickets/:id/messages", async (req, res) => {
     if (!db) return res.json([]);
     const check = await db.query(
       "SELECT id FROM public.tickets WHERE id = $1 AND (owner_user_id = $2 OR $3 = TRUE) LIMIT 1",
-      [req.params.id, req.user.id, req.user.role === "admin"]
+      [req.params.id, req.user.id, isStaff(req.user)]
     );
     if (!check.rowCount) return res.status(404).json({ error: "Ticket not found" });
-    const result = req.user.role === "admin"
+    const result = isStaff(req.user)
       ? await db.query(
           'SELECT id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt" FROM public.ticket_messages WHERE ticket_id = $1 ORDER BY created_at ASC LIMIT 200',
           [req.params.id]
@@ -2890,7 +2897,7 @@ app.post("/api/tickets/:id/reply", async (req, res) => {
       [req.params.id, req.user.id, req.user.role === "admin"]
     );
     if (!check.rowCount) return res.status(404).json({ error: "Ticket not found" });
-    const role = req.user.role === "admin" ? "admin" : "user";
+    const role = isStaff(req.user) ? "admin" : "user";
     const authorName = req.user.name || req.user.email || "Bruger";
     const result = await db.query(
       'INSERT INTO public.ticket_messages (ticket_id, author_user_id, author_name, author_role, content) VALUES ($1,$2,$3,$4,$5) RETURNING id, author_name AS "authorName", author_role AS "authorRole", content, created_at AS "createdAt"',
