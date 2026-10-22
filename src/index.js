@@ -1082,6 +1082,12 @@ async function getSessionUser(req){
   const row=result.rows[0];
   if(!row) return null;
   Object.assign(sessionUser,row);
+  // Enforce expiry for manually issued subscription keys at request time.
+  if (row.subscriptionCurrentPeriodEnd && new Date(row.subscriptionCurrentPeriodEnd).getTime() <= Date.now() &&
+      ["active","trialing"].includes(String(row.subscriptionStatus || "").toLowerCase())) {
+    await db.query("UPDATE public.users SET subscription_status='inactive' WHERE id=$1", [row.id]);
+    sessionUser.subscriptionStatus = "inactive";
+  }
   const freeGrant = await db.query(
     "SELECT access_plan AS \"expiresPlan\", expires_at AS \"expiresAt\" FROM public.free_access_grants WHERE email = LOWER($1) AND (expires_at IS NULL OR expires_at > NOW()) LIMIT 1",
     [row.email]
