@@ -4256,6 +4256,16 @@ body.locked > .app{display:none}
     <div class="actions"><button class="btn primary" onclick="generateSerialKeys()">🔑 Generér serial keys</button></div>
     <pre id="serialGenerated" style="display:none;margin-top:14px;white-space:pre-wrap;word-break:break-all;background:#0b0b11;border:1px solid var(--border);padding:12px;border-radius:10px"></pre>
     <div id="serialKeyList" style="margin-top:16px"></div>
+    <hr style="border-color:var(--border);margin:18px 0">
+    <div class="section-title"><div><h3>🎁 Gratis adgang via email</h3><span>Giv en bruger adgang uden betaling og uden serial key.</span></div></div>
+    <div class="form-grid">
+      <div class="field"><label>Emailadresse</label><input id="freeAccessEmail" type="email" placeholder="person@example.com"></div>
+      <div class="field"><label>Pakke</label><select id="freeAccessPlan"><option value="member">Member</option><option value="member_plus">Member Plus</option><option value="member_pro">Member Pro</option></select></div>
+      <div class="field"><label>Udløbsdato (valgfri)</label><input id="freeAccessExpiresAt" type="datetime-local"></div>
+      <div class="field"><label>Årsag (valgfri)</label><input id="freeAccessReason" maxlength="500" placeholder="Fx testadgang eller samarbejde"></div>
+    </div>
+    <div class="actions"><button class="btn primary" onclick="grantFreeAccess()">🎁 Giv gratis adgang</button><button class="btn small" onclick="loadFreeAccess()">Opdater liste</button></div>
+    <div id="freeAccessList" style="margin-top:12px"></div>
   </div>
 
   <div class="card" style="margin-bottom:18px">
