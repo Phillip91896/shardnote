@@ -55,7 +55,7 @@ app.post("/api/billing/webhook", express.raw({ type: "application/json" }), asyn
   catch(error){console.error("[Shardnote Bot] Stripe webhook signature failed:",error.message);return res.status(400).send("Invalid webhook signature.");}
   try{
     const object=event.data.object;
-    if(event.type==="checkout.session.completed"){
+    if((event.type==="checkout.session.completed" && ["paid","no_payment_required"].includes(object.payment_status)) || event.type==="checkout.session.async_payment_succeeded"){
       const userId=object.metadata?.user_id;
       const subscriptionId=typeof object.subscription==="string"?object.subscription:object.subscription?.id||null;
       const customerId=typeof object.customer==="string"?object.customer:object.customer?.id||null;
