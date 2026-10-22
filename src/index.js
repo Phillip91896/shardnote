@@ -1294,6 +1294,35 @@ app.get("/api/admin/staff-applications", requireAuth, requireApplicationReviewer
   }
 });
 
+app.patch("/api/admin/staff-applications/:id", requireAuth, requireOwner, async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: "Ansøgningssystemet er midlertidigt utilgængeligt." });
+    const id = Number.parseInt(req.params.id, 10);
+    const status = String(req.body?.status || "");
+    if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ error: "Ugyldigt ansøgningsnummer." });
+    if (!["new", "reviewed", "approved", "rejected"].includes(status)) return res.status(400).json({ error: "Ugyldig status." });
+    const result = await db.query(
+      "UPDATE public.staff_applications SET status = $1, reviewed_at = CASE WHEN $1 IN ('reviewed','approved','rejected') THEN NOW() ELSE NULL END WHERE id = $2 RETURNING id, full_name AS \"fullName\", email, status, reviewed_at AS \"reviewedAt\"",
+      [status, id]
+    );
+    if (!result.rowCount) return res.status(404).json({ error: "Ansøgningen blev ikke fundet." });
+    const application = result.rows[0];
+    if (status === "approved") {
+      const promoted = await db.query(
+        "UPDATE public.users SET role = 'admin' WHERE LOWER(email) = LOWER($1) AND LOWER(COALESCE(role, '')) <> 'owner' RETURNING id, email, role",
+        [application.email]
+      );
+      log("security", "Owner " + req.user.email + " approved staff application #" + id + "; matching accounts promoted: " + promoted.rowCount);
+      return res.json({ ok: true, application, promoted: promoted.rowCount, message: promoted.rowCount ? "Ansøgningen er godkendt, og brugerens konto er gjort til Admin." : "Ansøgningen er godkendt, men der findes ingen konto med samme email endnu." });
+    }
+    log("staff_application", "Owner " + req.user.email + " changed application #" + id + " status to " + status);
+    return res.json({ ok: true, application });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Ansøgningen kunne ikke opdateres." });
+  }
+});
+
 async function recordTicketEvent(ticketId, actorUserId, actorName, action, metadata = {}) {
   if (!db || !ticketId) return;
   await db.query(
