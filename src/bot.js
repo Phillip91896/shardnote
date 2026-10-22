@@ -15,6 +15,7 @@ const {
   Partials
 } = require("discord.js");
 const { joinVoiceChannel, getVoiceConnection } = require("@discordjs/voice");
+const { parseDuration, pickRandomWinners, timerDelayUntil, giveawayText } = require("./giveaway-utils");
 
 const commands = [
   {
@@ -321,16 +322,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
   const spamBuckets = new Map();
   const raidBuckets = new Map();
   const polls = new Map();
-  const giveaways = new Map();
-  const giveawayEntries = new Map();
-
-  function parseDuration(value) {
-    const match = String(value || "").trim().toLowerCase().match(/^(\\d+)\\s*(s|m|h|d)$/);
-    if (!match) return null;
-    const multiplier = { s: 1000, m: 60000, h: 3600000, d: 86400000 }[match[2]];
-    const ms = Number(match[1]) * multiplier;
-    return Number.isFinite(ms) && ms >= 1000 && ms <= 28 * 86400000 ? ms : null;
-  }
+  const giveawayTimers = new Map();
 
   function formatDuration(ms) {
     const total = Math.floor(ms / 1000);
@@ -338,6 +330,175 @@ function createBot({ state, db, log, createTicket, setReady }) {
     if (total >= 3600) return Math.floor(total / 3600) + "h";
     if (total >= 60) return Math.floor(total / 60) + "m";
     return total + "s";
+  }
+
+
+  function buildGiveawayEmbed(giveaway, entryCount) {
+    const language = giveaway.language || "da";
+    return new EmbedBuilder()
+      .setTitle(giveawayText(language, "title", { prize: giveaway.prize }))
+      .setDescription(giveawayText(language, "details", {
+        winners: giveaway.winners,
+        timestamp: Math.floor(new Date(giveaway.ends_at).getTime() / 1000),
+        entries: entryCount
+      }))
+      .setColor(0xf4c95d);
+  }
+
+  function giveawayComponents(id, language) {
+    return [new ActionRowBuilder().addComponents(
+      new ButtonBuilder().setCustomId("giveaway:" + String(id))
+        .setLabel(giveawayText(language, "join")).setStyle(ButtonStyle.Primary)
+    )];
+  }
+
+  function clearGiveawayTimer(id) {
+    const key = String(id);
+    const timer = giveawayTimers.get(key);
+    if (timer) clearTimeout(timer);
+    giveawayTimers.delete(key);
+  }
+
+  function scheduleGiveawayRetry(id, delay = 60000) {
+    clearGiveawayTimer(id);
+    const key = String(id);
+    const timer = setTimeout(() => {
+      giveawayTimers.delete(key);
+      finishGiveaway(id).catch((error) => {
+        log("error", "Giveaway retry failed for " + key + ": " + error.message);
+        scheduleGiveawayRetry(key, 60000);
+      });
+    }, Math.max(1000, delay));
+    giveawayTimers.set(key, timer);
+  }
+
+  function scheduleGiveawayEnd(giveaway) {
+    const key = String(giveaway.id);
+    clearGiveawayTimer(key);
+    const timer = setTimeout(() => {
+      giveawayTimers.delete(key);
+      if (new Date(giveaway.ends_at).getTime() > Date.now()) {
+        scheduleGiveawayEnd(giveaway);
+        return;
+      }
+      finishGiveaway(key).catch((error) => {
+        log("error", "Giveaway finish failed for " + key + ": " + error.message);
+        scheduleGiveawayRetry(key, 60000);
+      });
+    }, timerDelayUntil(giveaway.ends_at));
+    giveawayTimers.set(key, timer);
+  }
+
+  async function updateGiveawayAnnouncement(id) {
+    if (!db) return;
+    const result = await db.query("SELECT * FROM public.giveaways WHERE id = $1", [String(id)]);
+    const giveaway = result.rows[0];
+    if (!giveaway || giveaway.status !== "running") return;
+    const countResult = await db.query("SELECT COUNT(*)::int AS count FROM public.giveaway_entries WHERE giveaway_id = $1", [String(id)]);
+    const count = Number(countResult.rows[0]?.count || 0);
+    await db.query("UPDATE public.giveaways SET entry_count = $2 WHERE id = $1 AND status = 'running'", [String(id), count]);
+    const channel = await client.channels.fetch(giveaway.channel_id).catch(() => null);
+    if (!channel || !channel.isTextBased()) return;
+    const message = await channel.messages.fetch(giveaway.message_id).catch(() => null);
+    if (!message) return;
+    await message.edit({ embeds: [buildGiveawayEmbed(giveaway, count)], components: giveawayComponents(giveaway.id, giveaway.language || "da") });
+  }
+
+  async function finishGiveaway(id) {
+    if (!db) return;
+    const connection = await db.connect();
+    let giveaway = null;
+    try {
+      await connection.query("BEGIN");
+      const result = await connection.query("SELECT * FROM public.giveaways WHERE id = $1 FOR UPDATE", [String(id)]);
+      const row = result.rows[0];
+      if (!row || ["ended", "cancelled"].includes(row.status)) {
+        await connection.query("COMMIT");
+        clearGiveawayTimer(id);
+        return;
+      }
+      if (row.status === "running" && new Date(row.ends_at).getTime() > Date.now()) {
+        await connection.query("COMMIT");
+        scheduleGiveawayEnd(row);
+        return;
+      }
+      if (row.status === "ending" && row.processing_started_at
+        && Date.now() - new Date(row.processing_started_at).getTime() < 120000) {
+        await connection.query("COMMIT");
+        scheduleGiveawayRetry(id, 60000);
+        return;
+      }
+
+      const entriesResult = await connection.query("SELECT user_id FROM public.giveaway_entries WHERE giveaway_id = $1", [String(id)]);
+      const entryCount = entriesResult.rows.length;
+      let winnerIds = Array.isArray(row.winner_ids) ? row.winner_ids : [];
+      if (row.status !== "ending") {
+        winnerIds = pickRandomWinners(entriesResult.rows.map((entry) => entry.user_id), Number(row.winners));
+        await connection.query(
+          "UPDATE public.giveaways SET status = 'ending', winner_ids = $2, entry_count = $3, ended_at = COALESCE(ended_at, NOW()), processing_started_at = NOW() WHERE id = $1",
+          [String(id), winnerIds, entryCount]
+        );
+      } else {
+        await connection.query("UPDATE public.giveaways SET processing_started_at = NOW(), entry_count = $2 WHERE id = $1", [String(id), entryCount]);
+      }
+      giveaway = { ...row, status: "ending", winner_ids: winnerIds, entry_count: entryCount };
+      await connection.query("COMMIT");
+    } catch (error) {
+      await connection.query("ROLLBACK").catch(() => {});
+      throw error;
+    } finally {
+      connection.release();
+    }
+
+    if (!giveaway) return;
+    if (giveaway.result_message_id) {
+      await db.query("UPDATE public.giveaways SET status = 'ended', processing_started_at = NULL WHERE id = $1 AND status = 'ending'", [String(id)]);
+      clearGiveawayTimer(id);
+      return;
+    }
+
+    const channel = await client.channels.fetch(giveaway.channel_id).catch(() => null);
+    if (!channel || !channel.isTextBased()) throw new Error("Giveaway result channel is unavailable.");
+
+    const marker = "ShardNote Giveaway Result #" + String(id);
+    let resultMessage = null;
+    try {
+      const recent = await channel.messages.fetch({ limit: 50 });
+      resultMessage = recent.find((message) => message.author?.id === client.user?.id
+        && message.embeds.some((embed) => embed.footer?.text === marker)) || null;
+    } catch (error) {
+      log("warning", "Could not check for an existing giveaway result " + id + ": " + error.message);
+    }
+
+    if (!resultMessage) {
+      const language = giveaway.language || "da";
+      const winnerIds = Array.isArray(giveaway.winner_ids) ? giveaway.winner_ids : [];
+      const winnerText = winnerIds.map((userId) => "<@" + userId + ">").join(", ");
+      const description = winnerIds.length
+        ? giveawayText(language, "winner", { winners: winnerText, prize: giveaway.prize })
+        : giveawayText(language, "none", { prize: giveaway.prize });
+      resultMessage = await channel.send({
+        embeds: [new EmbedBuilder().setTitle(giveawayText(language, "resultTitle"))
+          .setDescription(description).setColor(0x57f287).setFooter({ text: marker })],
+        allowedMentions: { parse: [], users: winnerIds }
+      });
+    }
+
+    await db.query(
+      "UPDATE public.giveaways SET status = 'ended', result_message_id = $2, ended_at = COALESCE(ended_at, NOW()), processing_started_at = NULL WHERE id = $1 AND status = 'ending'",
+      [String(id), resultMessage.id]
+    );
+    clearGiveawayTimer(id);
+  }
+
+  async function recoverGiveaways() {
+    if (!db) return;
+    const result = await db.query("SELECT * FROM public.giveaways WHERE status IN ('running', 'ending') ORDER BY ends_at ASC");
+    for (const giveaway of result.rows) {
+      if (giveaway.status === "ending") scheduleGiveawayRetry(giveaway.id, 1000);
+      else scheduleGiveawayEnd(giveaway);
+    }
+    log("success", "Recovered " + result.rows.length + " active giveaway(s) from the database.");
   }
 
   async function getStarboardSettings(guildId) {
@@ -441,7 +602,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
       autorole_id: null, support_role_id: null, ticket_category_id: null,
       verification_role_id: null, suggestion_channel_id: null,
       automod_enabled: true, invite_filter: false, levels_enabled: true,
-      economy_enabled: true, anti_raid_enabled: true, lockdown: false, ai_enabled: false, ai_channel_ids: []
+      economy_enabled: true, anti_raid_enabled: true, lockdown: false, ai_enabled: false, ai_channel_ids: [], language: "da"
     };
     if (!db) return defaults;
     try {
@@ -1989,21 +2150,41 @@ function createBot({ state, db, log, createTicket, setReady }) {
     }
 
     if (interaction.customId.startsWith("giveaway:")) {
-      const id = interaction.customId.split(":")[1];
-      const set = giveawayEntries.get(id) || new Set();
-      if (set.has(interaction.user.id)) return interaction.reply({ content: "Du er allerede med.", ephemeral: true });
-      set.add(interaction.user.id);
-      giveawayEntries.set(id, set);
-      if (db && /^\d+$/.test(id)) {
-        await db.query(
-          "CREATE TABLE IF NOT EXISTS public.giveaway_entries (giveaway_id BIGINT NOT NULL, user_id VARCHAR(32) NOT NULL, PRIMARY KEY (giveaway_id, user_id))"
-        ).catch(() => {});
-        await db.query(
-          "INSERT INTO public.giveaway_entries (giveaway_id,user_id) VALUES ($1,$2) ON CONFLICT DO NOTHING",
-          [id, interaction.user.id]
-        ).catch(() => {});
+      const id = interaction.customId.slice("giveaway:".length);
+      if (!db) return interaction.reply({ content: giveawayText("da", "dbRequired"), ephemeral: true });
+      if (!/^\d+$/.test(id)) return interaction.reply({ content: giveawayText("da", "closed"), ephemeral: true });
+
+      await interaction.deferReply({ ephemeral: true });
+      const connection = await db.connect();
+      let language = "da";
+      let outcome = "closed";
+      let inserted = false;
+      try {
+        await connection.query("BEGIN");
+        const result = await connection.query("SELECT id, status, ends_at, language FROM public.giveaways WHERE id = $1 FOR UPDATE", [id]);
+        const giveaway = result.rows[0];
+        if (giveaway && giveaway.status === "running" && new Date(giveaway.ends_at).getTime() > Date.now()) {
+          language = giveaway.language || "da";
+          const insertResult = await connection.query(
+            "INSERT INTO public.giveaway_entries (giveaway_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING user_id",
+            [id, interaction.user.id]
+          );
+          inserted = insertResult.rowCount > 0;
+          const countResult = await connection.query("SELECT COUNT(*)::int AS count FROM public.giveaway_entries WHERE giveaway_id = $1", [id]);
+          await connection.query("UPDATE public.giveaways SET entry_count = $2 WHERE id = $1 AND status = 'running'", [id, Number(countResult.rows[0]?.count || 0)]);
+          outcome = inserted ? "joined" : "already";
+        }
+        await connection.query("COMMIT");
+      } catch (error) {
+        await connection.query("ROLLBACK").catch(() => {});
+        log("error", "Giveaway entry failed for " + id + ": " + error.message);
+        outcome = "createFailed";
+      } finally {
+        connection.release();
       }
-      return interaction.reply({ content: "🎉 Du er med i giveawayen!", ephemeral: true });
+      await interaction.editReply({ content: giveawayText(language, outcome) });
+      if (inserted) updateGiveawayAnnouncement(id).catch((error) => log("warning", "Giveaway count refresh failed for " + id + ": " + error.message));
+      return;
     }
 
     return interaction.reply({ content: "Ukendt knap.", ephemeral: true });
@@ -2446,37 +2627,47 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     if (command === "giveaway") {
       if (!requirePermission(PermissionFlagsBits.ManageGuild)) return true;
-      const raw = interaction.options.getString("duration", true).trim().toLowerCase();
-      const match = raw.match(/^(\d+)\s*(s|m|h|d)$/);
-      const duration = match ? Number(match[1]) * ({ s: 1000, m: 60000, h: 3600000, d: 86400000 }[match[2]]) : NaN;
-      if (!Number.isFinite(duration) || duration < 1000 || duration > 28 * 86400000) {
-        await interaction.reply({ content: "Brug fx 10m, 2h eller 1d.", ephemeral: true });
+      if (!db) {
+        await interaction.reply({ content: giveawayText("da", "dbRequired"), ephemeral: true });
         return true;
       }
-      const prize = interaction.options.getString("prize", true).slice(0, 200);
+      await interaction.deferReply({ ephemeral: true });
+      const settings = await getGuildSettings(interaction.guild.id);
+      const language = String(settings.language || "da").toLowerCase();
+      const duration = parseDuration(interaction.options.getString("duration", true));
+      if (!duration || duration > 28 * 86400000) {
+        await interaction.editReply({ content: giveawayText(language, "invalidDuration") });
+        return true;
+      }
+
+      const prize = interaction.options.getString("prize", true).trim().slice(0, 200);
       const winners = Math.max(1, Math.min(20, interaction.options.getInteger("winners") || 1));
       const endsAt = new Date(Date.now() + duration);
-      const key = interaction.guild.id + "-" + Date.now();
-      const message = await interaction.channel.send({
-        embeds: [new EmbedBuilder().setTitle("🎉 Giveaway: " + prize).setDescription("Vindere: **" + winners + "**\nSlutter: <t:" + Math.floor(endsAt.getTime() / 1000) + ":R>").setColor(0xf4c95d)],
-        components: [new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId("giveaway:" + key).setLabel("🎉 Deltag").setStyle(ButtonStyle.Primary))]
-      });
-      giveaways.set(key, { guildId: interaction.guild.id, channelId: interaction.channel.id, messageId: message.id, prize, winners });
-      giveawayEntries.set(key, new Set());
-      setTimeout(async () => {
-        const item = giveaways.get(key);
-        if (!item) return;
-        const list = [...(giveawayEntries.get(key) || [])];
-        const picked = [];
-        while (picked.length < Math.min(winners, list.length)) picked.push(list.splice(Math.floor(Math.random() * list.length), 1)[0]);
-        const channel = client.channels.cache.get(item.channelId);
-        if (channel?.isTextBased()) {
-          await channel.send(picked.length ? "🎉 Vinder: " + picked.map(id => "<@" + id + ">").join(", ") + "\n**Præmie:** " + prize : "🎉 Ingen deltagere.\n**Præmie:** " + prize).catch(() => {});
+      let message = null;
+      let giveaway = null;
+      try {
+        message = await interaction.channel.send({
+          embeds: [new EmbedBuilder().setTitle(giveawayText(language, "title", { prize }))
+            .setDescription(giveawayText(language, "details", { winners, timestamp: Math.floor(endsAt.getTime() / 1000), entries: 0 }))
+            .setColor(0xf4c95d)]
+        });
+        const inserted = await db.query(
+          "INSERT INTO public.giveaways (guild_id, channel_id, message_id, prize, winners, ends_at, host_id, status, language, entry_count) VALUES ($1, $2, $3, $4, $5, $6, $7, 'running', $8, 0) RETURNING *",
+          [interaction.guild.id, interaction.channel.id, message.id, prize, winners, endsAt, interaction.user.id, language]
+        );
+        giveaway = inserted.rows[0];
+        await message.edit({ embeds: [buildGiveawayEmbed(giveaway, 0)], components: giveawayComponents(giveaway.id, language) });
+        scheduleGiveawayEnd(giveaway);
+        await interaction.editReply({ content: giveawayText(language, "started") });
+      } catch (error) {
+        if (giveaway?.id) {
+          await db.query("UPDATE public.giveaways SET status = 'cancelled' WHERE id = $1 AND status = 'running'", [String(giveaway.id)]).catch(() => {});
+          clearGiveawayTimer(giveaway.id);
         }
-        giveaways.delete(key);
-        giveawayEntries.delete(key);
-      }, Math.min(duration, 2147483647));
-      await interaction.reply({ content: "🎉 Giveaway startet.", ephemeral: true });
+        if (message) await message.delete().catch(() => {});
+        log("error", "Giveaway creation failed: " + error.message);
+        await interaction.editReply({ content: giveawayText(language, "createFailed") }).catch(() => {});
+      }
       return true;
     }
 
@@ -2812,6 +3003,12 @@ function createBot({ state, db, log, createTicket, setReady }) {
     } catch (error) {
       console.error("[ShardNote] Slash command registration failed:", error);
       log("error", "Slash command registration failed: " + error.message);
+    }
+
+    try {
+      await recoverGiveaways();
+    } catch (error) {
+      log("error", "Giveaway recovery failed: " + error.message);
     }
   });
 

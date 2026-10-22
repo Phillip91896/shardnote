@@ -1163,11 +1163,6 @@ function requirePlan(minimumPlan, req, res, next) {
 }
 const staffApplicationRateLimit = new Map();
 
-function getClientIp(req) {
-  return String(req.headers["x-forwarded-for"] || req.ip || "")
-    .split(",")[0].trim()
-    .slice(0, 100);
-}
 
 async function isGuildLinkedToUser(userId, guildId) {
   if (!db) return false;
