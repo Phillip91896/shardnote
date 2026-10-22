@@ -1952,7 +1952,7 @@ app.patch("/api/admin/users/:id/role", requireAuth, requireOwner, async (req, re
   }
 });
 
-app.patch("/api/admin/users/:id/plan", requireAuth, requireAdmin, async (req, res) => {
+app.patch("/api/admin/users/:id/plan", requireAuth, requireOwner, async (req, res) => {
   try {
     await ensureAdmin();
     const allowed = ["member","member_plus","member_pro","member_premium"];
@@ -1995,7 +1995,7 @@ app.patch("/api/admin/users/:id/plan", requireAuth, requireAdmin, async (req, re
 
 
 // Admin-managed complimentary access for an email, even before account creation.
-app.post("/api/admin/free-access", requireAuth, requireAdmin, async (req, res) => {
+app.post("/api/admin/free-access", requireAuth, requireOwner, async (req, res) => {
   try {
     if (!db) return res.status(503).json({ error: "Database er nødvendig for gratis adgang." });
     const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 160);
@@ -2019,7 +2019,7 @@ app.post("/api/admin/free-access", requireAuth, requireAdmin, async (req, res) =
   }
 });
 
-app.get("/api/admin/free-access", requireAuth, requireAdmin, async (req, res) => {
+app.get("/api/admin/free-access", requireAuth, requireOwner, async (req, res) => {
   try {
     if (!db) return res.json([]);
     const result = await db.query(
@@ -2032,7 +2032,7 @@ app.get("/api/admin/free-access", requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
-app.delete("/api/admin/free-access/:email", requireAuth, requireAdmin, async (req, res) => {
+app.delete("/api/admin/free-access/:email", requireAuth, requireOwner, async (req, res) => {
   try {
     if (!db) return res.status(503).json({ error: "Database er nødvendig." });
     const email = decodeURIComponent(String(req.params.email || "")).trim().toLowerCase();
@@ -2046,7 +2046,7 @@ app.delete("/api/admin/free-access/:email", requireAuth, requireAdmin, async (re
   }
 });
 
-app.get("/api/admin/serial-keys", requireAuth, requireAdmin, async (req, res) => {
+app.get("/api/admin/serial-keys", requireAuth, requireOwner, async (req, res) => {
   try {
     if (!db) return res.json([]);
     const result = await db.query(
@@ -2059,7 +2059,7 @@ app.get("/api/admin/serial-keys", requireAuth, requireAdmin, async (req, res) =>
   }
 });
 
-app.post("/api/admin/serial-keys/generate", requireAuth, requireAdmin, async (req, res) => {
+app.post("/api/admin/serial-keys/generate", requireAuth, requireOwner, async (req, res) => {
   try {
     const productName = String(req.body?.productName || "Shardnote Bot Access").trim().slice(0,120) || "Shardnote Bot Access";
     const accessPlan = ["member","member_plus","member_pro"].includes(String(req.body?.accessPlan || "")) ? String(req.body.accessPlan) : null;
@@ -2117,7 +2117,7 @@ app.post("/api/admin/serial-keys/generate", requireAuth, requireAdmin, async (re
   }
 });
 
-app.patch("/api/admin/serial-keys/:id/revoke", requireAuth, requireAdmin, async (req, res) => {
+app.patch("/api/admin/serial-keys/:id/revoke", requireAuth, requireOwner, async (req, res) => {
   try {
     if (!db) return res.status(503).json({ error: "Database er nødvendig." });
     const result = await db.query(
@@ -2181,7 +2181,7 @@ app.post("/api/serial-keys/redeem", requireAuth, async (req, res) => {
   }
 });
 
-app.patch("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res) => {
+app.patch("/api/admin/users/:id/ban", requireAuth, requireOwner, async (req, res) => {
   try {
     await ensureAdmin();
 
@@ -2266,7 +2266,7 @@ app.patch("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res
   }
 });
 
-app.patch("/api/admin/users/:id/unban", requireAuth, requireAdmin, async (req, res) => {
+app.patch("/api/admin/users/:id/unban", requireAuth, requireOwner, async (req, res) => {
   try {
     await ensureAdmin();
     const id = Number(req.params.id);
@@ -2296,7 +2296,7 @@ app.patch("/api/admin/users/:id/unban", requireAuth, requireAdmin, async (req, r
   }
 });
 
-app.delete("/api/admin/users/:id", requireAuth, requireAdmin, async (req, res) => {
+app.delete("/api/admin/users/:id", requireAuth, requireOwner, async (req, res) => {
   try {
     await ensureAdmin();
 
