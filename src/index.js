@@ -4296,31 +4296,14 @@ body.locked > .app{display:none}
   </div>
 
   <div class="card" style="margin-bottom:18px">
-    <div class="section-title"><div><h2>🔑 Serial Keys</h2><span>Kun administratorer · generér nøgler til Discord-roller</span></div></div>
+    <div class="section-title"><div><h2>🎁 Gratis adgang via e-mail</h2><span>Kun Owner kan give eller fjerne gratis adgang.</span></div></div>
     <div class="form-grid">
-      <div class="field"><label>Key type</label><select id="serialType" onchange="toggleSerialType()"><option value="account">Website access</option><option value="discord">Discord role</option></select></div>
-      <div class="field"><label>Shardnote Bot-pakke</label><select id="serialAccessPlan"><option value="member">Member</option><option value="member_plus">Member Plus</option><option value="member_pro">Member Pro</option></select></div>
-      <div class="field"><label>Email key'en er til</label><input id="serialAssignedEmail" type="email" placeholder="person@example.com"></div>
-      <div class="field"><label>Adgangens varighed</label><select id="serialDurationMonths"><option value="1">1 måned</option><option value="3">3 måneder</option><option value="12">12 måneder</option></select></div>
-      <div class="field"><label>Server</label><select id="serialGuild" onchange="loadSerialRoles()" disabled><option value="">Vælg server</option></select></div>
-      <div class="field"><label>Discord-rolle</label><select id="serialRole" disabled><option value="">Vælg rolle</option></select></div>
-      <div class="field"><label>Produktnavn</label><input id="serialProduct" maxlength="120" value="Shardnote Bot Access"></div>
-      <div class="field"><label>Antal keys</label><input id="serialQuantity" type="number" min="1" max="100" value="1"></div>
-      <div class="field"><label>Brug pr. key</label><input id="serialMaxUses" type="number" min="1" max="10000" value="1"></div>
-      <div class="field"><label>Udløbsdato (valgfri)</label><input id="serialExpiresAt" type="datetime-local"></div>
-    </div>
-    <div class="actions"><button class="btn primary" onclick="generateSerialKeys()">🔑 Generér serial keys</button></div>
-    <pre id="serialGenerated" style="display:none;margin-top:14px;white-space:pre-wrap;word-break:break-all;background:#0b0b11;border:1px solid var(--border);padding:12px;border-radius:10px"></pre>
-    <div id="serialKeyList" style="margin-top:16px"></div>
-    <hr style="border-color:var(--border);margin:18px 0">
-    <div class="section-title"><div><h3>🎁 Gratis adgang via email</h3><span>Giv en bruger adgang uden betaling og uden serial key.</span></div></div>
-    <div class="form-grid">
-      <div class="field"><label>Emailadresse</label><input id="freeAccessEmail" type="email" placeholder="person@example.com"></div>
-      <div class="field"><label>Pakke</label><select id="freeAccessPlan"><option value="member">Member</option><option value="member_plus">Member Plus</option><option value="member_pro">Member Pro</option></select></div>
-      <div class="field"><label>Udløbsdato (valgfri)</label><input id="freeAccessExpiresAt" type="datetime-local"></div>
+      <div class="field"><label>E-mailadresse</label><input id="freeAccessEmail" type="email" placeholder="person@example.com"></div>
+      <div class="field"><label>Adgangsniveau</label><select id="freeAccessPlan"><option value="member">Member</option><option value="member_plus">Member Plus</option><option value="member_pro">Member Pro</option><option value="admin">Admin</option></select></div>
+      <div class="field"><label>Varighed</label><select id="freeAccessDuration"><option value="1">1 måned</option><option value="3">3 måneder</option><option value="12">12 måneder</option><option value="lifetime">Livstid</option></select></div>
       <div class="field"><label>Årsag (valgfri)</label><input id="freeAccessReason" maxlength="500" placeholder="Fx testadgang eller samarbejde"></div>
     </div>
-    <div class="actions"><button class="btn primary" onclick="grantFreeAccess()">🎁 Giv gratis adgang</button><button class="btn small" onclick="loadFreeAccess()">Opdater liste</button></div>
+    <div class="actions"><button class="btn primary" onclick="grantFreeAccess()">🎁 Giv adgang</button><button class="btn small" onclick="loadFreeAccess()">Opdater liste</button></div>
     <div id="freeAccessList" style="margin-top:12px"></div>
   </div>
 
