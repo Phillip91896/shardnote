@@ -918,7 +918,7 @@ async function loadStaffApplications(){
           '<div class="answer"><b>Konflikthåndtering</b><div>'+escapeHtml(app.conflictHandling||"Ikke oplyst")+'</div></div>'+
           '<div class="answer"><b>Ekstra information</b><div>'+escapeHtml(app.extraInfo||"Ikke oplyst")+'</div></div>'+
         '</div>'+
-        '<div class="actions"><button class="btn small" onclick="setStaffApplicationStatus('+app.id+',\''+(app.status==="reviewed"?"new":"reviewed")+'\')">'+(app.status==="reviewed"?"Markér som ny":"Markér som gennemgået")+'</button></div>'+
+        '<div class="actions">'+(currentUser?.isOwner ? '<button class="btn small primary" onclick="setStaffApplicationStatus('+app.id+',\'approved\')">Godkend og giv Admin</button> <button class="btn small danger" onclick="setStaffApplicationStatus('+app.id+',\'rejected\')">Afvis</button>' : '<span class="meta">Kun Owner kan godkende eller afvise ansøgninger.</span>')+'</div>'+
       '</div>';
     }).join(""):'<div class="empty">Ingen staff-ansøgninger.</div>';
   }catch(e){node.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';}
@@ -926,8 +926,9 @@ async function loadStaffApplications(){
 async function setStaffApplicationStatus(id,status){
   try{
     await api("/api/admin/staff-applications/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},body:JSON.stringify({status})});
-    toast("✅ Ansøgning opdateret");
+    toast(status==="approved"?"✅ Ansøgning godkendt":status==="rejected"?"Ansøgning afvist":"Ansøgning opdateret");
     loadStaffApplications();
+    loadUsers();
   }catch(e){toast(e.message)}
 }
 async function toggleApplicationReviewer(id,enabled){
