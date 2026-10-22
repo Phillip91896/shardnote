@@ -396,6 +396,7 @@ async function initDatabase() {
       lockdown BOOLEAN NOT NULL DEFAULT FALSE,
       ai_enabled BOOLEAN NOT NULL DEFAULT FALSE,
       ai_channel_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+      language VARCHAR(5) NOT NULL DEFAULT 'da',
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
@@ -403,7 +404,8 @@ async function initDatabase() {
   await db.query(`
     ALTER TABLE public.guild_settings
       ADD COLUMN IF NOT EXISTS ai_enabled BOOLEAN NOT NULL DEFAULT FALSE,
-      ADD COLUMN IF NOT EXISTS ai_channel_ids JSONB NOT NULL DEFAULT '[]'::jsonb
+      ADD COLUMN IF NOT EXISTS ai_channel_ids JSONB NOT NULL DEFAULT '[]'::jsonb,
+      ADD COLUMN IF NOT EXISTS language VARCHAR(5) NOT NULL DEFAULT 'da'
   `);
 
   await db.query(`
@@ -504,7 +506,7 @@ async function initDatabase() {
   `);
 
   await db.query(`
-    CREATE TABLE IF NOT EXISTS giveaways (
+    CREATE TABLE IF NOT EXISTS public.giveaways (
       id BIGSERIAL PRIMARY KEY,
       guild_id VARCHAR(32) NOT NULL,
       channel_id VARCHAR(32) NOT NULL,
@@ -514,17 +516,35 @@ async function initDatabase() {
       ends_at TIMESTAMPTZ NOT NULL,
       host_id VARCHAR(32) NOT NULL,
       status VARCHAR(20) NOT NULL DEFAULT 'running',
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      language VARCHAR(5) NOT NULL DEFAULT 'da',
+      winner_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      entry_count INTEGER NOT NULL DEFAULT 0,
+      ended_at TIMESTAMPTZ,
+      result_message_id VARCHAR(32),
+      processing_started_at TIMESTAMPTZ
     )
   `);
 
   await db.query(`
-    CREATE TABLE IF NOT EXISTS giveaway_entries (
+    CREATE TABLE IF NOT EXISTS public.giveaway_entries (
       giveaway_id BIGINT NOT NULL,
       user_id VARCHAR(32) NOT NULL,
       PRIMARY KEY (giveaway_id, user_id)
     )
   `);
+
+  await db.query(`
+    ALTER TABLE public.giveaways
+      ADD COLUMN IF NOT EXISTS language VARCHAR(5) NOT NULL DEFAULT 'da',
+      ADD COLUMN IF NOT EXISTS winner_ids TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+      ADD COLUMN IF NOT EXISTS entry_count INTEGER NOT NULL DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS ended_at TIMESTAMPTZ,
+      ADD COLUMN IF NOT EXISTS result_message_id VARCHAR(32),
+      ADD COLUMN IF NOT EXISTS processing_started_at TIMESTAMPTZ
+  `);
+
+  await db.query(`CREATE INDEX IF NOT EXISTS giveaways_status_ends_at_idx ON public.giveaways (status, ends_at)`);
 
   await db.query(`
     CREATE TABLE IF NOT EXISTS public.license_deliveries (
