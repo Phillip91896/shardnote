@@ -43,7 +43,7 @@ function navigate(page){
   if(page==="commands") loadCommands();
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
-  if(page==="admin"){ loadAdminTickets(); loadUsers(); loadDatabaseSummary(); loadIpCenter(); loadSerialGuilds(); loadSerialKeysList(); }
+  if(page==="admin"){ loadAdminTickets(); loadUsers(); loadDatabaseSummary(); loadIpCenter(); loadSerialGuilds(); loadSerialKeysList(); loadFreeAccess(); }
   if(page==="staff-applications") loadStaffApplications();
 }
 
@@ -755,6 +755,38 @@ async function loadAdminTickets(){
     node.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';
   }
 }
+
+async function loadFreeAccess(){
+  const node=document.getElementById("freeAccessList");
+  if(!node) return;
+  try{
+    const items=await api("/api/admin/free-access");
+    node.innerHTML=items.map(item=>`<div class="activity-item"><div style="flex:1"><b>${escapeHtml(item.email)}</b><small>${escapeHtml(item.plan||"member")} · ${item.expiresAt?"Udløber "+escapeHtml(new Date(item.expiresAt).toLocaleString()):"Ingen udløbsdato"} ${item.reason?" · "+escapeHtml(item.reason):""}</small></div><button class="btn small danger" onclick="revokeFreeAccess('${encodeURIComponent(item.email)}')">Fjern adgang</button></div>`).join("")||'<div class="empty">Ingen gratis adgang er oprettet.</div>';
+  }catch(e){node.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';}
+}
+async function grantFreeAccess(){
+  const email=document.getElementById("freeAccessEmail")?.value.trim();
+  const plan=document.getElementById("freeAccessPlan")?.value||"member";
+  const expiresAt=document.getElementById("freeAccessExpiresAt")?.value;
+  const reason=document.getElementById("freeAccessReason")?.value.trim();
+  if(!email){toast("Indtast en emailadresse.");return;}
+  try{
+    await api("/api/admin/free-access",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({email,plan,expiresAt:expiresAt?new Date(expiresAt).toISOString():null,reason})});
+    document.getElementById("freeAccessEmail").value="";
+    document.getElementById("freeAccessExpiresAt").value="";
+    document.getElementById("freeAccessReason").value="";
+    toast("Gratis adgang gemt for "+email);
+    loadFreeAccess();loadUsers();loadLogs();
+  }catch(e){toast(e.message);}
+}
+async function revokeFreeAccess(email){
+  if(!confirm("Fjerne gratis adgang for denne email?")) return;
+  try{await api("/api/admin/free-access/"+email,{method:"DELETE"});toast("Gratis adgang fjernet");loadFreeAccess();loadUsers();loadLogs();}
+  catch(e){toast(e.message);}
+}
+window.grantFreeAccess=grantFreeAccess;
+window.loadFreeAccess=loadFreeAccess;
+window.revokeFreeAccess=revokeFreeAccess;
 
 async function loadUsers(){
   try{
