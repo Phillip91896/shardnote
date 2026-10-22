@@ -56,7 +56,7 @@ function inferMonths(text) {
   const s = normalizeText(text);
   if (/12\s*(month|months|måned|måneder)|annual|year|yearly|12m/.test(s)) return 12;
   if (/3\s*(month|months|måned|måneder)|quarter|3m/.test(s)) return 3;
-  return 1;
+  return null;
 }
 function deepFind(obj, keys) {
   if (!obj || typeof obj !== 'object') return null;
@@ -88,10 +88,10 @@ async function resolveProductInfo(item) {
     try {
       const product = await sellauthRequest('GET', `/v1/shops/${encodeURIComponent(SHOP_ID)}/products/${encodeURIComponent(productId)}`);
       const productText = JSON.stringify(product);
-      return { plan: inferPlan(productText) || 'member', months: inferMonths(productText), productId, variantId };
+      return { plan: inferPlan(productText), months: inferMonths(productText), productId, variantId };
     } catch (_) {}
   }
-  const text = JSON.stringify(item || {}); return { plan: inferPlan(text) || 'member', months: inferMonths(text), productId, variantId };
+  const text = JSON.stringify(item || {}); return { plan: inferPlan(text), months: inferMonths(text), productId, variantId };
 }
 async function createOrGetLicense({ email, plan, months, orderKey }) {
   if (!db) throw new Error('Database er ikke konfigureret.');
@@ -194,8 +194,13 @@ function install() {
           const item = payload.item || payload.invoice_item || payload.invoiceItem || payload.data?.item || payload.data?.invoice_item || {};
           const email = String(payload.email || payload.customer?.email || payload.data?.customer?.email || deepFind(payload, ['email']) || '').trim().toLowerCase();
           const info = await resolveProductInfo(item);
-          const plan = ['member','member_plus','member_pro'].includes(info.plan) ? info.plan : 'member';
-          const months = [1,3,12].includes(Number(info.months)) ? Number(info.months) : 1;
+          // Fail closed: never grant the default Member/1-month plan when a product cannot be identified.
+          if (!['member','member_plus','member_pro'].includes(info.plan) || ![1,3,12].includes(Number(info.months))) {
+            console.error('[Shardnote Bot] SellAuth product mapping is ambiguous; delivery rejected.', { productId: info.productId || null, variantId: info.variantId || null });
+            return res.status(422).send('Product mapping is missing or ambiguous. Configure SELLAUTH_PRODUCT_MAP.');
+          }
+          const plan = info.plan;
+          const months = Number(info.months);
           const baseId = payload.id || payload.invoice_id || payload.invoiceId || payload.data?.id || req.headers['idempotency-key'] || crypto.createHash('sha256').update(raw).digest('hex').slice(0,24);
           const orderKey = `sellauth:${baseId}:${info.productId || ''}:${info.variantId || ''}`;
           const result = await createOrGetLicense({ email, plan, months, orderKey });
