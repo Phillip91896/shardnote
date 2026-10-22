@@ -116,6 +116,68 @@ async function api(url, options){
 function toast(msg){const el=document.getElementById("toast");el.textContent=msg;el.style.display="block";setTimeout(()=>el.style.display="none",2500)}
 function escapeHtml(s){return String(s).replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[m]))}
 
+async function loadSerialGuilds(){
+  const guildSelect=document.getElementById("serialGuild");
+  if(!guildSelect) return;
+  try{
+    const data=await api("/api/bot/guilds");
+    const guilds=Array.isArray(data)?data:(data.guilds||[]);
+    guildSelect.innerHTML='<option value="">Vælg server</option>'+guilds.map(g=>'<option value="'+escapeHtml(g.id)+'">'+escapeHtml(g.name)+'</option>').join("");
+  }catch(e){ guildSelect.innerHTML='<option value="">Discord-servere kunne ikke hentes</option>'; }
+}
+async function loadSerialRoles(){
+  const guildId=document.getElementById("serialGuild")?.value;
+  const roleSelect=document.getElementById("serialRole");
+  if(!roleSelect||!guildId) return;
+  try{
+    const data=await api("/api/bot/guilds/"+encodeURIComponent(guildId)+"/roles");
+    const roles=Array.isArray(data)?data:(data.roles||[]);
+    roleSelect.innerHTML='<option value="">Vælg rolle</option>'+roles.map(r=>'<option value="'+escapeHtml(r.id)+'">'+escapeHtml(r.name)+'</option>').join("");
+  }catch(e){ roleSelect.innerHTML='<option value="">Roller kunne ikke hentes</option>'; }
+}
+function toggleSerialType(){
+  const discord=document.getElementById("serialType")?.value==="discord";
+  ["serialGuild","serialRole"].forEach(id=>{const n=document.getElementById(id);if(n)n.disabled=!discord;});
+  ["serialAccessPlan","serialAssignedEmail","serialDurationMonths"].forEach(id=>{const n=document.getElementById(id);if(n)n.disabled=discord;});
+}
+async function generateSerialKeys(){
+  const keyType=document.getElementById("serialType")?.value||"account";
+  const payload={
+    productName:document.getElementById("serialProduct")?.value||"Shardnote Bot Access",
+    quantity:Number(document.getElementById("serialQuantity")?.value||1),
+    maxUses:Number(document.getElementById("serialMaxUses")?.value||1),
+    expiresAt:document.getElementById("serialExpiresAt")?.value?new Date(document.getElementById("serialExpiresAt").value).toISOString():null
+  };
+  if(keyType==="account"){
+    payload.accessPlan=document.getElementById("serialAccessPlan")?.value||"member";
+    payload.email=document.getElementById("serialAssignedEmail")?.value?.trim()||"";
+    payload.durationMonths=Number(document.getElementById("serialDurationMonths")?.value||1);
+  }else{
+    payload.guildId=document.getElementById("serialGuild")?.value||"";
+    payload.roleId=document.getElementById("serialRole")?.value||"";
+  }
+  const out=document.getElementById("serialGenerated");
+  try{
+    const result=await api("/api/admin/serial-keys/generate",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)});
+    if(out){out.style.display="block";out.textContent=result.keys.join("\n");}
+    toast("Serial key(s) oprettet");
+    loadSerialKeysList();
+  }catch(e){toast(e.message);}
+}
+async function loadSerialKeysList(){
+  const node=document.getElementById("serialKeyList");
+  if(!node)return;
+  try{
+    const items=await api("/api/admin/serial-keys");
+    node.innerHTML=items.map(k=>'<div class="activity-item"><div style="flex:1"><b>'+escapeHtml(k.productName||"Serial key")+'</b><small>'+escapeHtml(k.accessPlan||"Discord role")+(k.assignedEmail?" · "+escapeHtml(k.assignedEmail):"")+(k.durationMonths?" · "+escapeHtml(k.durationMonths+" måned(er)"):"")+' · '+(k.revoked?"Tilbagekaldt":Number(k.uses)>=Number(k.maxUses)?"Brugt op":"Aktiv")+'</small></div><span>••••'+escapeHtml(k.keyLast4||"")+'</span></div>').join("")||'<div class="empty">Ingen serial keys endnu.</div>';
+  }catch(e){node.innerHTML='<div class="empty">'+escapeHtml(e.message)+'</div>';}
+}
+window.generateSerialKeys=generateSerialKeys;
+window.loadSerialKeysList=loadSerialKeysList;
+window.loadSerialGuilds=loadSerialGuilds;
+window.loadSerialRoles=loadSerialRoles;
+window.toggleSerialType=toggleSerialType;
+
 function botInstallButton(){
   return '<button class="btn primary small" onclick="addBotToDiscord()">+ Add Bot to Discord</button>';
 }
