@@ -540,7 +540,15 @@ async function initDatabase() {
   `);
 
   await db.query(`
-    CREATE TABLE IF NOT EXISTS public.serial_keys (
+    CREATE TABLE IF NOT EXISTS public.free_access_grants (
+      email VARCHAR(160) PRIMARY KEY,
+      access_plan VARCHAR(30) NOT NULL DEFAULT 'member',
+      granted_by BIGINT,
+      reason TEXT,
+      expires_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    )
+      CREATE TABLE IF NOT EXISTS public.serial_keys (
       id BIGSERIAL PRIMARY KEY,
       key_hash TEXT NOT NULL UNIQUE,
       key_last4 VARCHAR(8) NOT NULL,
@@ -1069,6 +1077,16 @@ async function getSessionUser(req){
   const row=result.rows[0];
   if(!row) return null;
   Object.assign(sessionUser,row);
+  const freeGrant = await db.query(
+    "SELECT access_plan AS \"expiresPlan\", expires_at AS \"expiresAt\" FROM public.free_access_grants WHERE email = LOWER($1) AND (expires_at IS NULL OR expires_at > NOW()) LIMIT 1",
+    [row.email]
+  );
+  if (freeGrant.rowCount) {
+    sessionUser.plan = freeGrant.rows[0].expiresPlan || sessionUser.plan || "member";
+    sessionUser.subscriptionStatus = "active";
+    sessionUser.freeAccessGrant = true;
+    sessionUser.freeAccessExpiresAt = freeGrant.rows[0].expiresAt || null;
+  }
   return sessionUser;
 }
 function hasPaidAccess(user){return ["admin","owner"].includes(String(user?.role||"").toLowerCase())||["active","trialing"].includes(user?.subscriptionStatus);}
@@ -1925,6 +1943,58 @@ app.patch("/api/admin/users/:id/plan", requireAuth, requireAdmin, async (req, re
   }
 });
 
+
+// Admin-managed complimentary access for an email, even before account creation.
+app.post("/api/admin/free-access", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: "Database er nødvendig for gratis adgang." });
+    const email = String(req.body?.email || "").trim().toLowerCase().slice(0, 160);
+    const plan = ["member", "member_plus", "member_pro"].includes(String(req.body?.plan || "")) ? String(req.body.plan) : "member";
+    const reason = String(req.body?.reason || "").trim().slice(0, 500) || null;
+    const expiresAtRaw = String(req.body?.expiresAt || "").trim();
+    const expiresAt = expiresAtRaw ? new Date(expiresAtRaw) : null;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: "Indtast en gyldig emailadresse." });
+    if (expiresAt && Number.isNaN(expiresAt.getTime())) return res.status(400).json({ error: "Ugyldig udløbsdato." });
+    await db.query(
+      `INSERT INTO public.free_access_grants (email, access_plan, granted_by, reason, expires_at)
+       VALUES ($1,$2,$3,$4,$5)
+       ON CONFLICT (email) DO UPDATE SET access_plan=EXCLUDED.access_plan, granted_by=EXCLUDED.granted_by, reason=EXCLUDED.reason, expires_at=EXCLUDED.expires_at, created_at=NOW()`,
+      [email, plan, req.user.id, reason, expiresAt ? expiresAt.toISOString() : null]
+    );
+    log("security", "Admin " + req.user.email + " granted complimentary access to " + email + " (" + plan + ")");
+    return res.json({ ok: true, email, plan, expiresAt: expiresAt ? expiresAt.toISOString() : null });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Gratis adgang kunne ikke gemmes." });
+  }
+});
+
+app.get("/api/admin/free-access", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!db) return res.json([]);
+    const result = await db.query(
+      'SELECT email, access_plan AS "plan", reason, expires_at AS "expiresAt", created_at AS "createdAt" FROM public.free_access_grants ORDER BY created_at DESC LIMIT 300'
+    );
+    return res.json(result.rows);
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Kunne ikke hente gratis adgang." });
+  }
+});
+
+app.delete("/api/admin/free-access/:email", requireAuth, requireAdmin, async (req, res) => {
+  try {
+    if (!db) return res.status(503).json({ error: "Database er nødvendig." });
+    const email = decodeURIComponent(String(req.params.email || "")).trim().toLowerCase();
+    const result = await db.query("DELETE FROM public.free_access_grants WHERE email = $1 RETURNING email", [email]);
+    if (!result.rowCount) return res.status(404).json({ error: "Gratis adgang blev ikke fundet." });
+    log("security", "Admin " + req.user.email + " revoked complimentary access for " + email);
+    return res.json({ ok: true });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({ error: "Gratis adgang kunne ikke fjernes." });
+  }
+});
 
 app.get("/api/admin/serial-keys", requireAuth, requireAdmin, async (req, res) => {
   try {
