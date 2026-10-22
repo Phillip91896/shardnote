@@ -2015,7 +2015,7 @@ app.get("/api/admin/serial-keys", requireAuth, requireAdmin, async (req, res) =>
   try {
     if (!db) return res.json([]);
     const result = await db.query(
-      'SELECT id, product_name AS "productName", guild_id AS "guildId", role_id AS "roleId", access_plan AS "accessPlan", key_last4 AS "keyLast4", max_uses AS "maxUses", uses, revoked, created_at AS "createdAt", expires_at AS "expiresAt", last_redeemed_by AS "lastRedeemedBy", last_redeemed_at AS "lastRedeemedAt" FROM public.serial_keys ORDER BY created_at DESC LIMIT 300'
+      'SELECT id, product_name AS "productName", guild_id AS "guildId", role_id AS "roleId", access_plan AS "accessPlan", assigned_email AS "assignedEmail", duration_months AS "durationMonths", key_last4 AS "keyLast4", max_uses AS "maxUses", uses, revoked, created_at AS "createdAt", expires_at AS "expiresAt", last_redeemed_by AS "lastRedeemedBy", last_redeemed_at AS "lastRedeemedAt" FROM public.serial_keys ORDER BY created_at DESC LIMIT 300'
     );
     res.json(result.rows);
   } catch (error) {
