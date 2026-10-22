@@ -548,7 +548,10 @@ async function initDatabase() {
       expires_at TIMESTAMPTZ,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
-      CREATE TABLE IF NOT EXISTS public.serial_keys (
+  `);
+
+  await db.query(`
+    CREATE TABLE IF NOT EXISTS public.serial_keys (
       id BIGSERIAL PRIMARY KEY,
       key_hash TEXT NOT NULL UNIQUE,
       key_last4 VARCHAR(8) NOT NULL,
@@ -571,7 +574,9 @@ async function initDatabase() {
     ALTER TABLE public.serial_keys
       ALTER COLUMN guild_id DROP NOT NULL,
       ALTER COLUMN role_id DROP NOT NULL,
-      ADD COLUMN IF NOT EXISTS access_plan VARCHAR(30)
+      ADD COLUMN IF NOT EXISTS access_plan VARCHAR(30),
+      ADD COLUMN IF NOT EXISTS assigned_email VARCHAR(160),
+      ADD COLUMN IF NOT EXISTS duration_months INTEGER
   `);
 
   await db.query(`
@@ -1537,7 +1542,7 @@ app.post("/api/register", async (req, res) => {
       if (serialKey) {
         const keyHash = hashSerialKey(serialKey);
         const keyResult = await db.query(
-          "SELECT id, access_plan AS \"accessPlan\", max_uses AS \"maxUses\", uses, expires_at AS \"expiresAt\", revoked FROM public.serial_keys WHERE key_hash = $1 FOR UPDATE",
+          "SELECT id, access_plan AS \"accessPlan\", assigned_email AS \"assignedEmail\", duration_months AS \"durationMonths\", max_uses AS \"maxUses\", uses, expires_at AS \"expiresAt\", revoked FROM public.serial_keys WHERE key_hash = $1 FOR UPDATE",
           [keyHash]
         );
         keyRow = keyResult.rows[0];
@@ -1545,6 +1550,7 @@ app.post("/api/register", async (req, res) => {
         if (!keyRow) throw Object.assign(new Error("Serial key findes ikke."), { statusCode: 400 });
         if (keyRow.revoked) throw Object.assign(new Error("Denne serial key er tilbagekaldt."), { statusCode: 400 });
         if (!keyRow.accessPlan || !["member","member_plus","member_pro"].includes(keyRow.accessPlan)) throw Object.assign(new Error("Denne serial key er ikke en Shardnote Bot-konto-key."), { statusCode: 400 });
+        if (keyRow.assignedEmail && keyRow.assignedEmail.toLowerCase() !== email) throw Object.assign(new Error("Denne key er lavet til en anden emailadresse."), { statusCode: 403 });
         if (keyRow.expiresAt && new Date(keyRow.expiresAt).getTime() <= Date.now()) throw Object.assign(new Error("Denne serial key er udløbet."), { statusCode: 400 });
         if (keyRow.uses >= keyRow.maxUses) throw Object.assign(new Error("Denne serial key er allerede brugt op."), { statusCode: 400 });
 
@@ -1564,6 +1570,15 @@ app.post("/api/register", async (req, res) => {
       );
 
       user = result.rows[0];
+
+      if (keyRow?.durationMonths) {
+        const months = Number(keyRow.durationMonths);
+        if (![1, 3, 12].includes(months)) throw Object.assign(new Error("Serial key har en ugyldig adgangsperiode."), { statusCode: 400 });
+        await db.query(
+          "UPDATE public.users SET subscription_current_period_end = NOW() + ($1::text || ' months')::interval WHERE id = $2",
+          [months, user.id]
+        );
+      }
 
       if (keyRow) {
         const used = await db.query(
@@ -2012,7 +2027,9 @@ app.get("/api/admin/serial-keys", requireAuth, requireAdmin, async (req, res) =>
 app.post("/api/admin/serial-keys/generate", requireAuth, requireAdmin, async (req, res) => {
   try {
     const productName = String(req.body?.productName || "Shardnote Bot Access").trim().slice(0,120) || "Shardnote Bot Access";
-    const accessPlan = ["member","member_plus","member_pro","member_premium"].includes(String(req.body?.accessPlan || "")) ? String(req.body.accessPlan) : null;
+    const accessPlan = ["member","member_plus","member_pro"].includes(String(req.body?.accessPlan || "")) ? String(req.body.accessPlan) : null;
+    const assignedEmail = String(req.body?.email || "").trim().toLowerCase().slice(0,160) || null;
+    const durationMonths = Number(req.body?.durationMonths || 0);
     const guildId = String(req.body?.guildId || "").trim() || null;
     const roleId = String(req.body?.roleId || "").trim() || null;
     const quantity = Math.min(Math.max(Number(req.body?.quantity || 1), 1), 100);
@@ -2021,6 +2038,8 @@ app.post("/api/admin/serial-keys/generate", requireAuth, requireAdmin, async (re
     const expiresAt = expiresAtRaw ? new Date(expiresAtRaw) : null;
 
     if (!accessPlan && (!guildId || !roleId)) return res.status(400).json({ error: "Vælg enten en Shardnote Bot-pakke eller både Discord-server og rolle." });
+    if (accessPlan && (!assignedEmail || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(assignedEmail))) return res.status(400).json({ error: "Indtast emailadressen, som denne key skal tilhøre." });
+    if (accessPlan && ![1,3,12].includes(durationMonths)) return res.status(400).json({ error: "Vælg en adgangsperiode på 1, 3 eller 12 måneder." });
     if (expiresAt && Number.isNaN(expiresAt.getTime())) return res.status(400).json({ error: "Ugyldig udløbsdato." });
     if (!db) return res.status(503).json({ error: "Database er nødvendig for serial keys." });
 
@@ -2043,8 +2062,8 @@ app.post("/api/admin/serial-keys/generate", requireAuth, requireAdmin, async (re
         const hash = hashSerialKey(key);
         try {
           const result = await db.query(
-            'INSERT INTO public.serial_keys (key_hash, key_last4, product_name, guild_id, role_id, access_plan, max_uses, created_by, expires_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id',
-            [hash, key.slice(-4), productName, guildId, roleId, accessPlan, maxUses, req.user.id, expiresAt ? expiresAt.toISOString() : null]
+            'INSERT INTO public.serial_keys (key_hash, key_last4, product_name, guild_id, role_id, access_plan, max_uses, created_by, expires_at, assigned_email, duration_months) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING id',
+            [hash, key.slice(-4), productName, guildId, roleId, accessPlan, maxUses, req.user.id, expiresAt ? expiresAt.toISOString() : null, assignedEmail, accessPlan ? durationMonths : null]
           );
           if (result.rowCount) inserted = { key, id: result.rows[0].id };
         } catch (error) {
@@ -4246,6 +4265,8 @@ body.locked > .app{display:none}
     <div class="form-grid">
       <div class="field"><label>Key type</label><select id="serialType" onchange="toggleSerialType()"><option value="account">Website access</option><option value="discord">Discord role</option></select></div>
       <div class="field"><label>Shardnote Bot-pakke</label><select id="serialAccessPlan"><option value="member">Member</option><option value="member_plus">Member Plus</option><option value="member_pro">Member Pro</option></select></div>
+      <div class="field"><label>Email key'en er til</label><input id="serialAssignedEmail" type="email" placeholder="person@example.com"></div>
+      <div class="field"><label>Adgangens varighed</label><select id="serialDurationMonths"><option value="1">1 måned</option><option value="3">3 måneder</option><option value="12">12 måneder</option></select></div>
       <div class="field"><label>Server</label><select id="serialGuild" onchange="loadSerialRoles()" disabled><option value="">Vælg server</option></select></div>
       <div class="field"><label>Discord-rolle</label><select id="serialRole" disabled><option value="">Vælg rolle</option></select></div>
       <div class="field"><label>Produktnavn</label><input id="serialProduct" maxlength="120" value="Shardnote Bot Access"></div>
