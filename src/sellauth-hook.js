@@ -95,21 +95,29 @@ async function resolveProductInfo(item) {
 }
 async function createOrGetLicense({ email, plan, months, orderKey }) {
   if (!db) throw new Error('Database er ikke konfigureret.');
-  const existing = await db.query('SELECT id FROM public.license_deliveries WHERE checkout_session_id=$1 LIMIT 1', [orderKey]);
-  if (existing.rows[0]) return { duplicate: true, key: null };
-  const rawKey = generateSerialKey(); const keyHash = hashSerialKey(rawKey);
-  const user = await db.query('SELECT id FROM public.users WHERE lower(email)=lower($1) LIMIT 1', [email]);
-  if (!user.rows[0]) throw new Error('Kunden skal have en ShardNote-konto med samme email før levering.');
-  await db.query('BEGIN');
+  const client = await db.connect();
   try {
-    await db.query(`INSERT INTO public.serial_keys (key_hash,key_last4,product_name,access_plan,max_uses,created_by) VALUES ($1,$2,$3,$4,1,NULL)`, [keyHash, rawKey.slice(-4), `Shardnote Bot ${plan} · ${months} måned${months === 1 ? '' : 'er'}`, plan]);
-    await db.query(`INSERT INTO public.license_deliveries (checkout_session_id,user_id,email,key_hash,key_last4) VALUES ($1,$2,$3,$4,$5)`, [orderKey, user.rows[0].id, email, keyHash, rawKey.slice(-4)]);
-    await db.query(`UPDATE public.users SET plan=$1, subscription_status='active', trial_used=TRUE WHERE id=$2`, [plan, user.rows[0].id]);
-    await db.query('COMMIT');
-  } catch (error) {
-    await db.query('ROLLBACK'); if (error.code === '23505') return { duplicate: true, key: null }; throw error;
+    const existing = await client.query('SELECT id FROM public.license_deliveries WHERE checkout_session_id=$1 LIMIT 1', [orderKey]);
+    if (existing.rows[0]) return { duplicate: true, key: null };
+    const user = await client.query('SELECT id FROM public.users WHERE lower(email)=lower($1) LIMIT 1', [email]);
+    if (!user.rows[0]) throw new Error('Kunden skal have en ShardNote-konto med samme email før levering.');
+    const rawKey = generateSerialKey();
+    const keyHash = hashSerialKey(rawKey);
+    await client.query('BEGIN');
+    try {
+      await client.query(`INSERT INTO public.serial_keys (key_hash,key_last4,product_name,access_plan,max_uses,created_by) VALUES ($1,$2,$3,$4,1,NULL)`, [keyHash, rawKey.slice(-4), `Shardnote Bot ${plan} · ${months} måned${months === 1 ? '' : 'er'}`, plan]);
+      await client.query(`INSERT INTO public.license_deliveries (checkout_session_id,user_id,email,key_hash,key_last4) VALUES ($1,$2,$3,$4,$5)`, [orderKey, user.rows[0].id, email, keyHash, rawKey.slice(-4)]);
+      await client.query(`UPDATE public.users SET plan=$1, subscription_status='active', trial_used=TRUE WHERE id=$2`, [plan, user.rows[0].id]);
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK');
+      if (error.code === '23505') return { duplicate: true, key: null };
+      throw error;
+    }
+    return { duplicate: false, key: rawKey };
+  } finally {
+    client.release();
   }
-  return { duplicate: false, key: rawKey };
 }
 
 function install() {
@@ -179,7 +187,7 @@ function install() {
         try {
           const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
           if (!WEBHOOK_SECRET) return res.status(503).send('SellAuth webhook secret er ikke konfigureret.');
-          if (!hmacMatches(raw, req.headers['x-signature'])) return res.status(401).send('Invalid webhook signature.');
+          if (!hmacMatches(raw, req.headers['signature'] || req.headers['x-signature'])) return res.status(401).send('Invalid webhook signature.');
           const payload = safeJson(raw.toString('utf8')) || {};
           const event = normalizeText(payload.event || payload.type || '');
           if (event && !/(deliver|paid|complete|success|invoice)/.test(event)) return res.json({ received: true, ignored: true });
