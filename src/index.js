@@ -1807,21 +1807,17 @@ app.get("/api/admin/database-summary", requireAuth, requireAdmin, async (req, re
 app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
   try {
     await ensureAdmin();
-
     if (db) {
       const result = await db.query(
-        `SELECT
-           id, name, email, role, plan, application_reviewer AS "applicationReviewer",
-           banned,
-           ban_type AS "banType",
-           banned_at AS "bannedAt",
-           created_at AS "createdAt"
-         FROM users ORDER BY id ASC`
+        `SELECT id, name, role, plan, banned, ban_type AS "banType", created_at AS "createdAt"
+         FROM public.users ORDER BY id ASC`
       );
       return res.json(result.rows);
     }
-
-    res.json(state.users.map(({ passwordHash, ...u }) => u));
+    return res.json(state.users.map(u => ({
+      id:u.id, name:u.name, role:u.role, plan:u.plan || "member",
+      banned:!!u.banned, banType:u.banType || null, createdAt:u.createdAt || null
+    })));
   } catch (error) {
     console.error(error);
     res.status(500).json({ error: "Kunne ikke hente brugere." });
@@ -1917,7 +1913,12 @@ app.patch("/api/admin/users/:id/application-reviewer", requireAuth, requireOwner
   }
 });
 
-app.patch("/api/admin/users/:id/role", requireAuth, requireOwner, async (req, res) => {
+function requireOwnerOrStaffManager(req,res,next){
+  if (isSiteOwner(req.user) || req.user?.staffManager === true || req.user?.role === "staff_manager") return next();
+  return res.status(403).json({error:"Kun Owner eller staff-ansvarlig må ændre roller."});
+}
+
+app.patch("/api/admin/users/:id/role", requireAuth, requireOwnerOrStaffManager, async (req, res) => {
   try {
     await ensureAdmin();
 
@@ -2196,7 +2197,7 @@ app.post("/api/serial-keys/redeem", requireAuth, async (req, res) => {
   }
 });
 
-app.patch("/api/admin/users/:id/ban", requireAuth, requireOwner, async (req, res) => {
+app.patch("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res) => {
   try {
     await ensureAdmin();
 
