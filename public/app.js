@@ -925,6 +925,23 @@ async function toggleUserPlan(id,nextPlan){
 }
 async function deleteUser(id){if(!confirm("Slet denne bruger?"))return;try{await api("/api/admin/users/"+id,{method:"DELETE"});toast("Bruger slettet");loadUsers();loadLogs()}catch(e){toast(e.message)}}
 
+
+async function logout(){
+  const button=document.querySelector('button[onclick="logout()"]');
+  if(button){button.disabled=true;button.textContent="Logger ud…";}
+  try{
+    const response=await fetch("/api/logout",{method:"POST",credentials:"same-origin",headers:{"Accept":"application/json"}});
+    if(!response.ok) throw new Error("Serveren kunne ikke afslutte sessionen.");
+    try{localStorage.removeItem("Shardnote_session");}catch{}
+    try{sessionStorage.clear();}catch{}
+    window.location.replace("/");
+  }catch(error){
+    if(button){button.disabled=false;button.textContent="Log ud";}
+    toast(error.message||"Kunne ikke logge ud. Prøv igen.");
+  }
+}
+window.logout=logout;
+
 checkLogin();
 setInterval(()=>{syncOwnerPanel();if(currentUser)loadStats()},1000);
 setInterval(()=>{if(currentUser)loadStats()},15000);
