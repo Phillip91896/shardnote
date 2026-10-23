@@ -1104,6 +1104,8 @@ async function checkLogin(){
 
 function unlockDashboard(){
   document.getElementById("loginScreen")?.remove();
+  const createUserCard=document.getElementById("adminCreateUserCard");
+  if(createUserCard) createUserCard.style.display=currentUser?.isOwner ? "" : "none";
   document.body.classList.remove("locked");
   if(!isAdminOrOwner(currentUser) && !currentUser?.applicationReviewer){
     document.querySelector('[data-page="staff-applications"]')?.remove();
