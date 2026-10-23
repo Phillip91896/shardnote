@@ -4364,7 +4364,7 @@ body.locked > .app{display:none}
     </div>
   </div>
 
-  <div class="card" style="margin-bottom:18px">
+  <div class="card" id="ownerIpCard" style="margin-bottom:18px">
     <div class="section-title"><h2>Database-overblik</h2><span id="databaseStatus" class="badge pending">Tjekker…</span></div>
     <div id="databaseTables" class="activity"></div>
   </div>
