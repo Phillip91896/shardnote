@@ -1740,7 +1740,7 @@ app.get("/api/me", async (req,res)=>{
   res.json({user:{id:user.id,name:user.name,email:user.email,role:user.role,applicationReviewer:!!user.applicationReviewer,plan:user.plan||"member",subscriptionStatus:user.subscriptionStatus||"inactive",trialUsed:!!user.trialUsed,hasPaidAccess:hasPaidAccess(user),isOwner:isSiteOwner(user)}});
 });
 
-app.get("/api/admin/login-history", requireAuth, requireAdmin, async (req, res) => {
+app.get("/api/admin/login-history", requireAuth, requireOwner, async (req, res) => {
   try {
     const requestedLimit = Number.parseInt(req.query.limit, 10);
     const limit = Math.min(Math.max(Number.isFinite(requestedLimit) ? requestedLimit : 200, 1), 500);
@@ -1809,14 +1809,18 @@ app.get("/api/admin/users", requireAuth, requireAdmin, async (req, res) => {
     await ensureAdmin();
     if (db) {
       const result = await db.query(
-        `SELECT id, name, role, plan, banned, ban_type AS "banType", created_at AS "createdAt"
-         FROM public.users ORDER BY id ASC`
+        isSiteOwner(req.user)
+          ? `SELECT id, name, email, role, plan, banned, ban_type AS "banType", created_at AS "createdAt"
+             FROM public.users ORDER BY id ASC`
+          : `SELECT id, name, role, plan, banned, ban_type AS "banType"
+             FROM public.users ORDER BY id ASC`
       );
       return res.json(result.rows);
     }
     return res.json(state.users.map(u => ({
       id:u.id, name:u.name, role:u.role, plan:u.plan || "member",
-      banned:!!u.banned, banType:u.banType || null, createdAt:u.createdAt || null
+      banned:!!u.banned, banType:u.banType || null,
+      ...(isSiteOwner(req.user) ? {email:u.email || "", createdAt:u.createdAt || null} : {})
     })));
   } catch (error) {
     console.error(error);
