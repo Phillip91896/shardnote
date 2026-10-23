@@ -49,6 +49,23 @@ function navigate(page){
 }
 
 
+function syncOwnerPanel(){
+  const owner=!!currentUser?.isOwner;
+  const nav=document.getElementById("ownerPanelNav");
+  const panel=document.getElementById("ownerPanelCard");
+  const content=document.getElementById("ownerPanelContent");
+  if(nav) nav.style.display=owner ? "flex" : "none";
+  if(panel) panel.style.display=owner ? "block" : "none";
+  if(!owner || !content) return;
+  ["ownerFreeAccessCard","ownerIpCard"].forEach(id=>{
+    const card=document.getElementById(id);
+    if(card && card.parentElement!==content) content.appendChild(card);
+  });
+  const usersCard=document.getElementById("userList")?.closest(".card");
+  if(usersCard && usersCard.parentElement!==content) content.appendChild(usersCard);
+}
+
+
 function renderSpotImage(){
   const canvas=document.getElementById("spotCanvas");
   if(!canvas) return;
@@ -909,6 +926,7 @@ async function toggleUserPlan(id,nextPlan){
 async function deleteUser(id){if(!confirm("Slet denne bruger?"))return;try{await api("/api/admin/users/"+id,{method:"DELETE"});toast("Bruger slettet");loadUsers();loadLogs()}catch(e){toast(e.message)}}
 
 checkLogin();
+setInterval(()=>{syncOwnerPanel();if(currentUser)loadStats()},1000);
 setInterval(()=>{if(currentUser)loadStats()},15000);
 
 
