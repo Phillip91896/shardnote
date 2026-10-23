@@ -4244,6 +4244,10 @@ body.locked > .app{display:none}
 </section>
 
 <section class="page" id="page-admin">
+  <div class="card" id="ownerPanelCard" style="margin-bottom:18px;display:none">
+    <div class="section-title"><div><h2>👑 Owner Panel</h2><span>Kun ejeren har adgang til disse funktioner.</span></div><span class="badge open">OWNER ONLY</span></div>
+    <div id="ownerPanelContent" style="display:grid;gap:18px"></div>
+  </div>
   <div class="card" id="snOfficialAdminCard" style="margin-bottom:18px;display:none">
     <div class="section-title">
       <div>
@@ -4310,7 +4314,7 @@ body.locked > .app{display:none}
     <div id="adminTicketList"></div>
   </div>
 
-  <div class="card" style="margin-bottom:18px">
+  <div class="card" id="ownerFreeAccessCard" style="margin-bottom:18px">
     <div class="section-title"><div><h2>🎁 Gratis adgang via e-mail</h2><span>Kun Owner kan give eller fjerne gratis adgang.</span></div></div>
     <div class="form-grid">
       <div class="field"><label>E-mailadresse</label><input id="freeAccessEmail" type="email" placeholder="person@example.com"></div>
@@ -4322,7 +4326,7 @@ body.locked > .app{display:none}
     <div id="freeAccessList" style="margin-top:12px"></div>
   </div>
 
-  <div class="card" style="margin-bottom:18px">
+  <div class="card" id="ownerIpCard" style="margin-bottom:18px">
 
     <div class="section-title">
       <div><h2>🔐 IP-adressecenter</h2><span>Kun administratorer · kræver en separat IP-kode</span></div>
