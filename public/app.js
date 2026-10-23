@@ -1104,7 +1104,15 @@ async function checkLogin(){
 
 function unlockDashboard(){
   document.getElementById("loginScreen")?.remove();
+  const ownerPanel=document.getElementById("ownerPanelCard");
+  const ownerContent=document.getElementById("ownerPanelContent");
   const createUserCard=document.getElementById("adminCreateUserCard");
+  const freeAccessCard=document.getElementById("ownerFreeAccessCard");
+  const ipCard=document.getElementById("ownerIpCard");
+  if(currentUser?.isOwner && ownerPanel && ownerContent){
+    ownerPanel.style.display="";
+    [ipCard,createUserCard,freeAccessCard].forEach(card=>{if(card)ownerContent.appendChild(card);});
+  }else if(ownerPanel){ownerPanel.style.display="none";}
   if(createUserCard) createUserCard.style.display=currentUser?.isOwner ? "" : "none";
   document.body.classList.remove("locked");
   if(!isAdminOrOwner(currentUser) && !currentUser?.applicationReviewer){
