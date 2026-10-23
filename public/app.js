@@ -1,5 +1,5 @@
-const pages = ["dashboard","spot","tickets","messages","commands","features","templates","upgrades","store","activate","music","settings","logs","admin","staff-applications"];
-const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord Templates",upgrades:"Opgraderinger",store:"Store",activate:"Aktivér key",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel","staff-applications":"Staff ansøgninger"};
+const pages = ["dashboard","spot","tickets","messages","commands","features","templates","upgrades","store","activate","music","settings","logs","admin","owner-panel","staff-applications"];
+const titles = {dashboard:"Dashboard",spot:"Mit spot",tickets:"Tickets",messages:"Beskeder",commands:"Commands",features:"Bot-funktioner",templates:"Discord Templates",upgrades:"Opgraderinger",store:"Store",activate:"Aktivér key",music:"Musik",settings:"Indstillinger",logs:"Logs",admin:"Admin-panel","owner-panel":"Owner Panel","staff-applications":"Staff ansøgninger"};
 let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true,buttonLabels:{}};
 let ticketCache = [];
 let adminTicketCache = [];
@@ -44,6 +44,7 @@ function navigate(page){
   if(page==="settings") loadSettings();
   if(page==="logs") loadLogs();
   if(page==="admin"){ loadAdminTickets(); loadUsers(); loadDatabaseSummary(); loadIpCenter(); loadSerialGuilds(); loadSerialKeysList(); loadFreeAccess(); }
+  if(page==="owner-panel"){ if(!currentUser?.isOwner){navigate("dashboard");return;} loadUsers(); loadDatabaseSummary(); loadIpCenter(); loadSerialGuilds(); loadSerialKeysList(); loadFreeAccess(); }
   if(page==="staff-applications") loadStaffApplications();
 }
 
@@ -1104,6 +1105,8 @@ async function checkLogin(){
 
 function unlockDashboard(){
   document.getElementById("loginScreen")?.remove();
+  const ownerPanelNav=document.getElementById("ownerPanelNav");
+  if(ownerPanelNav) ownerPanelNav.style.display=currentUser?.isOwner ? "" : "none";
   const ownerPanel=document.getElementById("ownerPanelCard");
   const ownerContent=document.getElementById("ownerPanelContent");
   const createUserCard=document.getElementById("adminCreateUserCard");
