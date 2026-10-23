@@ -1109,6 +1109,13 @@ function unlockDashboard(){
   if(ownerPanelNav) ownerPanelNav.style.display=currentUser?.isOwner ? "" : "none";
   const ownerPanel=document.getElementById("ownerPanelCard");
   const ownerContent=document.getElementById("ownerPanelContent");
+  const ownerOnlyCards=["ownerIpCard","ownerFreeAccessCard","adminCreateUserCard"];
+  if(currentUser?.isOwner && ownerPanel && ownerContent){
+    ownerPanel.style.display="";
+    ownerOnlyCards.forEach(id=>{const card=document.getElementById(id);if(card)ownerContent.appendChild(card);});
+  }else if(ownerPanel){ownerPanel.style.display="none";}
+  const ownerPanel=document.getElementById("ownerPanelCard");
+  const ownerContent=document.getElementById("ownerPanelContent");
   const createUserCard=document.getElementById("adminCreateUserCard");
   const freeAccessCard=document.getElementById("ownerFreeAccessCard");
   const ipCard=document.getElementById("ownerIpCard");
