@@ -3920,6 +3920,7 @@ body.locked > .app{display:none}
     <button data-page="settings"><span class="icon">⚙</span><span>Indstillinger</span></button>
     <button data-page="logs"><span class="icon">◷</span><span>Logs</span></button>
     <button data-page="admin"><span class="icon">👑</span><span>Admin</span></button>
+    <button data-page="owner-panel" id="ownerPanelNav" style="display:none"><span class="icon">🛡️</span><span>Owner Panel</span></button>
     <button data-page="staff-applications"><span class="icon">🛡️</span><span>Staff ansøgninger</span></button>
   </nav>
   <div class="sidebar-footer">Shardnote Bot 2.0<br>Discord Control Center</div>
@@ -4244,10 +4245,6 @@ body.locked > .app{display:none}
 </section>
 
 <section class="page" id="page-admin">
-  <div class="card" id="ownerPanelCard" style="margin-bottom:18px;display:none">
-    <div class="section-title"><div><h2>👑 Owner Panel</h2><span>Kun ejeren har adgang til disse funktioner.</span></div><span class="badge open">OWNER ONLY</span></div>
-    <div id="ownerPanelContent" style="display:grid;gap:18px"></div>
-  </div>
   <div class="card" id="snOfficialAdminCard" style="margin-bottom:18px;display:none">
     <div class="section-title">
       <div>
@@ -4389,6 +4386,12 @@ body.locked > .app{display:none}
     </div>
   </div>
 
+</section>
+<section class="page" id="page-owner-panel">
+  <div class="card" id="ownerPanelCard" style="margin-bottom:18px;display:none">
+    <div class="section-title"><div><h2>👑 Owner Panel</h2><span>Kun ejeren har adgang til disse funktioner.</span></div><span class="badge open">OWNER ONLY</span></div>
+    <div id="ownerPanelContent" style="display:grid;gap:18px"></div>
+  </div>
 </section>
 </main>
 </div>
