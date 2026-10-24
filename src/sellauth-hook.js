@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const express = require('express');
+const SESSION_SECRET = require('./session-secret');
 const { Pool } = require('pg');
 
 const ORIGINAL_POST = express.application.post;
@@ -21,7 +22,7 @@ function parseCookies(req) {
   const header = req.headers.cookie || '';
   return Object.fromEntries(header.split(';').filter(Boolean).map(part => { const i = part.indexOf('='); return [part.slice(0, i).trim(), decodeURIComponent(part.slice(i + 1).trim())]; }));
 }
-function sessionSecret() { return process.env.SESSION_SECRET || process.env.DISCORD_TOKEN || process.env.STRIPE_SECRET_KEY || process.env.DATABASE_URL || 'Shardnote Bot-session-secret'; }
+function sessionSecret() { return SESSION_SECRET; }
 function verifySessionToken(token) {
   const raw = String(token || ''); const [id, signature] = raw.split('.');
   if (!id || !signature || !/^\d+$/.test(id)) return null;
@@ -105,9 +106,22 @@ async function createOrGetLicense({ email, plan, months, orderKey }) {
     const keyHash = hashSerialKey(rawKey);
     await client.query('BEGIN');
     try {
-      await client.query(`INSERT INTO public.serial_keys (key_hash,key_last4,product_name,access_plan,max_uses,created_by) VALUES ($1,$2,$3,$4,1,NULL)`, [keyHash, rawKey.slice(-4), `Shardnote Bot ${plan} · ${months} måned${months === 1 ? '' : 'er'}`, plan]);
+      await client.query(
+        `INSERT INTO public.serial_keys
+          (key_hash,key_last4,product_name,access_plan,max_uses,created_by,assigned_email,duration_months,expires_at)
+         VALUES ($1,$2,$3,$4,1,NULL,LOWER($5),$6,NOW()+($6::text || ' months')::interval)`,
+        [keyHash, rawKey.slice(-4), `Shardnote Bot ${plan} · ${months} måned${months === 1 ? '' : 'er'}`, plan, email, months]
+      );
       await client.query(`INSERT INTO public.license_deliveries (checkout_session_id,user_id,email,key_hash,key_last4) VALUES ($1,$2,$3,$4,$5)`, [orderKey, user.rows[0].id, email, keyHash, rawKey.slice(-4)]);
-      await client.query(`UPDATE public.users SET plan=$1, subscription_status='active', trial_used=TRUE WHERE id=$2`, [plan, user.rows[0].id]);
+      await client.query(
+        `UPDATE public.users
+         SET plan=$1,
+             subscription_status='active',
+             trial_used=TRUE,
+             subscription_current_period_end = GREATEST(COALESCE(subscription_current_period_end, NOW()), NOW()) + ($2::text || ' months')::interval
+         WHERE id=$3`,
+        [plan, months, user.rows[0].id]
+      );
       await client.query('COMMIT');
     } catch (error) {
       await client.query('ROLLBACK');
@@ -185,7 +199,7 @@ function install() {
     if (path === '/api/sellauth/deliver') {
       return ORIGINAL_POST.call(this, path, express.raw({ type: 'application/json', limit: '2mb' }), async (req, res) => {
         try {
-          const raw = Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
+          const raw = Buffer.isBuffer(req.rawBody) ? req.rawBody : Buffer.isBuffer(req.body) ? req.body : Buffer.from(JSON.stringify(req.body || {}));
           if (!WEBHOOK_SECRET) return res.status(503).send('SellAuth webhook secret er ikke konfigureret.');
           if (!hmacMatches(raw, req.headers['signature'] || req.headers['x-signature'])) return res.status(401).send('Invalid webhook signature.');
           const payload = safeJson(raw.toString('utf8')) || {};
