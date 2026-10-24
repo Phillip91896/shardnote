@@ -943,7 +943,7 @@ async function logout(){
 window.logout=logout;
 
 checkLogin();
-setInterval(()=>{syncOwnerPanel();if(currentUser)loadStats()},1000);
+setInterval(syncOwnerPanel,1000);
 setInterval(()=>{if(currentUser)loadStats()},15000);
 
 
