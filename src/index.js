@@ -2488,17 +2488,18 @@ app.use("/api", (req, res, next) => {
   });
 });
 
-app.get("/api/stats", async (req, res) => {
+app.get("/api/stats", requireAuth, async (req, res) => {
   try {
     const botReady = typeof client.isReady === "function" ? client.isReady() : discordReady;
     const linkedGuilds = botReady ? [...client.guilds.cache.values()] : [];
+    const staffCanViewAllTickets = isStaff(req.user);
 
-    let openTickets = req.user?.role === "admin"
+    let openTickets = staffCanViewAllTickets
       ? state.tickets.filter(t => t.status !== "closed").length
       : state.tickets.filter(t => t.ownerUserId === req.user.id && t.status !== "closed").length;
 
     if (db) {
-      const result = req.user?.role === "admin"
+      const result = staffCanViewAllTickets
         ? await db.query("SELECT COUNT(*)::int AS count FROM public.tickets WHERE status <> 'closed'")
         : await db.query("SELECT COUNT(*)::int AS count FROM public.tickets WHERE owner_user_id = $1 AND status <> 'closed'", [req.user.id]);
       openTickets = result.rows[0].count;
