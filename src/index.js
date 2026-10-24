@@ -69,31 +69,33 @@ app.post("/api/billing/webhook", express.raw({ type: "application/json" }), asyn
               [object.id]
             );
             if (!delivery.rows[0]) {
+              const userResult = await db.query("SELECT name,email FROM public.users WHERE id = $1 LIMIT 1",[userId]);
+              const recipient = userResult.rows[0];
+              const keyMonths = [1,3,12].includes(Number(object.metadata?.months)) ? Number(object.metadata.months) : 1;
+              const keyEmail = String(recipient?.email || object.customer_details?.email || "").trim().toLowerCase();
               const rawKey = generateSerialKey();
               const keyHash = hashSerialKey(rawKey);
-              const keyResult = await db.query(
+              await db.query(
                 `INSERT INTO public.serial_keys
-                  (key_hash,key_last4,product_name,access_plan,max_uses,created_by)
-                 VALUES ($1,$2,$3,$4,1,$5)
+                  (key_hash,key_last4,product_name,access_plan,max_uses,created_by,assigned_email,duration_months,expires_at)
+                 VALUES ($1,$2,$3,$4,1,$5,NULLIF(LOWER($6),''),$7,NOW()+($7::text || ' months')::interval)
                  RETURNING id`,
-                [keyHash, rawKey.slice(-4), "Shardnote Bot " + plan, plan, userId]
+                [keyHash, rawKey.slice(-4), "Shardnote Bot " + plan, plan, userId, keyEmail, keyMonths]
               );
               const deliveryInsert = await db.query(
                 `INSERT INTO public.license_deliveries
                   (checkout_session_id,user_id,email,key_hash,key_last4)
                  VALUES ($1,$2,$3,$4,$5)
                  RETURNING id`,
-                [object.id, userId, object.customer_details?.email || "", keyHash, rawKey.slice(-4)]
+                [object.id, userId, keyEmail, keyHash, rawKey.slice(-4)]
               );
-              const userResult = await db.query("SELECT name,email FROM public.users WHERE id = $1 LIMIT 1",[userId]);
-              const recipient = userResult.rows[0];
               if (recipient?.email) {
                 const mail = await sendLicenseEmail({
                   to: recipient.email,
                   name: recipient.name,
                   key: rawKey,
                   plan,
-                  months: Number(object.metadata?.months || 1)
+                  months: keyMonths
                 });
                 if (mail.sent) {
                   await db.query("UPDATE public.license_deliveries SET sent_at = NOW() WHERE id = $1",[deliveryInsert.rows[0].id]);
@@ -134,7 +136,14 @@ app.post("/api/billing/webhook", express.raw({ type: "application/json" }), asyn
   }catch(error){console.error("[Shardnote Bot] Stripe webhook handler failed:",error);return res.status(500).send("Webhook handler failed.");}
 });
 
-app.use(express.json({ limit: "1mb" }));
+app.use(express.json({
+  limit: "1mb",
+  verify(req, res, buffer) {
+    // Keep the exact bytes for SellAuth HMAC verification; parsed JSON cannot
+    // be serialized back to the same signed payload reliably.
+    if (req.path === "/api/sellauth/deliver") req.rawBody = Buffer.from(buffer);
+  }
+}));
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(path.join(__dirname, "../public"), { maxAge: 0 }));
 
@@ -1048,7 +1057,7 @@ async function ensureAdmin() {
     realUsers[0].role = "owner";
   }
 }
-const SESSION_SECRET = process.env.SESSION_SECRET || crypto.randomBytes(32).toString("hex");
+const SESSION_SECRET = require("./session-secret");
 
 function signSessionUserId(userId) {
   return crypto.createHmac("sha256", SESSION_SECRET).update(String(userId)).digest("hex");
@@ -1127,6 +1136,13 @@ function isStaff(user) {
 }
 function requireAdmin(req, res, next) {
   if (!isStaff(req.user)) return res.status(403).json({ error: "Kun administratorer har adgang." });
+  next();
+}
+function requireSettingsAccess(req, res, next) {
+  const memberPro = String(req.user?.plan || "").trim().toLowerCase() === "member_pro";
+  if (!isStaff(req.user) && !(memberPro && hasPaidAccess(req.user))) {
+    return res.status(403).json({ error: "Indstillinger kræver Admin eller et aktivt Member Pro-abonnement." });
+  }
   next();
 }
 function requireOwner(req, res, next) {
@@ -1684,12 +1700,18 @@ app.post("/api/license/redeem", requireAuth, async (req, res) => {
     await db.query("BEGIN");
     try {
       const result = await db.query(
-        'SELECT id, product_name AS "productName", access_plan AS "accessPlan", max_uses AS "maxUses", uses, expires_at AS "expiresAt", revoked FROM public.serial_keys WHERE key_hash = $1 FOR UPDATE',
+        'SELECT id, product_name AS "productName", access_plan AS "accessPlan", assigned_email AS "assignedEmail", duration_months AS "durationMonths", max_uses AS "maxUses", uses, expires_at AS "expiresAt", revoked FROM public.serial_keys WHERE key_hash = $1 FOR UPDATE',
         [hash]
       );
       const item = result.rows[0];
       if (!item) throw Object.assign(new Error("License key findes ikke."), { statusCode: 404 });
       if (item.revoked) throw Object.assign(new Error("Denne license key er tilbagekaldt."), { statusCode: 400 });
+      if (item.assignedEmail && String(item.assignedEmail).trim().toLowerCase() !== String(req.user.email || "").trim().toLowerCase()) {
+        throw Object.assign(new Error("Denne license key er lavet til en anden emailadresse."), { statusCode: 403 });
+      }
+      if (item.durationMonths != null && ![1,3,12].includes(Number(item.durationMonths))) {
+        throw Object.assign(new Error("Denne license key har en ugyldig adgangsperiode."), { statusCode: 400 });
+      }
       if (!item.accessPlan || !["member","member_plus","member_pro"].includes(item.accessPlan)) {
         throw Object.assign(new Error("Denne key er ikke en Shardnote Bot-license key."), { statusCode: 400 });
       }
@@ -1699,8 +1721,18 @@ app.post("/api/license/redeem", requireAuth, async (req, res) => {
       if (item.uses >= item.maxUses) throw Object.assign(new Error("Denne license key er allerede brugt op."), { statusCode: 400 });
 
       await db.query(
-        "UPDATE public.users SET plan = $1, subscription_status = 'active', trial_used = TRUE WHERE id = $2",
-        [item.accessPlan, req.user.id]
+        `UPDATE public.users
+         SET plan = $1,
+             subscription_status = 'active',
+             trial_used = TRUE,
+             subscription_current_period_end = CASE
+               WHEN $3::integer IS NOT NULL
+                 AND (subscription_current_period_end IS NULL OR subscription_current_period_end <= NOW())
+               THEN NOW() + ($3::text || ' months')::interval
+               ELSE subscription_current_period_end
+             END
+         WHERE id = $2`,
+        [item.accessPlan, req.user.id, item.durationMonths == null ? null : Number(item.durationMonths)]
       );
       const used = await db.query(
         "UPDATE public.serial_keys SET uses = uses + 1, last_redeemed_by = $1, last_redeemed_at = NOW() WHERE id = $2 AND uses < max_uses RETURNING id",
@@ -3299,7 +3331,7 @@ app.post("/api/commands", async (req, res) => {
   });
 });
 
-app.get("/api/settings", requireAuth, requireAdmin, async (req, res) => {
+app.get("/api/settings", requireAuth, requireSettingsAccess, async (req, res) => {
   try {
     if (db) {
       await db.query("INSERT INTO public.account_settings (user_id) VALUES ($1) ON CONFLICT (user_id) DO NOTHING", [req.user.id]);
@@ -3317,7 +3349,7 @@ app.get("/api/settings", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-app.patch("/api/settings", requireAuth, requireAdmin, async (req, res) => {
+app.patch("/api/settings", requireAuth, requireSettingsAccess, async (req, res) => {
   try {
     if (typeof req.body.prefix === "string" && req.body.prefix.length <= 5) {
       state.settings.prefix = req.body.prefix || "!";
