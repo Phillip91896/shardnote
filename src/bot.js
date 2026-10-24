@@ -3030,15 +3030,25 @@ function createBot({ state, db, log, createTicket, setReady }) {
     log("error", "Discord client error: " + error.message);
   });
 
-  client.on("shardDisconnect", () => {
+  client.on("shardDisconnect", (event, shardId) => {
     setReady(false);
-    console.warn("[ShardNote] Discord connection disconnected.");
-    log("warning", "Discord connection disconnected.");
+    const code = Number(event?.code || 0) || null;
+    const reason = String(event?.reason || "").slice(0, 200);
+    const detail = `shard ${shardId ?? 0}, code ${code ?? "unknown"}${reason ? ", reason: " + reason : ""}`;
+    console.warn("[ShardNote] Discord connection disconnected (" + detail + ").");
+    log("warning", "Discord connection disconnected (" + detail + ").");
   });
 
-  client.on("shardReconnecting", () => {
-    console.warn("[ShardNote] Discord connection reconnecting...");
-    log("warning", "Discord connection reconnecting");
+  client.on("shardReconnecting", (shardId) => {
+    setReady(false);
+    console.warn(`[ShardNote] Discord connection reconnecting (shard ${shardId ?? 0})...`);
+    log("warning", `Discord connection reconnecting (shard ${shardId ?? 0})`);
+  });
+
+  client.on("shardError", (error, shardId) => {
+    setReady(false);
+    console.error("[ShardNote] Discord shard error (shard " + (shardId ?? 0) + "):", error);
+    log("error", "Discord shard error (shard " + (shardId ?? 0) + "): " + String(error?.message || error));
   });
 
   client.on("interactionCreate", async (interaction) => {
