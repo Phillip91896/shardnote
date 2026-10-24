@@ -1671,7 +1671,7 @@ app.post("/api/register", async (req, res) => {
       plan: user.plan || activatedPlan
     });
 
-    res.setHeader("Set-Cookie", `ShardNote_session=${sid}; HttpOnly; Path=/; SameSite=Lax`);
+    res.setHeader("Set-Cookie", `ShardNote_session=${sid}; HttpOnly; Path=/; SameSite=Lax; Max-Age=28800${req.secure || process.env.NODE_ENV === "production" ? "; Secure" : ""}`);
     log("security", `New account registered: ${email}${activatedFromKey ? " with serial key (" + (user.plan || activatedPlan) + ")" : ""}`);
     res.status(201).json({
       user: {
