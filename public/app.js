@@ -735,11 +735,33 @@ async function runCommand(){
 }
 function musicAction(){toast("Musikmodulet er klar til Discord voice-integration.")}
 async function loadSettings(){
-  settings=await api("/api/settings");
-  settings.buttonLabels=settings.buttonLabels||{};
-  document.getElementById("prefix").value=settings.prefix;
-  ["maintenance","autoReply","welcomeMessages"].forEach(k=>document.getElementById(k+"Switch").classList.toggle("on",!!settings[k]));
-  applyButtonLabels();
+  const page=document.getElementById("settings");
+  try{
+    settings=await api("/api/settings");
+    settings.buttonLabels=settings.buttonLabels||{};
+    const prefix=document.getElementById("prefix");
+    if(prefix) prefix.value=settings.prefix||"!";
+    ["maintenance","autoReply","welcomeMessages"].forEach(k=>{
+      const control=document.getElementById(k+"Switch");
+      if(control) control.classList.toggle("on",!!settings[k]);
+    });
+    applyButtonLabels();
+  }catch(error){
+    console.error("[ShardNote] Settings load failed:",error);
+    const message=String(error?.message||"Ukendt fejl");
+    if(page){
+      let notice=document.getElementById("settingsLoadError");
+      if(!notice){
+        notice=document.createElement("div");
+        notice.id="settingsLoadError";
+        notice.className="empty";
+        notice.setAttribute("role","alert");
+        page.prepend(notice);
+      }
+      notice.textContent="Indstillinger kunne ikke indlæses: "+message+". Prøv at logge ind igen. Hvis fejlen fortsætter, skal adgangsrettighederne eller serverens API kontrolleres.";
+    }
+    toast("Indstillinger kunne ikke indlæses: "+message);
+  }
 }
 function toggleSetting(key){settings[key]=!settings[key];document.getElementById(key+"Switch").classList.toggle("on",settings[key])}
 async function saveSettings(){
