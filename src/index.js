@@ -1129,7 +1129,7 @@ async function getSessionUser(req){
   }
   return sessionUser;
 }
-function hasPaidAccess(user){return ["admin","owner"].includes(String(user?.role||"").toLowerCase())||["active","trialing"].includes(user?.subscriptionStatus);}
+function hasPaidAccess(user){return isSiteOwner(user)||["admin","owner"].includes(String(user?.role||"").toLowerCase())||["active","trialing"].includes(user?.subscriptionStatus);}
 async function requireAuth(req,res,next){try{const user=await getSessionUser(req);if(!user)return res.status(401).json({error:"Du skal logge ind."});req.user=user;next();}catch(error){console.error(error);res.status(500).json({error:"Loginstatus kunne ikke hentes."});}}
 function isStaff(user) {
   return String(user?.role || "").trim().toLowerCase() === "admin" || isSiteOwner(user);
@@ -1170,7 +1170,7 @@ function requirePaid(req, res, next) {
   next();
 }
 function requirePlan(minimumPlan, req, res, next) {
-  if (["admin","owner"].includes(String(req.user?.role || "").toLowerCase())) return next();
+  if (isSiteOwner(req.user) || ["admin","owner"].includes(String(req.user?.role || "").toLowerCase())) return next();
   const rank = { member: 0, member_plus: 1, member_pro: 2, member_premium: 3 };
   const current = rank[req.user?.plan || "member"] ?? 0;
   const needed = rank[minimumPlan] ?? 0;
