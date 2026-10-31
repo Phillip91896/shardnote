@@ -7,7 +7,7 @@ const isAdminOrOwner = user => ["admin", "owner"].includes(String(user?.role || 
 
 async function addBotToDiscord(){
   try{
-    const r=await fetch("/api/bot/invite");
+    const r=await fetch("/api/bot/invite",{credentials:"same-origin",headers:{"Accept":"application/json"}});
     const data=await r.json();
     if(!r.ok) throw new Error(data.error || "The Discord bot is not online yet.");
     window.location.href=data.url;
@@ -947,6 +947,118 @@ async function toggleUserPlan(id,nextPlan){
 }
 async function deleteUser(id){if(!confirm("Slet denne bruger?"))return;try{await api("/api/admin/users/"+id,{method:"DELETE"});toast("Bruger slettet");loadUsers();loadLogs()}catch(e){toast(e.message)}}
 
+
+
+async function buySelectedPeriod(plan, selectId){
+  const result=document.getElementById("storePurchaseResult");
+  const months=Number(document.getElementById(selectId)?.value||1);
+  if(!["member","member_plus","member_pro"].includes(plan)||![1,3,12].includes(months)){toast("Vælg en gyldig pakke og periode.");return;}
+  try{
+    if(result) result.textContent="Åbner sikker betaling…";
+    const checkout=await api("/api/billing/create-checkout",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({plan,months})});
+    if(!checkout.url) throw new Error("Betalingslinket blev ikke modtaget.");
+    window.location.assign(checkout.url);
+  }catch(error){if(result)result.textContent=error.message;toast(error.message);}
+}
+async function activateLicenseKey(){
+  const input=document.getElementById("licenseActivationKey");
+  const result=document.getElementById("licenseActivationResult");
+  const key=String(input?.value||"").trim().toUpperCase();
+  if(!key){toast("Indtast din license key.");return;}
+  try{
+    if(result)result.textContent="Aktiverer license key…";
+    const data=await api("/api/license/redeem",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({key})});
+    if(result)result.textContent=data.message||"License key aktiveret.";
+    toast("License key aktiveret");
+    setTimeout(()=>window.location.reload(),900);
+  }catch(error){if(result)result.textContent=error.message;toast(error.message);}
+}
+async function createUser(){
+  const name=document.getElementById("newUserName")?.value.trim();
+  const email=document.getElementById("newUserEmail")?.value.trim();
+  const password=document.getElementById("newUserPassword")?.value||"";
+  const role=document.getElementById("newUserRole")?.value||"member";
+  const plan=document.getElementById("newUserPlan")?.value||"member";
+  if(!name||!email||password.length<8){toast("Udfyld navn, email og en adgangskode på mindst 8 tegn.");return;}
+  try{
+    await api("/api/admin/users",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({name,email,password,role,plan})});
+    ["newUserName","newUserEmail","newUserPassword"].forEach(id=>{const el=document.getElementById(id);if(el)el.value="";});
+    toast("Brugeren er oprettet");
+    await loadUsers();
+    await loadLogs();
+  }catch(error){toast(error.message);}
+}
+async function loadStaffApplications(){
+  const list=document.getElementById("staffApplicationList");
+  const count=document.getElementById("staffApplicationCount");
+  if(!list)return;
+  try{
+    const items=await api("/api/admin/staff-applications",{credentials:"same-origin"});
+    const filter=document.getElementById("staffApplicationStatusFilter")?.value||"all";
+    const visible=items.filter(item=>filter==="all"||item.status===filter);
+    if(count)count.textContent=visible.length+" ansøgninger";
+    list.innerHTML=visible.map(item=>{
+      const details=[item.email,item.discordUsername,item.country,item.timezone].filter(Boolean).map(escapeHtml).join(" · ");
+      const action=(status,label)=>'<button class="btn small" onclick="updateStaffApplication('+Number(item.id)+',\''+status+'\')">'+label+'</button>';
+      return '<article class="card"><div class="section-title"><div><b>'+escapeHtml(item.fullName||"Ansøger")+'</b><div style="color:var(--muted);font-size:12px;margin-top:4px">'+details+'</div></div><span class="badge pending">'+escapeHtml(item.status||"new")+'</span></div><p><b>Hvorfor:</b> '+escapeHtml(item.whyJoin||"—")+'</p><p><b>Erfaring:</b> '+escapeHtml(item.experience||"—")+'</p><p><b>Tilgængelighed:</b> '+escapeHtml(item.availability||"—")+'</p><div class="actions">'+action("reviewed","Markér gennemgået")+action("approved","Godkend")+action("rejected","Afvis")+'</div></article>';
+    }).join("")||'<div class="empty">Ingen ansøgninger i denne visning.</div>';
+  }catch(error){list.innerHTML='<div class="empty">'+escapeHtml(error.message)+'</div>';}
+}
+async function updateStaffApplication(id,status){
+  if(!confirm("Vil du ændre ansøgningens status til "+status+"?"))return;
+  try{
+    const data=await api("/api/admin/staff-applications/"+id,{method:"PATCH",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({status})});
+    toast(data.message||"Ansøgning opdateret");
+    await loadStaffApplications();
+  }catch(error){toast(error.message);}
+}
+async function loadIpOverview(){
+  const list=document.getElementById("ipDistinctList");
+  try{
+    const data=await api("/api/ip/overview",{credentials:"same-origin"});
+    const ipList=(items)=>items.length?items.map(item=>'<div class="activity-item"><span>'+escapeHtml(item.ipAddress||"Ukendt IP")+'</span><small>'+escapeHtml(item.userEmail||item.email||item.name||"")+'</small></div>').join(""):'<div class="empty">Ingen data.</div>';
+    if(list)list.innerHTML=(data.distinctIps||[]).map(ip=>'<span class="badge pending" style="margin:3px">'+escapeHtml(ip)+'</span>').join("")||'<div class="empty">Ingen IP-adresser registreret.</div>';
+    const logList=document.getElementById("ipLoginList");
+    if(logList)logList.innerHTML=ipList(data.loginHistory||[]);
+    const banList=document.getElementById("ipBanList");
+    if(banList)banList.innerHTML=ipList(data.bannedIps||[]);
+    const lock=document.getElementById("ipLockPanel"),content=document.getElementById("ipContent");
+    if(lock)lock.style.display="none";if(content)content.style.display="block";
+  }catch(error){
+    const lock=document.getElementById("ipLockPanel"),content=document.getElementById("ipContent");
+    if(lock)lock.style.display="block";if(content)content.style.display="none";
+    const err=document.getElementById("ipUnlockError");if(err)err.textContent=error.message;
+  }
+}
+async function unlockIpCenter(){
+  const password=document.getElementById("ipPassword")?.value||"";
+  const errorNode=document.getElementById("ipUnlockError");if(errorNode)errorNode.textContent="";
+  try{
+    await api("/api/ip/unlock",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({password})});
+    const input=document.getElementById("ipPassword");if(input)input.value="";
+    await loadIpOverview();
+    toast("IP-adressecenter åbnet i 15 minutter");
+  }catch(error){if(errorNode)errorNode.textContent=error.message;else toast(error.message);}
+}
+async function lockIpCenter(){
+  try{await api("/api/ip/lock",{method:"POST",credentials:"same-origin"});}catch(error){}
+  const lock=document.getElementById("ipLockPanel"),content=document.getElementById("ipContent");
+  if(lock)lock.style.display="block";if(content)content.style.display="none";
+  toast("IP-adressecenter låst");
+}
+function loadIpCenter(){const lock=document.getElementById("ipLockPanel"),content=document.getElementById("ipContent");if(lock)lock.style.display="block";if(content)content.style.display="none";}
+async function banUser(id,type="normal"){
+  const label=type==="ip"?"IP-ban":"normal ban";
+  if(!confirm("Vil du give denne bruger "+label+"?"))return;
+  try{await api("/api/admin/users/"+id+"/ban",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({type})});toast("Bruger bannet");await loadUsers();await loadLogs();}
+  catch(error){toast(error.message);}
+}
+async function unbanUser(id){
+  if(!confirm("Vil du fjerne bannet fra denne bruger?"))return;
+  try{await api("/api/admin/users/"+id+"/unban",{method:"POST",credentials:"same-origin"});toast("Ban fjernet");await loadUsers();await loadLogs();}
+  catch(error){toast(error.message);}
+}
+["buySelectedPeriod","activateLicenseKey","createUser","loadStaffApplications","updateStaffApplication","loadIpOverview","unlockIpCenter","lockIpCenter","loadIpCenter","banUser","unbanUser"].forEach(name=>{window[name]=({buySelectedPeriod,activateLicenseKey,createUser,loadStaffApplications,updateStaffApplication,loadIpOverview,unlockIpCenter,lockIpCenter,loadIpCenter,banUser,unbanUser})[name];});
 
 async function logout(){
   const button=document.querySelector('button[onclick="logout()"]');
