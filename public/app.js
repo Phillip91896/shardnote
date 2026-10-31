@@ -1050,7 +1050,7 @@ function loadIpCenter(){const lock=document.getElementById("ipLockPanel"),conten
 async function banUser(id,type="normal"){
   const label=type==="ip"?"IP-ban":"normal ban";
   if(!confirm("Vil du give denne bruger "+label+"?"))return;
-  try{await api("/api/admin/users/"+id+"/ban",{method:"POST",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({type})});toast("Bruger bannet");await loadUsers();await loadLogs();}
+  try{await api("/api/admin/users/"+id+"/ban",{method:"PATCH",headers:{"Content-Type":"application/json"},credentials:"same-origin",body:JSON.stringify({type})});toast("Bruger bannet");await loadUsers();await loadLogs();}
   catch(error){toast(error.message);}
 }
 async function unbanUser(id){
