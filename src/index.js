@@ -2318,7 +2318,7 @@ app.patch("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req, res
   }
 });
 
-app.patch("/api/admin/users/:id/unban", requireAuth, requireOwner, async (req, res) => {
+app.patch("/api/admin/users/:id/unban", requireAuth, requireAdmin, async (req, res) => {
   try {
     await ensureAdmin();
     const id = Number(req.params.id);
