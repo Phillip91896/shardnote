@@ -3699,7 +3699,7 @@ app.get("/api/bot/guilds/:guildId/settings", requireAuth, requirePaid, (req,res,
     if (!discordReady) return res.status(503).json({ error: "Discord-botten er ikke online endnu." });
     const guild = client.guilds.cache.get(String(req.params.guildId));
     if (!guild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
-    if (req.user?.role !== "admin" && !(await isGuildLinkedToUser(req.user.id, guild.id))) return res.status(403).json({ error: "Denne Discord-server er ikke koblet til din Shardnote Bot-konto." });
+    if (req.user?.role !== "admin" && !isSiteOwner(req.user) && !(await isGuildLinkedToUser(req.user.id, guild.id))) return res.status(403).json({ error: "Denne Discord-server er ikke koblet til din Shardnote Bot-konto." });
 
     let settings;
     if (client.dashboardGetGuildSettings) {
@@ -3744,7 +3744,7 @@ app.get("/api/bot/guilds/:guildId/ai", requireAuth, requirePaid, (req,res,next)=
   try{
     const guild=client.guilds.cache.get(String(req.params.guildId));
     if(!guild)return res.status(404).json({error:"Botten er ikke med i den valgte Discord-server."});
-    if(req.user?.role!=="admin" && !(await isGuildLinkedToUser(req.user.id,guild.id)))return res.status(403).json({error:"Denne Discord-server er ikke koblet til din Shardnote Bot-konto."});
+    if(req.user?.role!=="admin" && !isSiteOwner(req.user) && !(await isGuildLinkedToUser(req.user.id,guild.id)))return res.status(403).json({error:"Denne Discord-server er ikke koblet til din Shardnote Bot-konto."});
     const settings=client.dashboardGetGuildSettings ? await client.dashboardGetGuildSettings(guild.id) : {};
     res.json({enabled:!!settings.ai_enabled,channelIds:Array.isArray(settings.ai_channel_ids)?settings.ai_channel_ids:[]});
   }catch(error){console.error(error);res.status(500).json({error:"AI-indstillingerne kunne ikke hentes."});}
@@ -3754,7 +3754,7 @@ app.patch("/api/bot/guilds/:guildId/ai", requireAuth, requirePaid, (req,res,next
   try{
     const guild=client.guilds.cache.get(String(req.params.guildId));
     if(!guild)return res.status(404).json({error:"Botten er ikke med i den valgte Discord-server."});
-    if(req.user?.role!=="admin" && !(await isGuildLinkedToUser(req.user.id,guild.id)))return res.status(403).json({error:"Denne Discord-server er ikke koblet til din Shardnote Bot-konto."});
+    if(req.user?.role!=="admin" && !isSiteOwner(req.user) && !(await isGuildLinkedToUser(req.user.id,guild.id)))return res.status(403).json({error:"Denne Discord-server er ikke koblet til din Shardnote Bot-konto."});
     const enabled=Boolean(req.body?.enabled);
     const channelIds=Array.isArray(req.body?.channelIds)
       ? [...new Set(req.body.channelIds.map(id=>String(id)).filter(id=>guild.channels.cache.has(id)))].slice(0,50)
@@ -3775,7 +3775,7 @@ app.post("/api/bot/guilds/:guildId/templates/:templateKey", requireAuth, require
     const guild = client.guilds.cache.get(String(req.params.guildId));
     if (!guild) return res.status(404).json({ error: "Botten er ikke med i den valgte Discord-server." });
 
-    if (req.user?.role !== "admin" && !(await isGuildLinkedToUser(req.user.id, guild.id))) {
+    if (req.user?.role !== "admin" && !isSiteOwner(req.user) && !(await isGuildLinkedToUser(req.user.id, guild.id))) {
       return res.status(403).json({ error: "Denne Discord-server er ikke koblet til din Shardnote Bot-konto." });
     }
 
