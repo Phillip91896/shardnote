@@ -714,6 +714,15 @@ function createBot({ state, db, log, createTicket, setReady }) {
         channelGroups: {"chat-logs":"📁 01 – PLAYER LOGS","command-logs":"📁 01 – PLAYER LOGS","player-joins":"📁 01 – PLAYER LOGS","player-leaves":"📁 01 – PLAYER LOGS","player-playtime":"📁 01 – PLAYER LOGS","player-deaths":"📁 01 – PLAYER LOGS","player-kills":"📁 01 – PLAYER LOGS","player-respawns":"📁 01 – PLAYER LOGS","player-kicks":"📁 01 – PLAYER LOGS","player-bans":"📁 01 – PLAYER LOGS","player-unbans":"📁 01 – PLAYER LOGS","inventory-take":"📁 02 – INVENTORY LOGS","inventory-deposit":"📁 02 – INVENTORY LOGS","inventory-transfers":"📁 02 – INVENTORY LOGS","player-loot":"📁 02 – INVENTORY LOGS","corpse-backpack-loot":"📁 02 – INVENTORY LOGS","item-drops-pickups":"📁 02 – INVENTORY LOGS","item-split-stack":"📁 02 – INVENTORY LOGS","wooden-box-logs":"📁 03 – CONTAINER LOGS","large-wooden-box-logs":"📁 03 – CONTAINER LOGS","tool-cupboard-logs":"📁 03 – CONTAINER LOGS","locker-logs":"📁 03 – CONTAINER LOGS","furnace-oven-logs":"📁 03 – CONTAINER LOGS","recycler-logs":"📁 03 – CONTAINER LOGS","vending-machine-logs":"📁 03 – CONTAINER LOGS","corpse-backpack-logs":"📁 03 – CONTAINER LOGS","pvp-pve-logs":"📁 04 – COMBAT & RAID LOGS","explosions-rockets":"📁 04 – COMBAT & RAID LOGS","c4-satchels":"📁 04 – COMBAT & RAID LOGS","destroyed-walls-doors":"📁 04 – COMBAT & RAID LOGS","raid-events":"📁 04 – COMBAT & RAID LOGS","building-damage":"📁 04 – COMBAT & RAID LOGS","building-placement":"📁 05 – BUILDING LOGS","building-upgrades":"📁 05 – BUILDING LOGS","building-demolitions":"📁 05 – BUILDING LOGS","building-repairs":"📁 05 – BUILDING LOGS","doors-locks":"📁 05 – BUILDING LOGS","tc-authorization":"📁 05 – BUILDING LOGS","crafting-started":"📁 06 – CRAFTING & ECONOMY","crafting-cancelled":"📁 06 – CRAFTING & ECONOMY","crafting-completed":"📁 06 – CRAFTING & ECONOMY","recycling-logs":"📁 06 – CRAFTING & ECONOMY","research-blueprints":"📁 06 – CRAFTING & ECONOMY","vending-transactions":"📁 06 – CRAFTING & ECONOMY","resource-gathering":"📁 06 – CRAFTING & ECONOMY","farming-harvesting":"📁 06 – CRAFTING & ECONOMY","vehicle-spawns":"📁 07 – VEHICLE & EVENT LOGS","vehicle-usage":"📁 07 – VEHICLE & EVENT LOGS","fuel-logs":"📁 07 – VEHICLE & EVENT LOGS","heli-bradley":"📁 07 – VEHICLE & EVENT LOGS","cargo-ship":"📁 07 – VEHICLE & EVENT LOGS","airdrops":"📁 07 – VEHICLE & EVENT LOGS","boats":"📁 07 – VEHICLE & EVENT LOGS","minicopters":"📁 07 – VEHICLE & EVENT LOGS","admin-actions":"📁 08 – ADMIN LOGS","moderator-actions":"📁 08 – ADMIN LOGS","helper-actions":"📁 08 – ADMIN LOGS","teleports":"📁 08 – ADMIN LOGS","item-gives-spawns":"📁 08 – ADMIN LOGS","noclip-godmode-vanish":"📁 08 – ADMIN LOGS","permission-changes":"📁 08 – ADMIN LOGS","server-start-stop":"📁 09 – SERVER LOGS","server-restarts-saves":"📁 09 – SERVER LOGS","plugin-errors":"📁 09 – SERVER LOGS","server-status":"📁 09 – SERVER LOGS"},
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
       },
+      "rust-logs": {
+        name: "Rust Server Logs",
+        roles: ["Ejer","Admin","Developer","Moderator","Support"],
+        extraRoles: [],
+        categories: ["📁 01 – PLAYER LOGS","📁 02 – INVENTORY LOGS","📁 03 – CONTAINER LOGS","📁 04 – COMBAT & RAID LOGS","📁 05 – BUILDING LOGS","📁 06 – CRAFTING & ECONOMY","📁 07 – VEHICLE & EVENT LOGS","📁 08 – ADMIN LOGS","📁 09 – SERVER LOGS"],
+        channels: ["chat-logs","command-logs","player-joins","player-leaves","player-playtime","player-deaths","player-kills","player-respawns","player-kicks","player-bans","player-unbans","inventory-take","inventory-deposit","inventory-transfers","player-loot","corpse-backpack-loot","item-drops-pickups","item-split-stack","wooden-box-logs","large-wooden-box-logs","tool-cupboard-logs","locker-logs","furnace-oven-logs","recycler-logs","vending-machine-logs","corpse-backpack-logs","pvp-pve-logs","explosions-rockets","c4-satchels","destroyed-walls-doors","raid-events","building-damage","building-placement","building-upgrades","building-demolitions","building-repairs","doors-locks","tc-authorization","crafting-started","crafting-cancelled","crafting-completed","recycling-logs","research-blueprints","vending-transactions","resource-gathering","farming-harvesting","vehicle-spawns","vehicle-usage","fuel-logs","heli-bradley","cargo-ship","airdrops","boats","minicopters","admin-actions","moderator-actions","helper-actions","teleports","item-gives-spawns","noclip-godmode-vanish","permission-changes","server-start-stop","server-restarts-saves","plugin-errors","server-status"],
+        channelGroups: {"chat-logs":"📁 01 – PLAYER LOGS","command-logs":"📁 01 – PLAYER LOGS","player-joins":"📁 01 – PLAYER LOGS","player-leaves":"📁 01 – PLAYER LOGS","player-playtime":"📁 01 – PLAYER LOGS","player-deaths":"📁 01 – PLAYER LOGS","player-kills":"📁 01 – PLAYER LOGS","player-respawns":"📁 01 – PLAYER LOGS","player-kicks":"📁 01 – PLAYER LOGS","player-bans":"📁 01 – PLAYER LOGS","player-unbans":"📁 01 – PLAYER LOGS","inventory-take":"📁 02 – INVENTORY LOGS","inventory-deposit":"📁 02 – INVENTORY LOGS","inventory-transfers":"📁 02 – INVENTORY LOGS","player-loot":"📁 02 – INVENTORY LOGS","corpse-backpack-loot":"📁 02 – INVENTORY LOGS","item-drops-pickups":"📁 02 – INVENTORY LOGS","item-split-stack":"📁 02 – INVENTORY LOGS","wooden-box-logs":"📁 03 – CONTAINER LOGS","large-wooden-box-logs":"📁 03 – CONTAINER LOGS","tool-cupboard-logs":"📁 03 – CONTAINER LOGS","locker-logs":"📁 03 – CONTAINER LOGS","furnace-oven-logs":"📁 03 – CONTAINER LOGS","recycler-logs":"📁 03 – CONTAINER LOGS","vending-machine-logs":"📁 03 – CONTAINER LOGS","corpse-backpack-logs":"📁 03 – CONTAINER LOGS","pvp-pve-logs":"📁 04 – COMBAT & RAID LOGS","explosions-rockets":"📁 04 – COMBAT & RAID LOGS","c4-satchels":"📁 04 – COMBAT & RAID LOGS","destroyed-walls-doors":"📁 04 – COMBAT & RAID LOGS","raid-events":"📁 04 – COMBAT & RAID LOGS","building-damage":"📁 04 – COMBAT & RAID LOGS","building-placement":"📁 05 – BUILDING LOGS","building-upgrades":"📁 05 – BUILDING LOGS","building-demolitions":"📁 05 – BUILDING LOGS","building-repairs":"📁 05 – BUILDING LOGS","doors-locks":"📁 05 – BUILDING LOGS","tc-authorization":"📁 05 – BUILDING LOGS","crafting-started":"📁 06 – CRAFTING & ECONOMY","crafting-cancelled":"📁 06 – CRAFTING & ECONOMY","crafting-completed":"📁 06 – CRAFTING & ECONOMY","recycling-logs":"📁 06 – CRAFTING & ECONOMY","research-blueprints":"📁 06 – CRAFTING & ECONOMY","vending-transactions":"📁 06 – CRAFTING & ECONOMY","resource-gathering":"📁 06 – CRAFTING & ECONOMY","farming-harvesting":"📁 06 – CRAFTING & ECONOMY","vehicle-spawns":"📁 07 – VEHICLE & EVENT LOGS","vehicle-usage":"📁 07 – VEHICLE & EVENT LOGS","fuel-logs":"📁 07 – VEHICLE & EVENT LOGS","heli-bradley":"📁 07 – VEHICLE & EVENT LOGS","cargo-ship":"📁 07 – VEHICLE & EVENT LOGS","airdrops":"📁 07 – VEHICLE & EVENT LOGS","boats":"📁 07 – VEHICLE & EVENT LOGS","minicopters":"📁 07 – VEHICLE & EVENT LOGS","admin-actions":"📁 08 – ADMIN LOGS","moderator-actions":"📁 08 – ADMIN LOGS","helper-actions":"📁 08 – ADMIN LOGS","teleports":"📁 08 – ADMIN LOGS","item-gives-spawns":"📁 08 – ADMIN LOGS","noclip-godmode-vanish":"📁 08 – ADMIN LOGS","permission-changes":"📁 08 – ADMIN LOGS","server-start-stop":"📁 09 – SERVER LOGS","server-restarts-saves":"📁 09 – SERVER LOGS","plugin-errors":"📁 09 – SERVER LOGS","server-status":"📁 09 – SERVER LOGS"},
+        features: {}
+      },
       "vennegruppe": {
         name: "Vennegruppe",
         roles: ["Ejer","Admin","Moderator","Ven"],
@@ -925,23 +934,25 @@ function createBot({ state, db, log, createTicket, setReady }) {
       "Support Room 4",
       "Support Room 5"
     ];
-    config = {
-      ...config,
-      roles: [...new Set([...(config.roles || []), "Support"])],
-      extraRoles: [...new Set([...(config.extraRoles || []), ...standardSupportRoles])],
-      categories: [...new Set([...(config.categories || []), "🎫 SUPPORT", "🔊 VOICE"])],
-      channels: [...new Set([
-        ...(config.channels || []),
-        "support",
-        "ticket-panel",
-        "support-info",
-        "faq",
-        "known-issues",
-        "waiting-for-support"
-      ])],
-      staffVoiceRooms: [...new Set([...(config.staffVoiceRooms || []), ...standardSupportVoiceRooms])],
-      waitingSupportVoice: config.waitingSupportVoice || "Waiting for Support"
-    };
+    if (templateKey !== "rust-logs") {
+      config = {
+        ...config,
+        roles: [...new Set([...(config.roles || []), "Support"])],
+        extraRoles: [...new Set([...(config.extraRoles || []), ...standardSupportRoles])],
+        categories: [...new Set([...(config.categories || []), "🎫 SUPPORT", "🔊 VOICE"])],
+        channels: [...new Set([
+          ...(config.channels || []),
+          "support",
+          "ticket-panel",
+          "support-info",
+          "faq",
+          "known-issues",
+          "waiting-for-support"
+        ])],
+        staffVoiceRooms: [...new Set([...(config.staffVoiceRooms || []), ...standardSupportVoiceRooms])],
+        waitingSupportVoice: config.waitingSupportVoice || "Waiting for Support"
+      };
+    }
 
     const me = guild.members.me || await guild.members.fetchMe().catch(() => null);
     const required = [PermissionFlagsBits.ManageRoles, PermissionFlagsBits.ManageChannels, PermissionFlagsBits.SendMessages];
@@ -1189,10 +1200,11 @@ function createBot({ state, db, log, createTicket, setReady }) {
       overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
 
-    // Rust log channels are visible only to this Discord server's owner and the bot.
+    // Rust log channels are visible to everyone, read-only for ordinary members,
+    // writable by staff roles and the ShardNote bot.
     const logOverwrites = [
-      overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel]),
-      overwrite(guild.ownerId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory]),
+      overwrite(guild.roles.everyone.id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory],[PermissionFlagsBits.SendMessages]),
+      ...staffRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.EmbedLinks])),
       overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
     const communityOverwrites = [
