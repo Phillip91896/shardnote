@@ -1175,11 +1175,10 @@ function createBot({ state, db, log, createTicket, setReady }) {
       overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
 
-    // Rust log channels are private and bot-write-only. Only core server staff can read them.
-    const logRoleIds = [roles.owner?.id, roles.admin?.id, roles.developer?.id, roles.moderator?.id].filter(Boolean);
+    // Rust log channels are visible only to this Discord server's owner and the bot.
     const logOverwrites = [
       overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel]),
-      ...logRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory])),
+      overwrite(guild.ownerId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory]),
       overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
     const communityOverwrites = [
@@ -1302,7 +1301,9 @@ function createBot({ state, db, log, createTicket, setReady }) {
       const baseCategoryName=String(config.categories[i] || "");
       const name=localizeTemplateName(baseCategoryName);
       let overwrites = publicOverwrites;
-      if (/TICKETS|STAFF|LOGS/i.test(baseCategoryName)) {
+      if (/LOGS/i.test(baseCategoryName)) {
+        overwrites = logOverwrites;
+      } else if (/TICKETS|STAFF/i.test(baseCategoryName)) {
         overwrites = privateOverwrites;
       } else if (/VOICE/i.test(baseCategoryName)) {
         overwrites = voiceOverwrites;
