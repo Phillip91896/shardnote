@@ -1124,6 +1124,40 @@ async function unbanUser(id){
 }
 ["buySelectedPeriod","activateLicenseKey","createUser","loadStaffApplications","updateStaffApplication","loadIpOverview","unlockIpCenter","lockIpCenter","loadIpCenter","banUser","unbanUser"].forEach(name=>{window[name]=({buySelectedPeriod,activateLicenseKey,createUser,loadStaffApplications,updateStaffApplication,loadIpOverview,unlockIpCenter,lockIpCenter,loadIpCenter,banUser,unbanUser})[name];});
 
+
+async function loadStorePage(){
+  const result=document.getElementById("storePurchaseResult");
+  if(!currentUser)return;
+  try{
+    const status=await api("/api/billing/status",{credentials:"same-origin"});
+    if(result && status?.subscriptionStatus){
+      const planLabel={member:"Member",member_plus:"Member Plus",member_pro:"Member Pro",member_premium:"Member Premium"}[status.plan||currentUser.plan]||"Member";
+      result.textContent=["active","trialing"].includes(String(status.subscriptionStatus).toLowerCase())
+        ?"Dit abonnement: "+planLabel+" · "+status.subscriptionStatus
+        :"Vælg en pakke og betalingsperiode for at fortsætte.";
+    }
+  }catch(error){
+    if(result && error.message && !/log ind/i.test(error.message))result.textContent=error.message;
+  }
+}
+async function loadDatabaseSummary(){
+  const statusNode=document.getElementById("databaseStatus");
+  const list=document.getElementById("databaseTables");
+  if(!statusNode||!list)return;
+  try{
+    const data=await api("/api/admin/database-summary",{credentials:"same-origin"});
+    statusNode.textContent=data.connected?"Database forbundet":"Database ikke forbundet";
+    statusNode.className="badge "+(data.connected?"open":"pending");
+    list.innerHTML=(data.tables||[]).map(table=>'<div class="activity-item"><div style="flex:1"><b>'+escapeHtml(table.name)+'</b></div><span>'+Number(table.rows||0).toLocaleString("da-DK")+'</span></div>').join("")||'<div class="empty">Ingen tabeloplysninger.</div>';
+  }catch(error){
+    statusNode.textContent="Kunne ikke hente status";
+    statusNode.className="badge closed";
+    list.innerHTML='<div class="empty">'+escapeHtml(error.message)+'</div>';
+  }
+}
+window.loadStorePage=loadStorePage;
+window.loadDatabaseSummary=loadDatabaseSummary;
+
 async function logout(){
   const button=document.querySelector('button[onclick="logout()"]');
   if(button){button.disabled=true;button.textContent="Logger ud…";}
