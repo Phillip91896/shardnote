@@ -708,9 +708,10 @@ function createBot({ state, db, log, createTicket, setReady }) {
       },
       "rust": {
         name: "Rust",
-        roles: ["Ejer","Admin","Moderator","Support","VIP","Medlem"],
-        categories: ["📌 INFORMATION","⛏️ RUST","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","🔒 STAFF","🔊 VOICE"],
-        channels: ["velkommen","regler","server-info","wipe-info","raid-info","team-finder","chat","support","ticket-panel","trade","logs","Fælles","Rust Voice"],
+        roles: ["Ejer","Admin","Developer","Moderator","Support","VIP","Medlem"],
+        categories: ["📌 INFORMATION","⛏️ RUST","💬 COMMUNITY","🎫 SUPPORT","🎟️ TICKETS","📁 01 – PLAYER LOGS","📁 02 – INVENTORY LOGS","📁 03 – CONTAINER LOGS","📁 04 – COMBAT & RAID LOGS","📁 05 – BUILDING LOGS","📁 06 – CRAFTING & ECONOMY","📁 07 – VEHICLE & EVENT LOGS","📁 08 – ADMIN LOGS","📁 09 – SERVER LOGS","🔒 STAFF","🔊 VOICE"],
+        channels: ["velkommen","regler","server-info","wipe-info","raid-info","team-finder","chat","support","ticket-panel","trade","Fælles","Rust Voice","chat-logs","command-logs","player-joins","player-leaves","player-playtime","player-deaths","player-kills","player-respawns","player-kicks","player-bans","player-unbans","inventory-take","inventory-deposit","inventory-transfers","player-loot","corpse-backpack-loot","item-drops-pickups","item-split-stack","wooden-box-logs","large-wooden-box-logs","tool-cupboard-logs","locker-logs","furnace-oven-logs","recycler-logs","vending-machine-logs","corpse-backpack-logs","pvp-pve-logs","explosions-rockets","c4-satchels","destroyed-walls-doors","raid-events","building-damage","building-placement","building-upgrades","building-demolitions","building-repairs","doors-locks","tc-authorization","crafting-started","crafting-cancelled","crafting-completed","recycling-logs","research-blueprints","vending-transactions","resource-gathering","farming-harvesting","vehicle-spawns","vehicle-usage","fuel-logs","heli-bradley","cargo-ship","airdrops","boats","minicopters","admin-actions","moderator-actions","helper-actions","teleports","item-gives-spawns","noclip-godmode-vanish","permission-changes","server-start-stop","server-restarts-saves","plugin-errors","server-status"],
+        channelGroups: {"chat-logs":"📁 01 – PLAYER LOGS","command-logs":"📁 01 – PLAYER LOGS","player-joins":"📁 01 – PLAYER LOGS","player-leaves":"📁 01 – PLAYER LOGS","player-playtime":"📁 01 – PLAYER LOGS","player-deaths":"📁 01 – PLAYER LOGS","player-kills":"📁 01 – PLAYER LOGS","player-respawns":"📁 01 – PLAYER LOGS","player-kicks":"📁 01 – PLAYER LOGS","player-bans":"📁 01 – PLAYER LOGS","player-unbans":"📁 01 – PLAYER LOGS","inventory-take":"📁 02 – INVENTORY LOGS","inventory-deposit":"📁 02 – INVENTORY LOGS","inventory-transfers":"📁 02 – INVENTORY LOGS","player-loot":"📁 02 – INVENTORY LOGS","corpse-backpack-loot":"📁 02 – INVENTORY LOGS","item-drops-pickups":"📁 02 – INVENTORY LOGS","item-split-stack":"📁 02 – INVENTORY LOGS","wooden-box-logs":"📁 03 – CONTAINER LOGS","large-wooden-box-logs":"📁 03 – CONTAINER LOGS","tool-cupboard-logs":"📁 03 – CONTAINER LOGS","locker-logs":"📁 03 – CONTAINER LOGS","furnace-oven-logs":"📁 03 – CONTAINER LOGS","recycler-logs":"📁 03 – CONTAINER LOGS","vending-machine-logs":"📁 03 – CONTAINER LOGS","corpse-backpack-logs":"📁 03 – CONTAINER LOGS","pvp-pve-logs":"📁 04 – COMBAT & RAID LOGS","explosions-rockets":"📁 04 – COMBAT & RAID LOGS","c4-satchels":"📁 04 – COMBAT & RAID LOGS","destroyed-walls-doors":"📁 04 – COMBAT & RAID LOGS","raid-events":"📁 04 – COMBAT & RAID LOGS","building-damage":"📁 04 – COMBAT & RAID LOGS","building-placement":"📁 05 – BUILDING LOGS","building-upgrades":"📁 05 – BUILDING LOGS","building-demolitions":"📁 05 – BUILDING LOGS","building-repairs":"📁 05 – BUILDING LOGS","doors-locks":"📁 05 – BUILDING LOGS","tc-authorization":"📁 05 – BUILDING LOGS","crafting-started":"📁 06 – CRAFTING & ECONOMY","crafting-cancelled":"📁 06 – CRAFTING & ECONOMY","crafting-completed":"📁 06 – CRAFTING & ECONOMY","recycling-logs":"📁 06 – CRAFTING & ECONOMY","research-blueprints":"📁 06 – CRAFTING & ECONOMY","vending-transactions":"📁 06 – CRAFTING & ECONOMY","resource-gathering":"📁 06 – CRAFTING & ECONOMY","farming-harvesting":"📁 06 – CRAFTING & ECONOMY","vehicle-spawns":"📁 07 – VEHICLE & EVENT LOGS","vehicle-usage":"📁 07 – VEHICLE & EVENT LOGS","fuel-logs":"📁 07 – VEHICLE & EVENT LOGS","heli-bradley":"📁 07 – VEHICLE & EVENT LOGS","cargo-ship":"📁 07 – VEHICLE & EVENT LOGS","airdrops":"📁 07 – VEHICLE & EVENT LOGS","boats":"📁 07 – VEHICLE & EVENT LOGS","minicopters":"📁 07 – VEHICLE & EVENT LOGS","admin-actions":"📁 08 – ADMIN LOGS","moderator-actions":"📁 08 – ADMIN LOGS","helper-actions":"📁 08 – ADMIN LOGS","teleports":"📁 08 – ADMIN LOGS","item-gives-spawns":"📁 08 – ADMIN LOGS","noclip-godmode-vanish":"📁 08 – ADMIN LOGS","permission-changes":"📁 08 – ADMIN LOGS","server-start-stop":"📁 09 – SERVER LOGS","server-restarts-saves":"📁 09 – SERVER LOGS","plugin-errors":"📁 09 – SERVER LOGS","server-status":"📁 09 – SERVER LOGS"},
         features: { automod_enabled:true, invite_filter:true, levels_enabled:true, economy_enabled:true, anti_raid_enabled:true, lockdown:false }
       },
       "vennegruppe": {
@@ -1173,6 +1174,14 @@ function createBot({ state, db, log, createTicket, setReady }) {
       ...extendedStaffRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages])),
       overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
     ];
+
+    // Rust log channels are private and bot-write-only. Only core server staff can read them.
+    const logRoleIds = [roles.owner?.id, roles.admin?.id, roles.developer?.id, roles.moderator?.id].filter(Boolean);
+    const logOverwrites = [
+      overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel]),
+      ...logRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory])),
+      overwrite(botId,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages,PermissionFlagsBits.ManageChannels,PermissionFlagsBits.ManageMessages])
+    ];
     const communityOverwrites = [
       overwrite(guild.roles.everyone.id,[],[PermissionFlagsBits.ViewChannel]),
       ...memberRoleIds.map(id=>overwrite(id,[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ReadMessageHistory,PermissionFlagsBits.SendMessages])),
@@ -1293,7 +1302,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
       const baseCategoryName=String(config.categories[i] || "");
       const name=localizeTemplateName(baseCategoryName);
       let overwrites = publicOverwrites;
-      if (/TICKETS|STAFF/i.test(baseCategoryName)) {
+      if (/TICKETS|STAFF|LOGS/i.test(baseCategoryName)) {
         overwrites = privateOverwrites;
       } else if (/VOICE/i.test(baseCategoryName)) {
         overwrites = voiceOverwrites;
@@ -1340,20 +1349,25 @@ function createBot({ state, db, log, createTicket, setReady }) {
     for (const base of config.channels) {
       if(base === "Fælles" || base.endsWith(" VC") || base.includes("Voice") || base.includes("Lounge")) continue;
       const key=base.toLowerCase().replace(/[^a-z0-9]+/g,"");
-      const parent=findCategory(
-        [
-          config.announcementChannels?.includes(base) ? "announcement" : null,
-          base.includes("support")||base.includes("ticket")?"support":null,
-          base.includes("log")||base.includes("staff")||base.includes("report")||base.includes("application")?"staff":null,
-          base.includes("partner")?"partner":null,
-          base.includes("feature")||base.includes("bug")||base.includes("roadmap")||base.includes("documentation")||base.includes("product")||base.includes("status")?"shardnote":null,
-          base.includes("game")||base.includes("chat")||base.includes("clips")||base.includes("showcase")||base.includes("suggest")||base.includes("feedback")||base.includes("events")||base.includes("poll")?"community":null
-        ].filter(Boolean),
-        0
-      );
-      const channelOverwrites = textChannelOverwrites(base, categories[config.categories.findIndex(categoryName =>
-        String(categoryName).toLowerCase() === String(config.categories[parent ? config.categories.indexOf(parent?.name) : -1] || "").toLowerCase()
-      )]);
+      const mappedCategoryName = config.channelGroups?.[base] || config.channelGroups?.[key];
+      const parent = mappedCategoryName
+        ? (categories.find(category => category.name === localizeTemplateName(mappedCategoryName)) || categories[0])
+        : findCategory(
+            [
+              config.announcementChannels?.includes(base) ? "announcement" : null,
+              base.includes("support")||base.includes("ticket")?"support":null,
+              base.includes("log")||base.includes("staff")||base.includes("report")||base.includes("application")?"staff":null,
+              base.includes("partner")?"partner":null,
+              base.includes("feature")||base.includes("bug")||base.includes("roadmap")||base.includes("documentation")||base.includes("product")||base.includes("status")?"shardnote":null,
+              base.includes("game")||base.includes("chat")||base.includes("clips")||base.includes("showcase")||base.includes("suggest")||base.includes("feedback")||base.includes("events")||base.includes("poll")?"community":null
+            ].filter(Boolean),
+            0
+          );
+      const channelOverwrites = mappedCategoryName && /LOGS/i.test(mappedCategoryName)
+        ? logOverwrites
+        : textChannelOverwrites(base, categories[config.categories.findIndex(categoryName =>
+            String(categoryName).toLowerCase() === String(config.categories[parent ? config.categories.indexOf(parent?.name) : -1] || "").toLowerCase()
+          )]);
       if(config.announcementChannels?.includes(base)){
         textChannels.push(await ensureAnnouncement(key,localizeTemplateName(base),parent,announcementOverwrites));
       } else {
@@ -1538,6 +1552,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     async function seedTemplateChannel(channel, baseName) {
       if (!channel?.isTextBased?.()) return;
+      if (config.channelGroups?.[baseName]) return;
       if (baseName === "ticket-panel" || baseName === "support") {
         await ensureTicketPanel(channel);
         return;
@@ -1584,7 +1599,7 @@ function createBot({ state, db, log, createTicket, setReady }) {
 
     const byBase = name => textChannels.find(c=>c.name.replace(/^F5 /,"")===name);
     const welcome = byBase("velkommen") || textChannels[0];
-    const logs = byBase("logs") || textChannels.find(c=>c.name.includes("log")) || textChannels[0];
+    const logs = byBase("server-start-stop") || byBase("admin-actions") || byBase("logs") || textChannels.find(c=>c.name.includes("log")) || textChannels[0];
     const support = byBase("support");
     const ticketPanel = byBase("ticket-panel");
     const suggestions = byBase("forslag") || byBase("suggestions");
