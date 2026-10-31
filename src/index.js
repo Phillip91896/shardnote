@@ -2348,6 +2348,56 @@ app.patch("/api/admin/users/:id/unban", requireAuth, requireOwner, async (req, r
   }
 });
 
+app.post("/api/admin/users/:id/ban", requireAuth, requireAdmin, async (req,res) => {
+  try {
+    const type = String(req.body?.type || "normal") === "ip" ? "ip" : "normal";
+    if (type === "ip" && !isSiteOwner(req.user)) return res.status(403).json({error:"Kun Owner må give IP-ban."});
+    if (String(req.params.id) === String(req.user.id)) return res.status(400).json({error:"Du kan ikke banne din egen konto."});
+    if (db) {
+      const target = await db.query("SELECT id,email,role FROM public.users WHERE id=$1 LIMIT 1",[req.params.id]);
+      if (!target.rowCount) return res.status(404).json({error:"Bruger ikke fundet."});
+      if (isSiteOwner(target.rows[0])) return res.status(403).json({error:"Owner-kontoen kan ikke bannes."});
+      let ipHash = null, ipEncrypted = null;
+      if (type === "ip") {
+        const audit = await db.query("SELECT ip_encrypted FROM public.login_audit WHERE LOWER(user_email)=LOWER($1) AND success=TRUE AND ip_encrypted IS NOT NULL ORDER BY created_at DESC LIMIT 1",[target.rows[0].email]);
+        const ip = audit.rows[0]?.ip_encrypted ? decryptIp(audit.rows[0].ip_encrypted) : null;
+        if (!ip) return res.status(400).json({error:"Der findes ingen gemt login-IP for denne bruger."});
+        ipHash = hashIp(ip); ipEncrypted = encryptIp(ip);
+      }
+      await db.query("UPDATE public.users SET banned=TRUE,ban_type=$1,banned_at=NOW(),banned_ip_hash=$2,banned_ip_encrypted=$3 WHERE id=$4",[type,ipHash,ipEncrypted,req.params.id]);
+    } else {
+      const target=state.users.find(u=>String(u.id)===String(req.params.id));
+      if(!target)return res.status(404).json({error:"Bruger ikke fundet."});
+      if(isSiteOwner(target))return res.status(403).json({error:"Owner-kontoen kan ikke bannes."});
+      target.banned=true;target.banType=type;target.bannedAt=new Date().toISOString();
+      if(type==="ip"){
+        const audit=state.loginAudit.find(item=>String(item.userEmail||"").toLowerCase()===String(target.email||"").toLowerCase()&&item.success&&item.ipEncrypted);
+        const ip=audit?.ipEncrypted?decryptIp(audit.ipEncrypted):null;
+        if(!ip)return res.status(400).json({error:"Der findes ingen gemt login-IP for denne bruger."});
+        target.bannedIpEncrypted=encryptIp(ip);
+      }
+    }
+    log("security","Admin "+req.user.email+" issued "+type+" ban for user #"+req.params.id);
+    return res.json({ok:true});
+  } catch(error) { console.error(error); return res.status(500).json({error:"Brugeren kunne ikke bannes."}); }
+});
+
+app.post("/api/admin/users/:id/unban", requireAuth, requireAdmin, async (req,res) => {
+  try {
+    if (db) {
+      const result=await db.query("UPDATE public.users SET banned=FALSE,ban_type=NULL,banned_ip=NULL,banned_ip_hash=NULL,banned_ip_encrypted=NULL,banned_at=NULL WHERE id=$1 AND LOWER(role)<>'owner' RETURNING id",[req.params.id]);
+      if(!result.rowCount)return res.status(404).json({error:"Bruger ikke fundet eller kan ikke ændres."});
+    } else {
+      const target=state.users.find(u=>String(u.id)===String(req.params.id));
+      if(!target)return res.status(404).json({error:"Bruger ikke fundet."});
+      if(isSiteOwner(target))return res.status(403).json({error:"Owner-kontoen kan ikke ændres."});
+      target.banned=false;target.banType=null;target.bannedIpEncrypted=null;target.bannedAt=null;
+    }
+    log("security","Admin "+req.user.email+" removed ban for user #"+req.params.id);
+    return res.json({ok:true});
+  } catch(error) { console.error(error); return res.status(500).json({error:"Ban kunne ikke fjernes."}); }
+});
+
 app.delete("/api/admin/users/:id", requireAuth, requireOwner, async (req, res) => {
   try {
     await ensureAdmin();
@@ -2379,7 +2429,7 @@ app.delete("/api/admin/users/:id", requireAuth, requireOwner, async (req, res) =
 });
 
 
-app.get("/api/bot/invite", requireAuth, (req, res) => {
+// The OAuth2 bot invite URL is public; requiring a dashboard session here can block valid invites after a session expires.\napp.get("/api/bot/invite", (req, res) => {
   if (!discordReady || !client?.user?.id) {
     return res.status(503).json({ error: "The Discord bot is not online yet." });
   }
