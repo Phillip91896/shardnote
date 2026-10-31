@@ -18,6 +18,7 @@
     {key:"fivem-esx",icon:"🚔",name:"FiveM ESX",desc:"ESX roleplay server with jobs, whitelist, police, EMS and support.",features:["AutoMod","Invite filter","Anti-raid","Tickets"]},
     {key:"fivem-rp",icon:"🎭",name:"FiveM RP",desc:"Roleplay server with RP information, factions, support and applications.",features:["AutoMod","Invite filter","Levels / XP","Anti-raid"]},
     {key:"rust",icon:"⛏️",name:"Rust",desc:"Rust community with wipes, raids, teams, trading and VIP.",features:["AutoMod","Invite filter","Levels / XP","Economy","Anti-raid"]},
+    {key:"rust-logs",icon:"📋",name:"Rust Server Logs",desc:"Standalone Rust server logging setup with 9 read-only log categories and dedicated channels.",features:["9 log categories","Read-only for members","Staff and bot logging","Inventory & container tracking"]},
     {key:"vennegruppe",icon:"👥",name:"Friends Server",desc:"Private server for friends with games, memes and voice channels.",features:["AutoMod","Levels / XP","Economy"]},
     {key:"gaming",icon:"🎮",name:"Gaming Community",desc:"General gaming community with events, clips, support and voice.",features:["AutoMod","Invite filter","Levels / XP","Economy"]},
     {key:"clan",icon:"🏆",name:"Clan / E-sports",desc:"Competitive community with players, tryouts, scrims, support and staff.",features:["AutoMod","Invite filter","Levels / XP","Anti-raid"]},
@@ -102,8 +103,26 @@
     if(custom) custom.style.display=key==="custom"?"block":"none";
     const result=document.getElementById("snTemplatePageResult");
     if(result) result.innerHTML="";
-    renderDiscordPreview(cfg);
+    if(key==="rust-logs") renderRustLogsPreview(); else renderDiscordPreview(cfg);
   }
+  function renderRustLogsPreview(){
+    const host=document.getElementById("snDiscordBlueprintPreview");
+    if(!host)return;
+    const groups=[
+      ["📁 01 – PLAYER LOGS",["chat-logs","command-logs","player-joins","player-leaves","player-playtime","player-deaths","player-kills","player-respawns","player-kicks","player-bans","player-unbans"]],
+      ["📁 02 – INVENTORY LOGS",["inventory-take","inventory-deposit","inventory-transfers","player-loot","corpse-backpack-loot","item-drops-pickups","item-split-stack"]],
+      ["📁 03 – CONTAINER LOGS",["wooden-box-logs","large-wooden-box-logs","tool-cupboard-logs","locker-logs","furnace-oven-logs","recycler-logs","vending-machine-logs","corpse-backpack-logs"]],
+      ["📁 04 – COMBAT & RAID LOGS",["pvp-pve-logs","explosions-rockets","c4-satchels","destroyed-walls-doors","raid-events","building-damage"]],
+      ["📁 05 – BUILDING LOGS",["building-placement","building-upgrades","building-demolitions","building-repairs","doors-locks","tc-authorization"]],
+      ["📁 06 – CRAFTING & ECONOMY",["crafting-started","crafting-cancelled","crafting-completed","recycling-logs","research-blueprints","vending-transactions","resource-gathering","farming-harvesting"]],
+      ["📁 07 – VEHICLE & EVENT LOGS",["vehicle-spawns","vehicle-usage","fuel-logs","heli-bradley","cargo-ship","airdrops","boats","minicopters"]],
+      ["📁 08 – ADMIN LOGS",["admin-actions","moderator-actions","helper-actions","teleports","item-gives-spawns","noclip-godmode-vanish","permission-changes"]],
+      ["📁 09 – SERVER LOGS",["server-start-stop","server-restarts-saves","plugin-errors","server-status"]]
+    ];
+    const html=groups.map(([name,channels])=>'<section style="margin-top:12px"><div style="font-size:11px;font-weight:900;color:#aeb1c0;padding:6px 8px">'+esc(name)+'</div>'+channels.map(channel=>'<div style="padding:5px 10px;color:#d8dae2;font-size:12px;border-radius:5px"># '+esc(channel)+'</div>').join("")+'</section>').join("");
+    host.innerHTML='<div style="border:1px solid rgba(255,255,255,.10);border-radius:16px;background:#0f1015;padding:16px"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><div><div style="font-size:11px;color:#8f91a0;text-transform:uppercase;letter-spacing:.08em">Standalone Discord template</div><div style="font-size:19px;font-weight:900;color:#fff;margin-top:4px">📋 Rust Server Logs</div></div><span class="badge open">9 categories</span></div><p style="font-size:12px;color:#a7a9b4;line-height:1.6">All log channels are visible to members as read-only. Staff roles and the ShardNote bot can post logs. This template does not add general Rust community, support or voice channels.</p><div style="max-height:620px;overflow:auto;background:#111217;border-radius:12px;padding:10px">'+html+'</div></div>';
+  }
+
   function renderDiscordPreview(cfg){
     const host=document.getElementById("snDiscordBlueprintPreview");
     if(!host)return;
