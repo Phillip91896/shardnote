@@ -26,7 +26,6 @@ async function checkLogin(){
     hideLogin();
     syncOwnerPanel();
     loadStats();
-    if(currentUser.isOwner)installOwnerUi();
     return currentUser;
   }catch(error){
     currentUser=null;
@@ -122,7 +121,7 @@ function syncOwnerPanel(){
   if(nav) nav.style.display=owner ? "flex" : "none";
   if(panel) panel.style.display=owner ? "block" : "none";
   if(!owner || !content) return;
-  ["ownerFreeAccessCard","ownerIpCard"].forEach(id=>{
+  ["ownerFreeAccessCard","ownerIpCard","ownerDatabaseCard"].forEach(id=>{
     const card=document.getElementById(id);
     if(card && card.parentElement!==content) content.appendChild(card);
   });
