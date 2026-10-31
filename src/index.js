@@ -3942,7 +3942,34 @@ body.locked > .app{display:none}
 @media(max-width:1050px){.sidebar{width:230px;padding:12px 8px 10px}.nav button{min-height:40px;padding:9px 10px;font-size:13.5px}.nav .icon{width:24px}.main{margin-left:230px;width:calc(100% - 230px);padding:20px}}@media(max-width:760px){.sidebar{width:210px;padding:12px 7px 10px}.brand{justify-content:flex-start;padding-bottom:12px}.brand span,.nav button span:not(.icon){display:inline}.sidebar-footer{display:none}.nav{gap:3px}.nav button{text-align:left;min-height:38px;padding:8px 7px;font-size:13px;font-weight:650}.nav .icon{width:22px}.main{margin-left:210px;width:calc(100% - 210px);padding:15px}.topbar{align-items:flex-start;flex-wrap:wrap}.topbar h1{font-size:24px}.form-grid{grid-template-columns:1fr}}@media(max-height:620px){.sidebar{padding-top:8px}.brand{padding-bottom:9px}.nav{gap:3px}.nav button{min-height:34px;padding-top:6px;padding-bottom:6px}}
 </style>
 </head>
-<body>
+<body class="locked">
+<div id="loginScreen">
+  <div class="login-card">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px">
+      <div class="brand-mark">S</div>
+      <div><h1 style="font-size:22px">Shardnote Bot</h1><p style="margin:3px 0 0">Discord Control Center</p></div>
+    </div>
+    <div id="loginForm">
+      <h2 style="margin:0 0 8px;font-size:18px">Log ind</h2>
+      <p>Log ind på din Shardnote-konto for at åbne dashboardet.</p>
+      <div class="field"><label>Email</label><input id="loginEmail" type="email" autocomplete="username" placeholder="Din emailadresse"></div>
+      <div class="field" style="margin-top:12px"><label>Adgangskode</label><input id="loginPassword" type="password" autocomplete="current-password" placeholder="Din adgangskode" onkeydown="if(event.key==='Enter')login()"></div>
+      <button class="btn primary" style="width:100%;margin-top:16px" onclick="login()">Log ind</button>
+      <button class="btn" style="width:100%;margin-top:9px" onclick="showRegisterForm(true)">Opret konto</button>
+    </div>
+    <div id="registerForm" style="display:none">
+      <h2 style="margin:0 0 8px;font-size:18px">Opret konto</h2>
+      <p>Opret din Shardnote-konto. Du kan også indtaste en licens-key.</p>
+      <div class="field"><label>Navn</label><input id="registerName" autocomplete="name" placeholder="Dit navn"></div>
+      <div class="field" style="margin-top:10px"><label>Email</label><input id="registerEmail" type="email" autocomplete="email" placeholder="Din emailadresse"></div>
+      <div class="field" style="margin-top:10px"><label>Adgangskode</label><input id="registerPassword" type="password" autocomplete="new-password" placeholder="Mindst 8 tegn"></div>
+      <div class="field" style="margin-top:10px"><label>Licens-key (valgfri)</label><input id="registerSerialKey" autocomplete="off" placeholder="XXXXX-XXXXX-XXXXX-XXXXX"></div>
+      <button class="btn primary" style="width:100%;margin-top:16px" onclick="registerAccount()">Opret konto</button>
+      <button class="btn" style="width:100%;margin-top:9px" onclick="showRegisterForm(false)">Tilbage til login</button>
+    </div>
+    <div id="loginError" role="alert" style="color:var(--red);font-size:12px;line-height:1.5;margin-top:12px"></div>
+  </div>
+</div>
 <div class="app">
 <aside class="sidebar">
   <div class="brand"><div class="brand-mark">S</div><span>Shardnote Bot</span></div>
@@ -4403,7 +4430,7 @@ body.locked > .app{display:none}
     </div>
   </div>
 
-  <div class="card" id="ownerIpCard" style="margin-bottom:18px">
+  <div class="card" id="ownerDatabaseCard" style="margin-bottom:18px">
     <div class="section-title"><h2>Database-overblik</h2><span id="databaseStatus" class="badge pending">Tjekker…</span></div>
     <div id="databaseTables" class="activity"></div>
   </div>
