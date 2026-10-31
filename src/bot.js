@@ -1020,7 +1020,18 @@ function createBot({ state, db, log, createTicket, setReady }) {
       name: localizeTemplateName(selectedPrefixRole(base)),
       color: [0xf1c40f,0xe74c3c,0xe67e22,0x3498db,0x9b59b6,0x2ecc71,0x7f8c8d,0x1abc9c][index % 8],
       hoist: index < Math.min(5, config.roles.length),
-      permissions: permissionsForRole(roleKey(base))
+      permissions: templateKey === "rust" && roleKey(base) === "owner"
+        ? [
+            PermissionFlagsBits.ManageGuild,
+            PermissionFlagsBits.ManageChannels,
+            PermissionFlagsBits.ManageRoles,
+            PermissionFlagsBits.ManageMessages,
+            PermissionFlagsBits.KickMembers,
+            PermissionFlagsBits.BanMembers,
+            PermissionFlagsBits.ModerateMembers,
+            PermissionFlagsBits.ViewAuditLog
+          ]
+        : permissionsForRole(roleKey(base))
     }));
 
     const extraRoleSpecs = (config.extraRoles || []).map((base,index) => ({
@@ -1047,6 +1058,9 @@ function createBot({ state, db, log, createTicket, setReady }) {
         });
         createdRoles++;
       } else {
+        if (templateKey === "rust" && spec.key === "owner") {
+          await role.setPermissions(spec.permissions, "ShardNote Rust: keep Ejer role from bypassing owner-only log channels");
+        }
         existingRoles++;
       }
       roles[spec.key] = role;
