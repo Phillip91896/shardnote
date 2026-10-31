@@ -3671,7 +3671,9 @@ app.get("/api/bot/guilds", requireAuth, requirePaid, (req,res,next)=>requirePlan
   try {
     if (!discordReady) return res.json([]);
     let guildsSource = [...client.guilds.cache.values()];
-    if (req.user?.role !== "admin") {
+    // Site owner is identified by the configured owner email as well as the owner role.
+    // Do not hide bot-connected guilds from the site owner just because their stored role is "member".
+    if (req.user?.role !== "admin" && !isSiteOwner(req.user)) {
       if (!db) return res.json([]);
       const linked = await db.query("SELECT guild_id FROM public.account_guilds WHERE user_id = $1", [req.user.id]);
       const linkedIds = new Set(linked.rows.map(row => String(row.guild_id)));
