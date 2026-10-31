@@ -4,6 +4,71 @@ let settings = {prefix:"!",maintenance:false,autoReply:true,welcomeMessages:true
 let ticketCache = [];
 let adminTicketCache = [];
 const isAdminOrOwner = user => ["admin", "owner"].includes(String(user?.role || "").toLowerCase());
+let currentUser = null;
+
+function showLogin(){
+  document.body.classList.add("locked");
+  const screen=document.getElementById("loginScreen");
+  if(screen)screen.style.display="grid";
+  const email=document.getElementById("loginEmail");
+  if(email)email.focus();
+}
+function hideLogin(){
+  document.body.classList.remove("locked");
+  const screen=document.getElementById("loginScreen");
+  if(screen)screen.style.display="none";
+}
+async function checkLogin(){
+  try{
+    const data=await api("/api/me",{credentials:"same-origin",headers:{"Accept":"application/json"}});
+    currentUser=data.user||null;
+    if(!currentUser)throw new Error("Loginstatus kunne ikke bekræftes.");
+    hideLogin();
+    syncOwnerPanel();
+    loadStats();
+    if(currentUser.isOwner)installOwnerUi();
+    return currentUser;
+  }catch(error){
+    currentUser=null;
+    showLogin();
+    return null;
+  }
+}
+async function login(){
+  const email=document.getElementById("loginEmail")?.value.trim();
+  const password=document.getElementById("loginPassword")?.value||"";
+  const errorNode=document.getElementById("loginError");
+  if(errorNode)errorNode.textContent="";
+  try{
+    await api("/api/login",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({email,password})});
+    await checkLogin();
+    if(!currentUser)throw new Error("Login kunne ikke bekræftes. Prøv igen.");
+  }catch(error){if(errorNode)errorNode.textContent=error.message;else toast(error.message);}
+}
+async function registerAccount(){
+  const name=document.getElementById("registerName")?.value.trim();
+  const email=document.getElementById("registerEmail")?.value.trim();
+  const password=document.getElementById("registerPassword")?.value||"";
+  const serialKey=document.getElementById("registerSerialKey")?.value.trim()||"";
+  const errorNode=document.getElementById("loginError");
+  if(errorNode)errorNode.textContent="";
+  try{
+    await api("/api/register",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json","Accept":"application/json"},body:JSON.stringify({name,email,password,serialKey})});
+    await checkLogin();
+    if(!currentUser)throw new Error("Kontoen blev oprettet, men login kunne ikke bekræftes.");
+  }catch(error){if(errorNode)errorNode.textContent=error.message;else toast(error.message);}
+}
+function showRegisterForm(show){
+  const loginForm=document.getElementById("loginForm");
+  const registerForm=document.getElementById("registerForm");
+  if(loginForm)loginForm.style.display=show?"none":"block";
+  if(registerForm)registerForm.style.display=show?"block":"none";
+  const errorNode=document.getElementById("loginError");if(errorNode)errorNode.textContent="";
+}
+window.showLogin=showLogin;
+window.login=login;
+window.registerAccount=registerAccount;
+window.showRegisterForm=showRegisterForm;
 
 async function addBotToDiscord(){
   try{
