@@ -1130,10 +1130,10 @@ async function loadStorePage(){
   if(!currentUser)return;
   try{
     const status=await api("/api/billing/status",{credentials:"same-origin"});
-    if(result && status?.subscriptionStatus){
+    if(result && status?.status){
       const planLabel={member:"Member",member_plus:"Member Plus",member_pro:"Member Pro",member_premium:"Member Premium"}[status.plan||currentUser.plan]||"Member";
-      result.textContent=["active","trialing"].includes(String(status.subscriptionStatus).toLowerCase())
-        ?"Dit abonnement: "+planLabel+" · "+status.subscriptionStatus
+      result.textContent=["active","trialing"].includes(String(status.status).toLowerCase())
+        ?"Dit abonnement: "+planLabel+" · "+status.status
         :"Vælg en pakke og betalingsperiode for at fortsætte.";
     }
   }catch(error){
