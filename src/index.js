@@ -3782,7 +3782,7 @@ app.post("/api/bot/guilds/:guildId/templates/:templateKey", requireAuth, require
 
     const templateKey = String(req.params.templateKey || "").trim().toLowerCase();
     const allowedTemplates = [
-      "fivem-vip","fivem-esx","fivem-rp","rust","vennegruppe",
+      "fivem-vip","fivem-esx","fivem-rp","rust","rust-logs","vennegruppe",
       "gaming","clan","streamer","community","support","shop","creator","custom"
     ];
     if (!allowedTemplates.includes(templateKey)) {
