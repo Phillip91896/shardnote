@@ -1055,7 +1055,7 @@ async function banUser(id,type="normal"){
 }
 async function unbanUser(id){
   if(!confirm("Vil du fjerne bannet fra denne bruger?"))return;
-  try{await api("/api/admin/users/"+id+"/unban",{method:"POST",credentials:"same-origin"});toast("Ban fjernet");await loadUsers();await loadLogs();}
+  try{await api("/api/admin/users/"+id+"/unban",{method:"PATCH",credentials:"same-origin"});toast("Ban fjernet");await loadUsers();await loadLogs();}
   catch(error){toast(error.message);}
 }
 ["buySelectedPeriod","activateLicenseKey","createUser","loadStaffApplications","updateStaffApplication","loadIpOverview","unlockIpCenter","lockIpCenter","loadIpCenter","banUser","unbanUser"].forEach(name=>{window[name]=({buySelectedPeriod,activateLicenseKey,createUser,loadStaffApplications,updateStaffApplication,loadIpOverview,unlockIpCenter,lockIpCenter,loadIpCenter,banUser,unbanUser})[name];});
